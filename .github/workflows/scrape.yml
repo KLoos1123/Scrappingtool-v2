@@ -35,7 +35,7 @@ jobs:
           MERCELL_WACHTWOORD: ${{ secrets.MERCELL_WACHTWOORD }}
         run: python run.py
 
-      - name: CSV en debug uploaden
+      - name: CSV, dashboard en debug uploaden
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -43,6 +43,7 @@ jobs:
           path: |
             tenders.csv
             tenders_nieuw.csv
+            dashboard.html
             debug_*.png
           if-no-files-found: ignore
 
