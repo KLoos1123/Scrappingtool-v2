@@ -6,13 +6,13 @@ zodat je het in GitHub Actions ziet.
 
 import csv
 import sys
+import subprocess
 import traceback
 from datetime import datetime, timezone, timedelta
 
 import db
 from scrapers import mercell
 
-# Nieuwe bron toevoegen? Importeer hem hierboven en zet hem in deze lijst.
 SCRAPERS = [
     mercell,
 ]
@@ -66,6 +66,9 @@ def main():
     print(f"\n=== export ===")
     exporteer(db.alle_rijen(), CSV_ALLES)
     exporteer(db.nieuw_sinds(startmoment.isoformat(timespec="seconds")), CSV_NIEUW)
+
+    print(f"\n=== dashboard ===")
+    subprocess.run(["python", "dashboard.py"], check=True)
 
     if mislukt:
         print(f"\nMislukte bronnen: {', '.join(mislukt)}")
