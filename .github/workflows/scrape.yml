@@ -2,7 +2,7 @@ name: Tender Scrapers
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # elke dag 06:00 UTC
+    - cron: '0 6,12 * * *'   # 06:00 en 12:00 UTC (zomertijd NL: 08:00 en 14:00)
   workflow_dispatch:
 
 # Nooit twee runs tegelijk, anders vechten ze om tenders.db
@@ -33,6 +33,8 @@ jobs:
         env:
           MERCELL_EMAIL: ${{ secrets.MERCELL_EMAIL }}
           MERCELL_WACHTWOORD: ${{ secrets.MERCELL_WACHTWOORD }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
         run: python run.py
 
       - name: CSV, dashboard en debug uploaden
