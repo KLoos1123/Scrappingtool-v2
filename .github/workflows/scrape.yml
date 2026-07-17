@@ -32,6 +32,7 @@ jobs:
       - name: Scrapers draaien
         env:
           MERCELL_EMAIL: ${{ secrets.MERCELL_EMAIL }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
           MERCELL_WACHTWOORD: ${{ secrets.MERCELL_WACHTWOORD }}
           STRIIVE_EMAIL: ${{ secrets.STRIIVE_EMAIL }}
           STRIIVE_WACHTWOORD: ${{ secrets.STRIIVE_WACHTWOORD }}
