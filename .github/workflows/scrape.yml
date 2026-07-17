@@ -33,6 +33,8 @@ jobs:
         env:
           MERCELL_EMAIL: ${{ secrets.MERCELL_EMAIL }}
           MERCELL_WACHTWOORD: ${{ secrets.MERCELL_WACHTWOORD }}
+          STRIIVE_EMAIL: ${{ secrets.STRIIVE_EMAIL }}
+          STRIIVE_WACHTWOORD: ${{ secrets.STRIIVE_WACHTWOORD }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
         run: python run.py
