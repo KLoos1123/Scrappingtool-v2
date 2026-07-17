@@ -35,8 +35,9 @@ jobs:
           MERCELL_WACHTWOORD: ${{ secrets.MERCELL_WACHTWOORD }}
           STRIIVE_EMAIL: ${{ secrets.STRIIVE_EMAIL }}
           STRIIVE_WACHTWOORD: ${{ secrets.STRIIVE_WACHTWOORD }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          SHEET_ID: ${{ secrets.SHEET_ID }}
+          SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
+          SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
+          SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
         run: python run.py
 
       - name: CSV, dashboard en debug uploaden
