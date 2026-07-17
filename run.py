@@ -10,11 +10,12 @@ from datetime import datetime, timezone, timedelta
 
 import db
 import sheets_writer
-from scrapers import mercell, hero
+from scrapers import mercell, hero, striive
 
 SCRAPERS = [
     mercell,
     hero,
+    striive,
 ]
 
 CSV_ALLES = "tenders.csv"
