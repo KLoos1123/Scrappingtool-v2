@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 import db
 import sheets_writer
 from scrapers import mercell, flextender, hero, striive
+import sharepoint_writer
+
 
 SCRAPERS = [
     mercell,
@@ -69,14 +71,13 @@ def main():
     exporteer(alle, CSV_ALLES)
     exporteer(db.nieuw_sinds(startmoment.isoformat(timespec="seconds")), CSV_NIEUW)
 
-    print(f"\n=== google sheets ===")
+    print(f"\n=== sharepoint ===")
     try:
-        aantal = sheets_writer.sync(alle, tab="tenders")
-        sheets_writer.schrijf_meta(aantal)
+        sharepoint_writer.sync(alle)
     except Exception as e:
-        print(f"  Sheets-sync MISLUKT: {e}")
+        print(f"  SharePoint-sync MISLUKT: {e}")
         traceback.print_exc()
-        mislukt.append("Google Sheets")
+        mislukt.append("SharePoint")
 
     print(f"\n=== dashboard ===")
     subprocess.run(["python", "dashboard.py"], check=True)
