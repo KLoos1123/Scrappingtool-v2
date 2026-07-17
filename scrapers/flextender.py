@@ -100,4 +100,7 @@ def haal_op():
     rijen = [_uit_kaart(k) for k in kaarten]
     rijen = [r for r in rijen if r["tender_id"]]
 
+    for r in rijen:
+        print(r)
     return rijen
+
