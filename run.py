@@ -14,6 +14,7 @@ from scrapers import mercell
 
 SCRAPERS = [
     mercell,
+    hero,
 ]
 
 CSV_ALLES = "tenders.csv"
