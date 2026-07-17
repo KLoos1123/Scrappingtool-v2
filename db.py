@@ -19,6 +19,7 @@ VELDEN = [
     "status",
     "deadline",
     "publicatiedatum",
+    "locatie",
     "url",
 ]
 
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS tenders (
     status           TEXT,
     deadline         TEXT,
     publicatiedatum  TEXT,
+    locatie          TEXT,
     url              TEXT,
     eerst_gezien     TEXT NOT NULL,
     laatst_gezien    TEXT NOT NULL,
@@ -48,6 +50,12 @@ def verbind():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+
+    # Migratie: bestaande databases hadden nog geen locatie-kolom.
+    kolommen = {r["name"] for r in conn.execute("PRAGMA table_info(tenders)")}
+    if "locatie" not in kolommen:
+        conn.execute("ALTER TABLE tenders ADD COLUMN locatie TEXT")
+
     return conn
 
 
@@ -67,14 +75,15 @@ def opslaan(rijen):
             """
             INSERT INTO tenders
                 (bron, tender_id, nummer, titel, organisatie,
-                 status, deadline, publicatiedatum, url,
+                 status, deadline, publicatiedatum, locatie, url,
                  eerst_gezien, laatst_gezien)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT (bron, tender_id) DO UPDATE SET
                 titel         = excluded.titel,
                 organisatie   = excluded.organisatie,
                 status        = excluded.status,
                 deadline      = excluded.deadline,
+                locatie       = excluded.locatie,
                 url           = excluded.url,
                 laatst_gezien = excluded.laatst_gezien
             """,
