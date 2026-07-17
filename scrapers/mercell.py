@@ -231,5 +231,5 @@ def haal_op():
 
     print("  gepubliceerde tenders")
     rijen.extend(_uit_gepubliceerd(t) for t in _gepubliceerd(token))
-
+    print(rijen)
     return rijen
