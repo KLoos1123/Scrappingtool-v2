@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 
 import db
 import sheets_writer
-from scrapers import mercell
+from scrapers import mercell, hero
 
 SCRAPERS = [
     mercell,
