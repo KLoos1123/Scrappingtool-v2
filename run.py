@@ -11,9 +11,11 @@ from datetime import datetime, timezone, timedelta
 import db
 import sheets_writer
 from scrapers import mercell
+from scrapers import flextender
 
 SCRAPERS = [
-    mercell,
+    # mercell,
+    flextender
 ]
 
 CSV_ALLES = "tenders.csv"
@@ -43,6 +45,7 @@ def main():
         try:
             rijen = scraper.haal_op()
             print(type(rijen))
+            print(rijen)
             exit()
             for r in rijen:
                 r["bron"] = naam
