@@ -42,7 +42,8 @@ def main():
         print(f"\n=== {naam} ===")
         try:
             rijen = scraper.haal_op()
-            print(rijen)
+            print(type(rijen))
+            exit()
             for r in rijen:
                 r["bron"] = naam
             print(f"  {len(rijen)} rijen opgehaald")
@@ -51,7 +52,7 @@ def main():
             print(f"  MISLUKT: {e}")
             traceback.print_exc()
             mislukt.append(naam)
-
+    
     if not alles:
         print("\nNiets opgehaald, database niet aangepast.")
         sys.exit(1)
