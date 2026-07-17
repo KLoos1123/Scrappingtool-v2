@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 import db
 import sheets_writer
 from scrapers import mercell, flextender, hero, striive
-import sharepoint_writer
+# import sharepoint_writer
 
 
 SCRAPERS = [
@@ -73,7 +73,7 @@ def main():
 
     print(f"\n=== sharepoint ===")
     try:
-        sharepoint_writer.sync(alle)
+        sheets_writer.sync(alle)
     except Exception as e:
         print(f"  SharePoint-sync MISLUKT: {e}")
         traceback.print_exc()
