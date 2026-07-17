@@ -42,6 +42,7 @@ def main():
         print(f"\n=== {naam} ===")
         try:
             rijen = scraper.haal_op()
+            print(rijen)
             for r in rijen:
                 r["bron"] = naam
             print(f"  {len(rijen)} rijen opgehaald")
