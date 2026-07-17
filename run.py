@@ -9,11 +9,14 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 import db
+import sheets_writer
+from scrapers import mercell, flextender, hero, striive
 import sharepoint_writer
-from scrapers import mercell, hero, striive
+
 
 SCRAPERS = [
     mercell,
+    flextender,
     hero,
     striive,
 ]
@@ -52,7 +55,7 @@ def main():
             print(f"  MISLUKT: {e}")
             traceback.print_exc()
             mislukt.append(naam)
-
+    
     if not alles:
         print("\nNiets opgehaald, database niet aangepast.")
         sys.exit(1)
