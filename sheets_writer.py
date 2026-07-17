@@ -38,6 +38,7 @@ def sync(rijen, tab="tenders"):
         print(f"  {tab}: niets te syncen")
         return 0
 
+    print(os.environ)
     sheet_id = os.environ.get("SHEET_ID")
     if not sheet_id:
         raise RuntimeError("Secret SHEET_ID ontbreekt.")
