@@ -14,7 +14,7 @@ from scrapers import mercell
 from scrapers import flextender
 
 SCRAPERS = [
-    # mercell,
+    mercell,
     flextender
 ]
 
@@ -44,9 +44,6 @@ def main():
         print(f"\n=== {naam} ===")
         try:
             rijen = scraper.haal_op()
-            print(type(rijen))
-            print(rijen)
-            exit()
             for r in rijen:
                 r["bron"] = naam
             print(f"  {len(rijen)} rijen opgehaald")
