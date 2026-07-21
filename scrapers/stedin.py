@@ -1,9 +1,9 @@
 """Stedin - werkenbij.stedin.net (Radancy-platform).
 
-Geen login nodig. De vacatures staan server-side in de zoekpagina; de
-paginering gaat via ?page=N. Het CDN kan kale requests blokkeren, daarom
-halen we de pagina's op via een browsercontext (Playwright) en parsen we
-de HTML met BeautifulSoup.
+Geen login nodig. De zoekpagina toont de eerste ~15 vacatures en laadt de
+rest bij via AJAX (de ?page-parameter wordt genegeerd). We renderen de
+pagina daarom met Playwright en scrollen/klikken tot het aantal vacatures
+niet meer groeit, en parsen dan de DOM met BeautifulSoup.
 """
 
 from playwright.sync_api import sync_playwright
@@ -16,7 +16,13 @@ ZOEK = f"{BASE}/vacatures-zoeken"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-MAX_PAGINA = 60  # veiligheidsgrens
+KAART = "a.job-list--link[data-job-id]"
+MEER_KNOP = (
+    "button.load-more, a.load-more, [class*='load-more'], "
+    "button[class*='more'], a[class*='pagination-next'], "
+    "a[rel='next'], .pagination-load-more a"
+)
+MAX_RONDES = 40
 
 
 def _tekst(el):
@@ -43,6 +49,32 @@ def _uit_kaart(a):
     }
 
 
+def _laad_alles(page):
+    """Scrollt en klikt tot het aantal vacaturekaarten stabiel blijft."""
+    vorig = -1
+    stabiel = 0
+    for _ in range(MAX_RONDES):
+        aantal = page.locator(KAART).count()
+        if aantal == vorig:
+            stabiel += 1
+            if stabiel >= 2:
+                break
+        else:
+            stabiel = 0
+        vorig = aantal
+
+        # probeer een "meer laden"-knop
+        try:
+            knop = page.locator(MEER_KNOP).first
+            if knop.is_visible(timeout=500):
+                knop.click(timeout=2000)
+        except Exception:
+            pass
+
+        page.mouse.wheel(0, 12000)
+        page.wait_for_timeout(1500)
+
+
 def haal_op():
     """Wordt aangeroepen door run.py. Geeft een lijst dicts terug."""
     rijen = []
@@ -50,33 +82,20 @@ def haal_op():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(user_agent=UA, locale="nl-NL")
+        page = browser.new_context(user_agent=UA, locale="nl-NL").new_page()
 
-        for pagina in range(1, MAX_PAGINA + 1):
-            url = ZOEK if pagina == 1 else f"{ZOEK}?page={pagina}"
-            resp = ctx.request.get(url, timeout=30000)
-            if not resp.ok:
-                print(f"    pagina {pagina}: status {resp.status}, stoppen")
-                break
+        page.goto(ZOEK, timeout=60000, wait_until="networkidle")
+        page.wait_for_timeout(2000)
+        _laad_alles(page)
 
-            soup = BeautifulSoup(resp.text(), "lxml")
-            kaarten = soup.select("a.job-list--link[data-job-id]")
-            if not kaarten:
-                break
-
-            nieuw = 0
-            for a in kaarten:
-                rij = _uit_kaart(a)
-                if rij and rij["tender_id"] not in gezien:
-                    gezien.add(rij["tender_id"])
-                    rijen.append(rij)
-                    nieuw += 1
-
-            # Geen nieuwe id's meer -> paginering herhaalt zichzelf.
-            if nieuw == 0:
-                break
-
+        soup = BeautifulSoup(page.content(), "lxml")
         browser.close()
+
+    for a in soup.select(KAART):
+        rij = _uit_kaart(a)
+        if rij and rij["tender_id"] not in gezien:
+            gezien.add(rij["tender_id"])
+            rijen.append(rij)
 
     print(f"  {len(rijen)} vacatures gevonden")
     return rijen
