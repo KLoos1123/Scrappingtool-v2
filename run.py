@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 
 import db
 import sheets_writer
-from scrapers import mercell, flextender, hero, striive
+from scrapers import mercell, flextender, hero, striive, freelancenl, ns, stedin
 # import sharepoint_writer
 
 
@@ -19,6 +19,9 @@ SCRAPERS = [
     flextender,
     hero,
     striive,
+    freelancenl,
+    ns,
+    stedin,
 ]
 
 CSV_ALLES = "tenders.csv"
