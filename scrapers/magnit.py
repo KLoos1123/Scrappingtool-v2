@@ -60,58 +60,46 @@ def haal_op():
     if not email or not wachtwoord:
         raise RuntimeError("MAGNIT_EMAIL of MAGNIT_WACHTWOORD ontbreekt")
 
-    onderschept = {"body": None}
+    body = None
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(user_agent=UA, locale="nl-NL")
         page = ctx.new_page()
 
-        def on_resp(resp):
-            try:
-                if "retrievejobrequests" in resp.url:
-                    tekst = resp.text()
-                    if '"jobRequests"' in tekst:
-                        onderschept["body"] = tekst
-            except Exception:
-                pass
-
-        page.on("response", on_resp)
-
         _login(page, email, wachtwoord)
-        page.wait_for_timeout(6000)
+        page.wait_for_timeout(5000)
 
-        # forceer de aanvragenlijst (triggert retrievejobrequests)
-        for sel in ["a:has-text('Aanvragen')", "text=AANVRAGEN",
-                    "a:has-text('Naar alle aanvragen')"]:
+        # Wacht deterministisch op de retrievejobrequests-response terwijl we
+        # de pagina herladen (dat vuurt de call opnieuw). Met retries, want de
+        # eerste laadpoging kan nog voor de MSAL-token uit zijn.
+        for poging in range(4):
             try:
-                el = page.query_selector(sel)
-                if el:
-                    el.click()
+                with page.expect_response(
+                    lambda r: "retrievejobrequests" in r.url
+                    and r.request.method == "POST",
+                    timeout=30000,
+                ) as resp_info:
+                    page.reload(wait_until="domcontentloaded")
+                tekst = resp_info.value.text()
+                if '"jobRequests"' in tekst:
+                    body = tekst
                     break
             except Exception:
-                continue
-        page.wait_for_timeout(6000)
-
-        # vangnet: opnieuw laden om de call te forceren
-        if not onderschept["body"]:
-            try:
-                page.goto(START, timeout=60000, wait_until="domcontentloaded")
-                page.wait_for_timeout(9000)
-            except Exception:
                 pass
+            page.wait_for_timeout(4000)
 
-        if not onderschept["body"]:
+        if not body:
             try:
                 page.screenshot(path="debug_magnit.png", full_page=True)
             except Exception:
                 pass
         browser.close()
 
-    if not onderschept["body"]:
+    if not body:
         raise RuntimeError("retrievejobrequests niet onderschept na login")
 
-    data = json.loads(onderschept["body"])
+    data = json.loads(body)
     jobs = ((data or {}).get("value") or {}).get("jobRequests") or []
     rijen = [_uit_jobrequest(j) for j in jobs if j.get("jobRequestId")]
 
