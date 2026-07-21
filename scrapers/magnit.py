@@ -39,17 +39,16 @@ def _uit_jobrequest(j):
     jid = j.get("jobRequestId")
     return {
         "tender_id": str(jid),
-        "nummer": (j.get("jobRequestNumber") or j.get("requestNumber")
-                   or j.get("number")),
-        "titel": j.get("position"),
-        "organisatie": (j.get("customerName") or j.get("customerExternalName")
+        "nummer": j.get("jobRequestNumber"),
+        "titel": j.get("position") or j.get("jobRequestName"),
+        "organisatie": (j.get("clientName") or j.get("companyName")
                         or j.get("customerTeamExternalName") or "Magnit"),
         "status": "Open",
-        "deadline": (j.get("closingDate") or j.get("deadline")
-                     or j.get("responseDeadline") or j.get("endDate")),
-        "publicatiedatum": (j.get("publicationDate") or j.get("publishedDate")
-                            or j.get("createdDate") or j.get("startDate")),
-        "locatie": (j.get("location") or j.get("workLocation") or j.get("city")),
+        "deadline": j.get("submissionDeadLine"),
+        "publicatiedatum": None,   # geen publicatiedatum in de API
+        "locatie": j.get("location"),
+        "start": j.get("periodStart"),
+        "uren_per_week": j.get("hoursPerWeek"),
         "url": f"{PORTAL}/supplier/jobrequests/{jid}",
     }
 
@@ -114,8 +113,6 @@ def haal_op():
 
     data = json.loads(onderschept["body"])
     jobs = ((data or {}).get("value") or {}).get("jobRequests") or []
-    if jobs:
-        print(f"  velden: {list(jobs[0].keys())}")
     rijen = [_uit_jobrequest(j) for j in jobs if j.get("jobRequestId")]
 
     print(f"  {len(rijen)} aanvragen opgehaald")
