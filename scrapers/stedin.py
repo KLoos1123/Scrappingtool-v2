@@ -1,9 +1,9 @@
 """Stedin - werkenbij.stedin.net (Radancy-platform).
 
 Geen login nodig. De zoekpagina toont 15 vacatures per pagina en pagineert
-via een "Volgende"-link (href /vacatures-zoeken&p=N). We renderen de pagina
-met Playwright, klikken door naar de volgende pagina tot die er niet meer is,
-en parsen elke pagina met BeautifulSoup.
+via de query-parameter ?p=N. Het CDN kan kale requests blokkeren, daarom
+halen we de pagina's op via een browsercontext (Playwright) en parsen we de
+HTML met BeautifulSoup.
 """
 
 from playwright.sync_api import sync_playwright
@@ -17,8 +17,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 KAART = "a.job-list--link[data-job-id]"
-VOLGENDE = "nav.pagination a.next:not(.disabled):not([aria-disabled='true'])"
-MAX_PAGINA = 30  # veiligheidsgrens
+MAX_PAGINA = 40  # veiligheidsgrens
 
 
 def _tekst(el):
@@ -52,34 +51,28 @@ def haal_op():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_context(user_agent=UA, locale="nl-NL").new_page()
+        ctx = browser.new_context(user_agent=UA, locale="nl-NL")
 
-        page.goto(ZOEK, timeout=60000, wait_until="domcontentloaded")
-
-        for _ in range(MAX_PAGINA):
-            try:
-                page.wait_for_selector(KAART, timeout=15000)
-            except Exception:
+        for pagina in range(1, MAX_PAGINA + 1):
+            resp = ctx.request.get(f"{ZOEK}?p={pagina}", timeout=30000)
+            if not resp.ok:
+                print(f"    pagina {pagina}: status {resp.status}, stoppen")
                 break
-            page.wait_for_timeout(500)
 
-            soup = BeautifulSoup(page.content(), "lxml")
+            kaarten = BeautifulSoup(resp.text(), "lxml").select(KAART)
+            if not kaarten:
+                break
+
             nieuw = 0
-            for a in soup.select(KAART):
+            for a in kaarten:
                 rij = _uit_kaart(a)
                 if rij and rij["tender_id"] not in gezien:
                     gezien.add(rij["tender_id"])
                     rijen.append(rij)
                     nieuw += 1
 
-            volgende = page.query_selector(VOLGENDE)
-            if not volgende or nieuw == 0:
-                break
-            try:
-                volgende.click()
-                page.wait_for_load_state("domcontentloaded", timeout=30000)
-                page.wait_for_timeout(1500)
-            except Exception:
+            # Laatste pagina bereikt: paginering herhaalt zichzelf.
+            if nieuw == 0:
                 break
 
         browser.close()
