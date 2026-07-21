@@ -33,16 +33,30 @@ def _login(page, email, wachtwoord):
     page.query_selector("input[type='password']").fill(wachtwoord)
     (page.query_selector("button:has-text('Inloggen')")
      or page.query_selector("button[type='submit']")).click()
-    page.wait_for_timeout(10000)
+    # terug op het portaal na de B2C-redirect
+    try:
+        page.wait_for_url("**portal.magnitglobal.com/supplier/**", timeout=40000)
+    except Exception:
+        pass
 
 
 def _token_en_member(page):
     return page.evaluate("""() => {
-        let token = null, member = null;
+        let token = null, fallback = null, member = null;
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k.includes('accesstoken') && k.includes('access_api')) {
-                try { token = JSON.parse(localStorage.getItem(k)).secret; } catch (e) {}
+            if (k.includes('accesstoken')) {
+                try {
+                    const o = JSON.parse(localStorage.getItem(k));
+                    if (o && o.secret) {
+                        if (k.includes('access_api') ||
+                            (o.target && String(o.target).includes('access_api'))) {
+                            token = o.secret;
+                        } else {
+                            fallback = o.secret;
+                        }
+                    }
+                } catch (e) {}
             }
             if (k === 'activemember') {
                 const v = localStorage.getItem(k);
@@ -50,8 +64,18 @@ def _token_en_member(page):
                 catch (e) { member = v; }
             }
         }
-        return { token, member };
+        return { token: token || fallback, member };
     }""")
+
+
+def _wacht_op_token(page, seconden=40):
+    """MSAL schrijft de token async na de redirect; poll tot hij er is."""
+    for _ in range(seconden // 2):
+        creds = _token_en_member(page)
+        if creds.get("token"):
+            return creds
+        page.wait_for_timeout(2000)
+    return _token_en_member(page)
 
 
 def _uit_jobrequest(j):
@@ -86,7 +110,7 @@ def haal_op():
         page = ctx.new_page()
 
         _login(page, email, wachtwoord)
-        creds = _token_en_member(page)
+        creds = _wacht_op_token(page)
         if not creds.get("token"):
             try:
                 page.screenshot(path="debug_magnit_login.png", full_page=True)
