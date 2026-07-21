@@ -1,83 +1,137 @@
-"""Magnit-portaal: login-mechanisme verkennen (TIJDELIJK).
+"""Magnit-portaal: inloggen + aanvragen-API onderscheppen (TIJDELIJK).
 
-Navigeert naar het supplier-portaal (zonder in te loggen) en dumpt de
-structuur van de login-pagina: invoervelden, knoppen, en of er een externe
-identity provider (Okta / Azure AD / Auth0 / Ping) of MFA in het spel is.
-Print GEEN wachtwoorden of tokens.
+Logt in met MAGNIT_EMAIL/MAGNIT_WACHTWOORD (uit secrets), opent de
+Aanvragen-lijst en dumpt de JSON-API die die lijst vult. Print GEEN
+wachtwoorden, cookies of auth-headers.
 """
 
 import os
+import json
 from playwright.sync_api import sync_playwright
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-START = "https://portal.magnitglobal.com/supplier/jobrequests/new"
+BASE = "https://portal.magnitglobal.com"
+START = f"{BASE}/supplier/jobrequests/new"
 
-IDP_HOSTS = ["okta", "microsoftonline", "auth0", "pingidentity", "pingone",
-             "onelogin", "login.magnit", "sso", "identity"]
+# API-achtige, data-dragende calls (geen assets/telemetrie)
+DATA_HINT = ("jobrequest", "aanvra", "request", "assignment", "opdracht",
+             "search", "list", "supplier")
+SKIP = (".js", ".css", ".png", ".jpg", ".svg", ".woff", "google", "segment",
+        "analytics", "sentry", "datadog", "telemetry")
+
+
+def _interessant(url, ct):
+    u = url.lower()
+    if any(s in u for s in SKIP):
+        return False
+    if "json" not in ct:
+        return False
+    return any(h in u for h in DATA_HINT)
 
 
 def main():
+    email = os.environ.get("MAGNIT_EMAIL")
+    wachtwoord = os.environ.get("MAGNIT_WACHTWOORD")
+    print(f"-- MAGNIT_EMAIL gezet: {bool(email)} | MAGNIT_WACHTWOORD gezet: {bool(wachtwoord)}")
+    if not email or not wachtwoord:
+        print("!! secrets ontbreken, stoppen (voeg MAGNIT_EMAIL en MAGNIT_WACHTWOORD toe)")
+        return
+
+    calls = []
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_context(user_agent=UA, locale="nl-NL").new_page()
+        ctx = browser.new_context(user_agent=UA, locale="nl-NL")
+        page = ctx.new_page()
 
+        def on_resp(resp):
+            ct = resp.headers.get("content-type", "")
+            if _interessant(resp.url, ct):
+                calls.append(resp)
+
+        page.on("response", on_resp)
+
+        # ---- inloggen ----
+        page.goto(START, timeout=60000, wait_until="domcontentloaded")
         try:
-            page.goto(START, timeout=60000, wait_until="domcontentloaded")
+            page.wait_for_selector(
+                "input[type='email'], input[placeholder*='mail'], input[placeholder*='mail']",
+                timeout=30000)
+        except Exception:
+            pass
+        try:
+            email_veld = page.query_selector(
+                "input[type='email'], input[placeholder*='mail'], input[placeholder*='mail']")
+            pw_veld = page.query_selector("input[type='password']")
+            email_veld.fill(email)
+            pw_veld.fill(wachtwoord)
+            knop = page.query_selector(
+                "button:has-text('Inloggen'), button[type='submit'], input[type='submit']")
+            knop.click()
         except Exception as e:
-            print(f"goto fout: {e}")
-        page.wait_for_timeout(6000)
-
-        print(f"-- start-url : {START}")
-        print(f"-- eind-url  : {page.url}")
-        print(f"-- titel     : {page.title()!r}")
-
-        host = page.url.lower()
-        idp = [h for h in IDP_HOSTS if h in host]
-        print(f"-- idp-hint (uit url): {idp or 'geen'}")
-
-        # invoervelden
-        velden = page.eval_on_selector_all(
-            "input, button, a[role=button]",
-            """els => els.slice(0, 40).map(e => ({
-                tag: e.tagName,
-                type: e.getAttribute('type'),
-                name: e.getAttribute('name'),
-                id: e.id,
-                placeholder: e.getAttribute('placeholder'),
-                autocomplete: e.getAttribute('autocomplete'),
-                text: (e.innerText||'').trim().slice(0,40)
-            }))"""
-        )
-        print("-- interactieve elementen:")
-        for v in velden:
-            print(f"   {v}")
-
-        # SSO / MFA hints in de tekst
-        tekst = page.inner_text("body").lower()
-        for hint in ["okta", "microsoft", "azure", "single sign", "sso",
-                     "verification code", "authenticator", "mfa",
-                     "two-factor", "two factor", "wachtwoord", "password",
-                     "e-mail", "email", "username", "gebruikersnaam"]:
-            if hint in tekst:
-                print(f"-- tekst-hint: '{hint}' aanwezig")
-
-        # frames (login kan in een iframe zitten)
-        for fr in page.frames:
-            if fr.url and fr.url != page.url:
-                print(f"-- frame: {fr.url[:120]}")
-
-        try:
+            print(f"!! login-invoer mislukt: {e}")
             page.screenshot(path="debug_magnit_login.png", full_page=True)
-            print("-- screenshot: debug_magnit_login.png")
+            browser.close()
+            return
+
+        page.wait_for_timeout(8000)
+        print(f"-- na login url: {page.url}")
+        try:
+            print(f"-- kop op pagina: {page.inner_text('body')[:120]!r}")
         except Exception:
             pass
 
-        # laat weten of secrets al aanwezig zijn (zonder waarde te tonen)
-        print(f"-- MAGNIT_EMAIL secret gezet: {bool(os.environ.get('MAGNIT_EMAIL'))}")
-        print(f"-- MAGNIT_WACHTWOORD secret gezet: {bool(os.environ.get('MAGNIT_WACHTWOORD'))}")
+        # ---- naar Aanvragen ----
+        for sel in ["a:has-text('Aanvragen')", "text=AANVRAGEN",
+                    "a:has-text('Naar alle aanvragen')"]:
+            try:
+                el = page.query_selector(sel)
+                if el:
+                    el.click()
+                    page.wait_for_timeout(6000)
+                    break
+            except Exception:
+                continue
 
+        page.wait_for_timeout(3000)
+        page.mouse.wheel(0, 4000)
+        page.wait_for_timeout(3000)
+        print(f"-- aanvragen url: {page.url}")
+
+        # ---- API-calls dumpen ----
+        print(f"\n-- {len(calls)} data-achtige JSON-calls:")
+        gezien = set()
+        for resp in calls:
+            key = resp.url.split("?")[0]
+            if key in gezien:
+                continue
+            gezien.add(key)
+            print(f"\n>>> {resp.request.method} {resp.url.split('?')[0]}")
+            try:
+                data = resp.json()
+            except Exception:
+                continue
+            if isinstance(data, dict):
+                print(f"    keys: {list(data.keys())[:20]}")
+                for veld in ("content", "items", "results", "data", "records",
+                             "jobRequests", "aanvragen"):
+                    lijst = data.get(veld)
+                    if isinstance(lijst, list) and lijst:
+                        print(f"    '{veld}': {len(lijst)} items; eerste item keys: "
+                              f"{list(lijst[0].keys()) if isinstance(lijst[0], dict) else type(lijst[0])}")
+                        print(f"    eerste item: {json.dumps(lijst[0], ensure_ascii=False)[:1400]}")
+                        break
+            elif isinstance(data, list) and data:
+                print(f"    lijst: {len(data)} items; eerste keys: "
+                      f"{list(data[0].keys()) if isinstance(data[0], dict) else type(data[0])}")
+                print(f"    eerste item: {json.dumps(data[0], ensure_ascii=False)[:1400]}")
+
+        try:
+            page.screenshot(path="debug_magnit_aanvragen.png", full_page=True)
+        except Exception:
+            pass
         browser.close()
 
 
