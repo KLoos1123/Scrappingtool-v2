@@ -1,9 +1,4 @@
-"""Verkenning regionale inhuurdesks (TIJDELIJK).
-
-Doel: per portaal vaststellen op welk platform het draait (Striive,
-Flextender, Nétive, InhuurDesk, ...) en of er een publieke
-opdrachtenlijst is die we zonder login kunnen scrapen.
-"""
+"""Recon ronde 2: inhuur-subdomeinen + kaartstructuren (TIJDELIJK)."""
 
 import re
 from playwright.sync_api import sync_playwright
@@ -12,29 +7,19 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 SITES = {
-    "werkeninnoordhollandnoord": "https://www.werkeninnoordhollandnoord.nl/",
-    "werkeninnoordoostbrabant": "https://www.werkeninnoordoostbrabant.nl/",
-    "werkeninzuidoostbrabant": "https://www.werkeninzuidoostbrabant.nl/",
-    "flexwestbrabant": "https://www.flexwestbrabant.nl/",
-    "inhuurgelderland": "https://www.inhuurgelderland.nl/",
-    "inhuurdesk-amstelveen": "https://inhuurdesk.amstelveen.nl/",
-    "inhuurdesk-capelle": "https://inhuurdesk.capelleaandenijssel.nl/",
-    "flexschiedam": "https://www.flexwerkschiedam.nl/",
+    "inhuur-nhn": "https://inhuur.werkeninnoordhollandnoord.nl/",
+    "inhuurdesk-nob": "https://inhuurdesk.werkeninnoordoostbrabant.nl/",
+    "inhuur-zob": "https://inhuur.werkeninzuidoostbrabant.nl/",
+    "gelderland": "https://www.werkeningelderland.nl/inhuur/",
+    "flexwestbrabant-opdrachten": "https://flexwestbrabant.nl/opdrachten/",
+    "flexwestbrabant-home": "https://flexwestbrabant.nl/",
 }
 
-MARKERS = [
-    "striive", "flextender", "kbs_flx", "netive", "my-flexforce", "flexforce",
-    "negometrix", "mercell", "ctmsolution", "inhuurdesk", "staffingdesk",
-    "staffing management", "hireserve", "radancy", "carerix", "otys",
-    "easycruit", "workday", "successfactors", "tangram", "connexys",
-    "recruitnow", "jobsrepublic", "solviteers", "matchr",
-]
-
-ANKER_PATRONEN = ["/opdracht", "/vacature", "/aanvraag", "/inhuur",
-                  "/assignment", "/job"]
-
-API_HINT = re.compile(r"(/api/|/wp-json|graphql|\.json|search|opdracht|vacature|aanvraag)", re.I)
+API_HINT = re.compile(r"(/api/|/wp-json|graphql|\.json|search|opdracht|vacature|aanvraag|request)", re.I)
 STATIC = re.compile(r"\.(png|jpe?g|gif|svg|webp|woff2?|ttf|css|ico|mp4)(\?|$)", re.I)
+
+CARD_HINTS = ["opdracht", "aanvraag", "vacature", "job", "card", "result",
+              "listing", "item", "post", "tender"]
 
 
 def verken(naam, url, ctx):
@@ -44,7 +29,7 @@ def verken(naam, url, ctx):
 
     def on_response(resp):
         u = resp.url
-        if STATIC.search(u):
+        if STATIC.search(u) or "maps.googleapis" in u or "google" in u:
             return
         ct = resp.headers.get("content-type", "")
         if "json" in ct or API_HINT.search(u):
@@ -63,28 +48,42 @@ def verken(naam, url, ctx):
     print(f"-- titel: {page.title()!r}")
     print(f"-- eind-url: {page.url}")
 
-    html = page.content().lower()
-    gevonden = [m for m in MARKERS if m in html]
-    print(f"-- platform-markers: {gevonden or 'geen'}")
-
     hrefs = page.eval_on_selector_all(
         "a[href]", "els => els.map(e => e.getAttribute('href'))")
-    for pat in ANKER_PATRONEN:
-        matches = [h for h in hrefs if h and pat in h.lower()]
+    for pat in ["opdracht", "aanvraag", "vacature", "detail", "request"]:
+        matches = list(dict.fromkeys(
+            h for h in hrefs if h and pat in h.lower() and "linkedin" not in h))
         if matches:
-            uniek = list(dict.fromkeys(matches))
-            print(f"-- ankers met '{pat}': {len(uniek)} (eerste 5)")
-            for h in uniek[:5]:
+            print(f"-- ankers met '{pat}': {len(matches)} (eerste 6)")
+            for h in matches[:6]:
                 print(f"     {h}")
 
+    # eerste inhoudelijke "kaart" dumpen
+    for hint in CARD_HINTS:
+        try:
+            els = page.query_selector_all(f"[class*='{hint}']")
+        except Exception:
+            continue
+        for el in els[:3]:
+            try:
+                outer = el.evaluate("e => e.outerHTML")
+            except Exception:
+                continue
+            if len(outer) > 300 and ("<a" in outer or "href" in outer):
+                print(f"\n-- '*{hint}*' outerHTML (max 2200):\n{outer[:2200]}")
+                break
+        else:
+            continue
+        break
+
     gezien = set()
-    print(f"-- {len(api_calls)} interessante netwerk-calls:")
+    print(f"\n-- {len(api_calls)} interessante netwerk-calls:")
     for method, status, ct, u in api_calls:
         key = u.split("?")[0]
         if key in gezien:
             continue
         gezien.add(key)
-        print(f"   [{method} {status} {ct}] {u[:160]}")
+        print(f"   [{method} {status} {ct}] {u[:170]}")
 
     page.close()
 
