@@ -80,7 +80,9 @@ def haal_op():
                     and r.request.method == "POST",
                     timeout=30000,
                 ) as resp_info:
-                    page.reload(wait_until="domcontentloaded")
+                    # navigeer naar de aanvragen-deeplink; dat vuurt de call
+                    # (na login landt de app soms op home, waar hij niet vuurt)
+                    page.goto(START, wait_until="domcontentloaded", timeout=60000)
                 tekst = resp_info.value.text()
                 if '"jobRequests"' in tekst:
                     body = tekst
