@@ -41,8 +41,11 @@ def _uit_anker(a, base, prefix, regio):
         return None
     org_slug, titel_slug, oid = m.groups()
 
+    # De h3 op de homepage kapt lange titels af ("...piek..."); de URL-slug
+    # bevat de volledige titel, dus die heeft dan de voorkeur.
     titel = a.get_text(strip=True) or None
-    if not titel or titel.lower() in ("delen", "bekijk"):
+    if (not titel or titel.lower() in ("delen", "bekijk")
+            or titel.endswith("...") or titel.endswith("…")):
         titel = _ontslug(titel_slug)
 
     return {
