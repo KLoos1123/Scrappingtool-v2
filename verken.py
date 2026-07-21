@@ -1,161 +1,151 @@
-"""Eenmalig verkenningsscript (TIJDELIJK).
+"""Tweede verkenningsronde (TIJDELIJK).
 
-Doel: de echte structuur van de nieuw toe te voegen sites achterhalen, omdat
-de ontwikkelomgeving deze sites niet kan bereiken. Draait in GitHub Actions.
-
-Voor elke site:
-  - laadt de lijstpagina met een echte browser (Playwright)
-  - logt alle netwerk-requests die op een API/feed lijken (json, /api/, /wp-json,
-    algolia, 'vacature'/'opdracht'/'job'/'search' in de url)
-  - detecteert het framework (__NEXT_DATA__, __NUXT__, wp-json, ...)
-  - telt kandidaat-DOM-selectors en print de outerHTML van de eerste "kaart"
-  - print ankers die op detail-URL's lijken
-
-Dit bestand mag na de verkenning weer verwijderd worden.
+Legt per site de JSON-API's vast (request + response body) en onderzoekt
+paginering. Voor MiPublic: probeer WAF te omzeilen met realistische headers
+en alternatieve bronnen (wp-json / feed / sitemap).
 """
 
 import json
-import re
 from playwright.sync_api import sync_playwright
 
-SITES = {
-    "freelancenl": "https://www.freelance.nl/opdrachten",
-    "mipublic": "https://mipublic.nl/zzp-opdrachten-overheid/",
-    "ns": "https://www.werkenbijns.nl/vacatures",
-    "stedin": "https://werkenbij.stedin.net/vacatures-zoeken",
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+HDRS = {
+    "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+              "image/webp,*/*;q=0.8",
+    "sec-ch-ua": '"Chromium";v="120", "Not:A-Brand";v="99"',
+    "sec-ch-ua-platform": '"Windows"',
+    "Upgrade-Insecure-Requests": "1",
 }
 
-API_HINT = re.compile(
-    r"(/api/|/wp-json|algolia|/search|graphql|\.json|vacature|opdracht|jobs?\b|feed)",
-    re.I,
-)
-STATIC = re.compile(r"\.(png|jpe?g|gif|svg|webp|woff2?|ttf|css|ico|mp4)(\?|$)", re.I)
-
-CARD_HINTS = [
-    "vacature", "opdracht", "job", "card", "listing", "result", "vacancy",
-    "position", "search-result", "list-item", "tile",
-]
+API_WORDS = ("search", "results", "/api/", "opdracht", "vacature", "banen",
+             "public-api", "jobs", "graphql")
 
 
-def verken(naam, url, page):
+def dump_apis(naam, url, page, extra=None):
     print(f"\n{'='*70}\n### {naam}  ->  {url}\n{'='*70}")
+    boeiend = []
 
-    api_calls = []
-
-    def on_response(resp):
-        u = resp.url
-        if STATIC.search(u):
-            return
+    def on_resp(resp):
+        u = resp.url.lower()
         ct = resp.headers.get("content-type", "")
-        interessant = "json" in ct or API_HINT.search(u)
-        if interessant:
-            api_calls.append((resp.request.method, resp.status, ct.split(";")[0], u))
+        if ("json" in ct) and any(w in u for w in API_WORDS):
+            boeiend.append(resp)
 
-    page.on("response", on_response)
-
+    page.on("response", on_resp)
     try:
-        page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        page.goto(url, timeout=60000, wait_until="networkidle")
     except Exception as e:
-        print(f"  goto fout: {e}")
-    page.wait_for_timeout(6000)
-    try:
-        page.mouse.wheel(0, 4000)
-        page.wait_for_timeout(2500)
-    except Exception:
-        pass
-
-    print(f"\n-- titel: {page.title()!r}")
-    print(f"-- eind-url: {page.url}")
-
-    # Framework-detectie
-    html = page.content()
-    for marker in ["__NEXT_DATA__", "__NUXT__", "window.__INITIAL_STATE__",
-                   "wp-json", "wp-content", "data-server-rendered", "ng-version"]:
-        if marker in html:
-            print(f"-- framework-marker gevonden: {marker}")
-
-    # __NEXT_DATA__ dumpen (keys)
-    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
-    if m:
+        print(f"  goto: {e}")
+    page.wait_for_timeout(3000)
+    # probeer meer te laden
+    for _ in range(3):
         try:
-            data = json.loads(m.group(1))
-            pp = data.get("props", {}).get("pageProps", {})
-            print(f"-- __NEXT_DATA__ pageProps keys: {list(pp.keys())}")
-            print(f"-- buildId: {data.get('buildId')}")
-            blob = json.dumps(pp)[:1500]
-            print(f"-- pageProps sample: {blob}")
-        except Exception as e:
-            print(f"-- __NEXT_DATA__ parse fout: {e}")
+            page.mouse.wheel(0, 6000)
+            page.wait_for_timeout(1500)
+        except Exception:
+            pass
+    if extra:
+        extra(page)
 
-    # Interessante netwerk-calls
-    print(f"\n-- {len(api_calls)} mogelijk interessante netwerk-calls:")
+    print(f"-- {len(boeiend)} interessante JSON-calls")
     gezien = set()
-    for method, status, ct, u in api_calls:
-        key = u.split("?")[0]
+    for resp in boeiend:
+        key = (resp.request.method, resp.url.split("?")[0])
         if key in gezien:
             continue
         gezien.add(key)
-        print(f"   [{method} {status} {ct}] {u[:180]}")
-
-    # Kandidaat-kaarten in de DOM
-    print("\n-- kandidaat DOM-selectors (class/id bevat hint):")
-    for hint in CARD_HINTS:
+        print(f"\n>>> {resp.request.method} {resp.url[:200]}")
+        pd = resp.request.post_data
+        if pd:
+            print(f"    POSTDATA: {pd[:600]}")
         try:
-            n = page.eval_on_selector_all(
-                f"[class*='{hint}'], [id*='{hint}']", "els => els.length"
-            )
-        except Exception:
-            n = 0
-        if n:
-            print(f"   *{hint}*: {n} elementen")
+            body = resp.text()
+            print(f"    RESP ({len(body)} chars): {body[:1800]}")
+        except Exception as e:
+            print(f"    body-fout: {e}")
 
-    # Ankers die op detailpagina's lijken
-    hrefs = page.eval_on_selector_all(
-        "a[href]", "els => els.map(e => e.getAttribute('href'))"
-    )
-    patronen = {}
-    for h in hrefs:
-        if not h:
-            continue
-        for pat in ["/opdracht/", "/vacature/", "/vacatures/", "/vacancy/",
-                    "/job/", "/jobs/", "/vac/"]:
-            if pat in h:
-                patronen.setdefault(pat, []).append(h)
-    for pat, lst in patronen.items():
-        print(f"\n-- ankers met '{pat}': {len(lst)} (eerste 8)")
-        for h in lst[:8]:
-            print(f"   {h}")
 
-    # outerHTML van eerste kandidaat-kaart
-    for hint in CARD_HINTS:
+def freelance_extra(page):
+    # paginering onderzoeken
+    for sel in ["a[rel='next']", ".pagination a", "a.projectlist-nav__next",
+                "[class*='pagination'] a", "[class*='next']"]:
+        els = page.query_selector_all(sel)
+        if els:
+            print(f"-- freelance paginatie-selector '{sel}': {len(els)}")
+            for e in els[:5]:
+                print(f"     href={e.get_attribute('href')} text={e.inner_text()[:30]!r}")
+
+
+def ns_extra(page):
+    # zoek naar totaal + probeer een vacatures-api
+    for sel in ["[class*='count']", "[class*='total']", "[class*='result']"]:
+        el = page.query_selector(sel)
+        if el:
+            print(f"-- ns '{sel}': {el.inner_text()[:80]!r}")
+    for path in ["/api/2/vacancies", "/api/2/jobs", "/api/2/search",
+                 "/api/vacancies", "/api/2/vacancy"]:
         try:
-            el = page.query_selector(f"[class*='{hint}']")
-            if el:
-                outer = el.evaluate("e => e.outerHTML")
-                if len(outer) > 200:  # sla lege wrappers over
-                    print(f"\n-- eerste '*{hint}*' outerHTML (max 2500 chars):")
-                    print(outer[:2500])
-                    break
-        except Exception:
-            continue
+            r = page.request.get("https://www.werkenbijns.nl" + path, timeout=15000)
+            print(f"-- ns probe {path}: {r.status} {r.headers.get('content-type','')} "
+                  f"{r.text()[:300] if r.status==200 else ''}")
+        except Exception as e:
+            print(f"-- ns probe {path}: {e}")
+
+
+def stedin_extra(page):
+    for path in ["/search-jobs/results?CurrentPage=1",
+                 "/search-jobs/results",
+                 "/vacatures-zoeken?page=2"]:
+        try:
+            r = page.request.get("https://werkenbij.stedin.net" + path, timeout=15000)
+            print(f"-- stedin probe {path}: {r.status} {r.headers.get('content-type','')} "
+                  f"len={len(r.text())} {r.text()[:400] if r.status==200 else ''}")
+        except Exception as e:
+            print(f"-- stedin probe {path}: {e}")
+
+
+def mipublic(ctx):
+    print(f"\n{'='*70}\n### mipublic (WAF-omzeiling)\n{'='*70}")
+    page = ctx.new_page()
+    for url in ["https://mipublic.nl/zzp-opdrachten-overheid/",
+                "https://mipublic.nl/wp-json/wp/v2/types",
+                "https://mipublic.nl/wp-json/wp/v2/vacature?per_page=5",
+                "https://mipublic.nl/vacature/feed/",
+                "https://mipublic.nl/sitemap.xml",
+                "https://mipublic.nl/sitemap_index.xml",
+                "https://mipublic.nl/wp-sitemap.xml"]:
+        try:
+            r = page.request.get(url, headers=HDRS, timeout=20000)
+            body = r.text()
+            print(f"\n>>> {url}\n    status={r.status} ct={r.headers.get('content-type','')} "
+                  f"len={len(body)}")
+            print(f"    {body[:700]}")
+        except Exception as e:
+            print(f"\n>>> {url}\n    fout: {e}")
+    page.close()
 
 
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            locale="nl-NL",
-        )
-        for naam, url in SITES.items():
+        ctx = browser.new_context(user_agent=UA, locale="nl-NL",
+                                  extra_http_headers=HDRS)
+        for naam, url, extra in [
+            ("freelancenl", "https://www.freelance.nl/opdrachten", freelance_extra),
+            ("ns", "https://www.werkenbijns.nl/vacatures", ns_extra),
+            ("stedin", "https://werkenbij.stedin.net/vacatures-zoeken", stedin_extra),
+        ]:
             page = ctx.new_page()
             try:
-                verken(naam, url, page)
+                dump_apis(naam, url, page, extra)
             except Exception as e:
-                print(f"\n### {naam} MISLUKT: {e}")
+                print(f"### {naam} MISLUKT: {e}")
             finally:
                 page.close()
+        mipublic(ctx)
         browser.close()
 
 
