@@ -67,21 +67,36 @@ def main():
 
         # login
         page.goto(START, timeout=60000, wait_until="domcontentloaded")
-        page.wait_for_selector("input[type='password']", timeout=30000)
-        page.query_selector(
-            "input[type='email'], input[placeholder*='mail']").fill(email)
-        page.query_selector("input[type='password']").fill(wachtwoord)
-        page.query_selector(
-            "button:has-text('Inloggen'), button[type='submit']").click()
-        page.wait_for_timeout(8000)
+        try:
+            page.wait_for_selector("input[type='password']", timeout=30000)
+            page.wait_for_timeout(2500)
+            email_veld = (page.query_selector("input[type='email']")
+                          or page.query_selector("input[placeholder*='mail' i]")
+                          or page.query_selector("input[type='text']:not([type='password'])"))
+            email_veld.fill(email)
+            page.query_selector("input[type='password']").fill(wachtwoord)
+            (page.query_selector("button:has-text('Inloggen')")
+             or page.query_selector("button[type='submit']")).click()
+        except Exception as e:
+            print(f"!! login mislukt: {e}")
+            try:
+                page.screenshot(path="debug_magnit_login.png", full_page=True)
+            except Exception:
+                pass
+            browser.close()
+            return
+        page.wait_for_timeout(10000)
 
-        # naar Aanvragen
+        # naar Aanvragen (best effort; retrievejobrequests vuurt ook zonder klik)
         for sel in ["a:has-text('Aanvragen')", "text=AANVRAGEN",
                     "a:has-text('Naar alle aanvragen')"]:
-            el = page.query_selector(sel)
-            if el:
-                el.click()
-                break
+            try:
+                el = page.query_selector(sel)
+                if el:
+                    el.click()
+                    break
+            except Exception:
+                continue
         page.wait_for_timeout(8000)
 
         # token-locatie zoeken (alleen sleutelnamen + shape, geen waarde)
