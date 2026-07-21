@@ -1,8 +1,8 @@
-"""Magnit-portaal: inloggen + aanvragen-API onderscheppen (TIJDELIJK).
+"""Magnit: retrievejobrequests-payload + response + token-locatie (TIJDELIJK).
 
-Logt in met MAGNIT_EMAIL/MAGNIT_WACHTWOORD (uit secrets), opent de
-Aanvragen-lijst en dumpt de JSON-API die die lijst vult. Print GEEN
-wachtwoorden, cookies of auth-headers.
+Logt in, opent Aanvragen, en legt bij binnenkomst de payload en de body van
+de data-calls vast. Zoekt ook waar de OIDC-access-token is opgeslagen
+(alleen sleutelnamen, niet de tokenwaarde).
 """
 
 import os
@@ -15,11 +15,10 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 BASE = "https://portal.magnitglobal.com"
 START = f"{BASE}/supplier/jobrequests/new"
 
-# API-achtige, data-dragende calls (geen assets/telemetrie)
-DATA_HINT = ("jobrequest", "aanvra", "request", "assignment", "opdracht",
-             "search", "list", "supplier")
+DATA_HINT = ("jobrequest", "retrievejob", "assignment", "expertise",
+             "categorycount", "dashboard")
 SKIP = (".js", ".css", ".png", ".jpg", ".svg", ".woff", "google", "segment",
-        "analytics", "sentry", "datadog", "telemetry")
+        "analytics", "sentry", "negotiate", "openid")
 
 
 def _interessant(url, ct):
@@ -34,12 +33,11 @@ def _interessant(url, ct):
 def main():
     email = os.environ.get("MAGNIT_EMAIL")
     wachtwoord = os.environ.get("MAGNIT_WACHTWOORD")
-    print(f"-- MAGNIT_EMAIL gezet: {bool(email)} | MAGNIT_WACHTWOORD gezet: {bool(wachtwoord)}")
     if not email or not wachtwoord:
-        print("!! secrets ontbreken, stoppen (voeg MAGNIT_EMAIL en MAGNIT_WACHTWOORD toe)")
+        print("!! secrets ontbreken")
         return
 
-    calls = []
+    captured = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -47,91 +45,92 @@ def main():
         page = ctx.new_page()
 
         def on_resp(resp):
-            ct = resp.headers.get("content-type", "")
-            if _interessant(resp.url, ct):
-                calls.append(resp)
+            try:
+                ct = resp.headers.get("content-type", "")
+                if not _interessant(resp.url, ct):
+                    return
+                entry = {"method": resp.request.method,
+                         "url": resp.url.split("?")[0]}
+                try:
+                    entry["postdata"] = (resp.request.post_data or "")[:1000]
+                except Exception:
+                    entry["postdata"] = None
+                try:
+                    entry["body"] = resp.text()[:2500]
+                except Exception as e:
+                    entry["body"] = f"<geen body: {e}>"
+                captured.append(entry)
+            except Exception:
+                pass
 
         page.on("response", on_resp)
 
-        # ---- inloggen ----
+        # login
         page.goto(START, timeout=60000, wait_until="domcontentloaded")
-        try:
-            page.wait_for_selector(
-                "input[type='email'], input[placeholder*='mail'], input[placeholder*='mail']",
-                timeout=30000)
-        except Exception:
-            pass
-        try:
-            email_veld = page.query_selector(
-                "input[type='email'], input[placeholder*='mail'], input[placeholder*='mail']")
-            pw_veld = page.query_selector("input[type='password']")
-            email_veld.fill(email)
-            pw_veld.fill(wachtwoord)
-            knop = page.query_selector(
-                "button:has-text('Inloggen'), button[type='submit'], input[type='submit']")
-            knop.click()
-        except Exception as e:
-            print(f"!! login-invoer mislukt: {e}")
-            page.screenshot(path="debug_magnit_login.png", full_page=True)
-            browser.close()
-            return
-
+        page.wait_for_selector("input[type='password']", timeout=30000)
+        page.query_selector(
+            "input[type='email'], input[placeholder*='mail']").fill(email)
+        page.query_selector("input[type='password']").fill(wachtwoord)
+        page.query_selector(
+            "button:has-text('Inloggen'), button[type='submit']").click()
         page.wait_for_timeout(8000)
-        print(f"-- na login url: {page.url}")
-        try:
-            print(f"-- kop op pagina: {page.inner_text('body')[:120]!r}")
-        except Exception:
-            pass
 
-        # ---- naar Aanvragen ----
+        # naar Aanvragen
         for sel in ["a:has-text('Aanvragen')", "text=AANVRAGEN",
                     "a:has-text('Naar alle aanvragen')"]:
-            try:
-                el = page.query_selector(sel)
-                if el:
-                    el.click()
-                    page.wait_for_timeout(6000)
-                    break
-            except Exception:
-                continue
+            el = page.query_selector(sel)
+            if el:
+                el.click()
+                break
+        page.wait_for_timeout(8000)
 
-        page.wait_for_timeout(3000)
-        page.mouse.wheel(0, 4000)
-        page.wait_for_timeout(3000)
-        print(f"-- aanvragen url: {page.url}")
-
-        # ---- API-calls dumpen ----
-        print(f"\n-- {len(calls)} data-achtige JSON-calls:")
-        gezien = set()
-        for resp in calls:
-            key = resp.url.split("?")[0]
-            if key in gezien:
-                continue
-            gezien.add(key)
-            print(f"\n>>> {resp.request.method} {resp.url.split('?')[0]}")
-            try:
-                data = resp.json()
-            except Exception:
-                continue
-            if isinstance(data, dict):
-                print(f"    keys: {list(data.keys())[:20]}")
-                for veld in ("content", "items", "results", "data", "records",
-                             "jobRequests", "aanvragen"):
-                    lijst = data.get(veld)
-                    if isinstance(lijst, list) and lijst:
-                        print(f"    '{veld}': {len(lijst)} items; eerste item keys: "
-                              f"{list(lijst[0].keys()) if isinstance(lijst[0], dict) else type(lijst[0])}")
-                        print(f"    eerste item: {json.dumps(lijst[0], ensure_ascii=False)[:1400]}")
-                        break
-            elif isinstance(data, list) and data:
-                print(f"    lijst: {len(data)} items; eerste keys: "
-                      f"{list(data[0].keys()) if isinstance(data[0], dict) else type(data[0])}")
-                print(f"    eerste item: {json.dumps(data[0], ensure_ascii=False)[:1400]}")
-
+        # token-locatie zoeken (alleen sleutelnamen + shape, geen waarde)
         try:
-            page.screenshot(path="debug_magnit_aanvragen.png", full_page=True)
-        except Exception:
-            pass
+            info = page.evaluate("""() => {
+                const out = {local: [], session: [], oidc: null};
+                for (let i=0;i<localStorage.length;i++){
+                    const k = localStorage.key(i); out.local.push(k);
+                    if (k.toLowerCase().includes('oidc') || k.toLowerCase().includes('user')) {
+                        try { const v = JSON.parse(localStorage.getItem(k));
+                            out.oidc = {key: k, fields: Object.keys(v),
+                                        hasAccess: !!v.access_token,
+                                        tokenType: v.token_type,
+                                        profileKeys: v.profile? Object.keys(v.profile): null};
+                        } catch(e){}
+                    }
+                }
+                for (let i=0;i<sessionStorage.length;i++) out.session.push(sessionStorage.key(i));
+                return out;
+            }""")
+            print("-- localStorage keys:", info["local"])
+            print("-- sessionStorage keys:", info["session"])
+            print("-- oidc-user:", info["oidc"])
+        except Exception as e:
+            print(f"-- storage-scan fout: {e}")
+
+        print(f"\n-- {len(captured)} data-calls vastgelegd:")
+        for e in captured:
+            print(f"\n>>> {e['method']} {e['url']}")
+            if e.get("postdata"):
+                print(f"    PAYLOAD: {e['postdata']}")
+            body = e.get("body", "")
+            # probeer nette structuur te tonen
+            try:
+                d = json.loads(body) if body.startswith(("{", "[")) else None
+            except Exception:
+                d = None
+            if isinstance(d, dict):
+                print(f"    keys: {list(d.keys())[:20]}")
+                for veld in ("content", "items", "results", "data", "records",
+                             "jobRequests", "aanvragen", "value"):
+                    lst = d.get(veld)
+                    if isinstance(lst, list) and lst and isinstance(lst[0], dict):
+                        print(f"    '{veld}': {len(lst)} items; item-keys: {list(lst[0].keys())}")
+                        print(f"    item0: {json.dumps(lst[0], ensure_ascii=False)[:1500]}")
+                        break
+            else:
+                print(f"    body: {body[:1500]}")
+
         browser.close()
 
 
