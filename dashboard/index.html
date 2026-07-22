@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<base target="_top">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#f7f7f5; color:#1f1f1f; padding:20px; }
+  h1 { font-size:20px; margin:0 0 4px 0; }
+  .subtitle { color:#6b6b6b; font-size:13px; margin-bottom:18px; }
+  .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+  .card { background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:12px 14px; }
+  .card .label { font-size:12px; color:#6b6b6b; margin-bottom:4px; }
+  .card .value { font-size:24px; font-weight:700; }
+  .card .sub { font-size:11px; color:#9a978f; margin-top:2px; }
+  .card.sap { border-color:#c9b8f0; background:#faf7ff; }
+  .layout { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+  .layout3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+  .panel { background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:14px; }
+  .panel h2 { font-size:14px; margin:0 0 10px 0; }
+  .chart-wrap { position:relative; height:240px; }
+  .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:12px 14px; }
+  .filters label { font-size:12px; color:#444; margin-right:4px; }
+  select, input[type=text] { font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid #d8d5cf; background:#fff; color:#1f1f1f; }
+  input[type=text] { min-width:220px; }
+  .toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#444; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #eeece6; vertical-align:top; }
+  th { cursor:pointer; color:#444; font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:1; }
+  tr:hover td { background:#fafaf8; }
+  a.title-link { color:#1a5fb4; text-decoration:none; }
+  a.title-link:hover { text-decoration:underline; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .badge-open { background:#e3f4e5; color:#227a2f; }
+  .badge-dicht { background:#efe9e3; color:#7a6a55; }
+  .badge-overig { background:#eee; color:#666; }
+  .badge-sap { background:#ece2ff; color:#5b3fb0; border:1px solid #d8c8f5; }
+  .cat { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; background:#eef1f6; color:#3a4a63; }
+  .score { display:inline-block; min-width:44px; text-align:center; padding:3px 6px; border-radius:6px; font-weight:700; font-size:12px; }
+  .s-hot { background:#ffe1d6; color:#b23c17; }
+  .s-warm { background:#fbedcf; color:#8a5a00; }
+  .s-cool { background:#eef0f4; color:#5b6472; }
+  .nieuw { font-size:10px; background:#1a5fb4; color:#fff; padding:1px 6px; border-radius:999px; margin-left:6px; }
+  .table-wrap { overflow-x:auto; max-height:640px; overflow-y:auto; border:1px solid #e5e3de; border-radius:10px; background:#fff; }
+  .footer-row { display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; color:#6b6b6b; }
+  .pager button { font-size:12px; padding:5px 10px; border-radius:6px; border:1px solid #d8d5cf; background:#fff; cursor:pointer; margin-left:6px; }
+  .pager button:disabled { opacity:.4; cursor:default; }
+  .loading, .error { padding:40px; text-align:center; color:#6b6b6b; }
+  .error { color:#a13030; background:#fff; border:1px solid #f0d5d5; border-radius:10px; text-align:left; }
+  .error code { display:block; margin-top:8px; font-size:12px; color:#666; white-space:pre-wrap; }
+  .muted { color:#9a978f; font-size:11px; }
+  .refresh-btn { font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid #d8d5cf; background:#fff; cursor:pointer; }
+  .ranklist { list-style:none; margin:0; padding:0; }
+  .ranklist li { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid #f0eee9; font-size:13px; }
+  .ranklist li:last-child { border-bottom:none; }
+  .ranklist .cnt { font-weight:700; color:#5b3fb0; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f2f1ed; color:#555; margin:2px 3px 2px 0; }
+  @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .layout,.layout3{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<h1>SAP &amp; Marktmonitor</h1>
+<div class="subtitle" id="subtitle">Data wordt geladen...</div>
+
+<div id="loading" class="loading">Data wordt opgehaald...</div>
+<div id="errorBox" class="error" style="display:none"></div>
+
+<div id="app" style="display:none">
+
+  <div class="cards">
+    <div class="card"><div class="label">Nieuw vandaag</div><div class="value" id="kpiVandaag">-</div><div class="sub">laatste 24 uur (IT)</div></div>
+    <div class="card"><div class="label">Nieuw deze week</div><div class="value" id="kpiWeek">-</div><div class="sub">laatste 7 dagen (IT)</div></div>
+    <div class="card"><div class="label">Unieke opdrachtgevers</div><div class="value" id="kpiOrgs">-</div><div class="sub">met open IT-vacatures</div></div>
+    <div class="card sap"><div class="label">SAP-vacatures</div><div class="value" id="kpiSap" style="color:#5b3fb0">-</div><div class="sub" id="kpiSapNieuw">-</div></div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Top opdrachtgevers (huidige selectie)</h2>
+      <div class="chart-wrap"><canvas id="orgChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Categorieverdeling</h2>
+      <div class="chart-wrap"><canvas id="catChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="layout3">
+    <div class="panel">
+      <h2>Meest gevraagde SAP-rollen</h2>
+      <ul class="ranklist" id="sapRoles"></ul>
+    </div>
+    <div class="panel">
+      <h2>Top gevraagde skills</h2>
+      <ul class="ranklist" id="topSkills"></ul>
+    </div>
+    <div class="panel">
+      <h2>Snel filteren</h2>
+      <div id="quickCats"></div>
+      <div class="muted" style="margin-top:10px">Klik een categorie om direct te filteren.</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div><label>Type</label>
+      <select id="typeFilter">
+        <option value="">Alle IT</option>
+        <option value="SAP">SAP</option>
+        <option value="Data &amp; BI">Data &amp; BI</option>
+        <option value="Cloud &amp; Infra">Cloud &amp; Infra</option>
+        <option value="Development">Development</option>
+        <option value="Security">Security</option>
+        <option value="Overig IT">Overig IT</option>
+      </select>
+    </div>
+    <div><label>Bron</label><select id="bronFilter"></select></div>
+    <div><label>Regio</label><select id="regioFilter"></select></div>
+    <div><label>Periode</label>
+      <select id="periodeFilter">
+        <option value="">Alle</option>
+        <option value="1">Vandaag</option>
+        <option value="3">Laatste 3 dagen</option>
+        <option value="7">Deze week</option>
+        <option value="31">Deze maand</option>
+      </select>
+    </div>
+    <div><label>Sorteer</label>
+      <select id="sortFilter">
+        <option value="score-desc">Sales-score (hoog → laag)</option>
+        <option value="datum-desc">Nieuwste eerst</option>
+        <option value="organisatie-asc">Organisatie (A-Z)</option>
+      </select>
+    </div>
+    <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
+    <div style="flex:1"></div>
+    <button class="refresh-btn" id="refreshBtn">Vernieuwen</button>
+    <input type="text" id="searchBox" placeholder="Zoek op titel of organisatie...">
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="score">Score</th>
+          <th data-key="datum">Datum</th>
+          <th data-key="organisatie">Organisatie</th>
+          <th data-key="titel">Titel</th>
+          <th data-key="categorie">Categorie</th>
+          <th data-key="regio">Regio</th>
+          <th data-key="bron">Bron</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer-row">
+    <div id="resultCount">-</div>
+    <div class="pager">
+      <button id="prevBtn">Vorige</button>
+      <span id="pageInfo"></span>
+      <button id="nextBtn">Volgende</button>
+    </div>
+  </div>
+  <div class="muted" style="margin-top:8px;">Sales-score is een indicatie op basis van SAP/IT-trefwoorden, type organisatie en hoe recent de vacature binnenkwam. Bedoeld als prioritering, geen garantie.</div>
+</div>
+
+<script>
+/* ===================== trefwoorden ===================== */
+const SAP_STRONG = ['abap','s/4hana','s4hana','s/4','successfactors','fiori','hana','fico','netweaver','sapui5'];
+const SAP_MODULES = ['sd','mm','pm','pp','ewm','bw','fi','co','le','qm','ps','hcm','ariba','ibp'];
+
+const IT_KEYWORDS = ['it','ict','software','applicatie','applicatiebeheer','systeembeheer','netwerk','developer','ontwikkelaar','engineer','devops','architect','azure','aws','cloud','data','database','business analist','business analyst','informatieanalist','scrum','agile','security','informatiebeveiliging','cyber','consultant','java','python','.net','javascript','sap','erp','bi','power bi','powerbi','dynamics','m365','microsoft 365','functioneel beheer','technisch beheer','tester','test','ux','ui','front-end','back-end','fullstack','full-stack','integratie','api','linux','oracle','sql','digitalisering','automatisering','rpa','ai','machine learning','platform','servicenow','salesforce','react','angular','node'];
+const IT_STRONG = ['sap','developer','ontwikkelaar','engineer','software','azure','aws','cloud','devops','architect','security','informatiebeveiliging','ict','data engineer','.net','abap'];
+
+const EXCLUDE_KEYWORDS = ['schoonmaak','schoonmaker','interieurverzorger','monteur','chauffeur','buschauffeur','verkoper','verkoopmedewerker','verkoopmedewerkster','magazijn','magazijnmedewerker','operator','productiemedewerker','hovenier','servicemedewerker','beveiliger','receptionist','receptie','kok','catering','facilitair','heftruck','lasser','timmerman','schilder','stratenmaker','bezorger','postbezorger','conducteur','machinist','rangeerder','steward','gastheer','gastvrouw','barista','bediening','groenvoorziening','straatreiniger','kassamedewerker','baliemedewerker','verzorgende','verpleegkundige','apotheek','stukadoor','elektromonteur','installatiemonteur','fietsenmaker','vakkenvuller'];
+
+const GROOT_ORG = ['ns','stedin','alliander','enexis','tennet','prorail','kpn','vodafone','rijkswaterstaat','belastingdienst','defensie','politie','rivm','ministerie','gemeente','provincie','waterschap','universiteit','hogeschool','ziekenhuis','rabobank','ing','abn','achmea','vitens','dow','shell','philips','asml'];
+
+const SKILLS = [
+  ['SAP','sap'],['ABAP','abap'],['S/4HANA','s/?4hana'],['SuccessFactors','successfactors'],
+  ['Azure','azure'],['AWS','aws'],['Cloud','cloud'],['Power BI','power ?bi'],['Python','python'],
+  ['Java','java'],['.NET','\\.net'],['DevOps','devops'],['Data','data'],['Security','security|informatiebeveiliging'],
+  ['Dynamics','dynamics'],['M365','m365|microsoft 365'],['Scrum','scrum|agile'],['Oracle','oracle'],
+  ['SQL','sql'],['Linux','linux'],['ServiceNow','servicenow'],['Salesforce','salesforce'],['RPA','rpa'],['AI/ML','\\bai\\b|machine learning']
+];
+
+const REGIO_STEDEN = {
+  'Randstad':['amsterdam','rotterdam','den haag','s-gravenhage','gravenhage','utrecht','haarlem','leiden','delft','zoetermeer','amstelveen','almere','hilversum','gouda','dordrecht','schiphol','diemen','capelle','rijswijk','heinenoord'],
+  'Noord':['groningen','leeuwarden','assen','drachten','heerenveen','emmen','hoogeveen'],
+  'Oost':['zwolle','deventer','enschede','apeldoorn','arnhem','nijmegen','hengelo','ede','doetinchem'],
+  'Zuid':['eindhoven','tilburg','breda','den bosch','s-hertogenbosch','hertogenbosch','maastricht','venlo','roermond','helmond','sittard','geleen','bergen op zoom'],
+  'Midden':['amersfoort','veenendaal','nieuwegein','houten','zeist','baarn','soest']
+};
+
+/* ===================== state ===================== */
+const state = {
+  rows: [], type:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
+  prevSort: null,
+  toonNietIt:false, page:1, pageSize:50,
+};
+let orgChart=null, catChart=null;
+
+/* ===================== helpers ===================== */
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function wordMatch(text, kw){
+  const e = kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp('(^|[^a-z0-9])'+e+'($|[^a-z0-9])','i').test(text);
+}
+function anyMatch(text, list){ return list.some(k=>wordMatch(text,k)); }
+function fmtDate(iso){
+  if(!iso) return '-';
+  const d=new Date(iso); if(isNaN(d.getTime())) return String(iso).slice(0,10);
+  return d.toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+/* ===================== verrijking ===================== */
+function isSap(t){
+  if(wordMatch(t,'sap')) return true;
+  if(SAP_STRONG.some(k=>wordMatch(t,k))) return true;
+  return false;
+}
+function isIt(t){
+  if(anyMatch(t, IT_STRONG)) return true;
+  if(anyMatch(t, EXCLUDE_KEYWORDS)) return false;
+  return anyMatch(t, IT_KEYWORDS);
+}
+function categorie(t, sap){
+  if(sap) return 'SAP';
+  if(wordMatch(t,'security')||wordMatch(t,'informatiebeveiliging')||wordMatch(t,'cyber')||wordMatch(t,'soc')) return 'Security';
+  if(wordMatch(t,'data')||wordMatch(t,'bi')||wordMatch(t,'power bi')||wordMatch(t,'powerbi')||wordMatch(t,'analytics')||wordMatch(t,'analist')) return 'Data & BI';
+  if(wordMatch(t,'cloud')||wordMatch(t,'azure')||wordMatch(t,'aws')||wordMatch(t,'infra')||wordMatch(t,'netwerk')||wordMatch(t,'devops')||wordMatch(t,'systeembeheer')||wordMatch(t,'linux')) return 'Cloud & Infra';
+  if(wordMatch(t,'developer')||wordMatch(t,'ontwikkelaar')||wordMatch(t,'engineer')||wordMatch(t,'java')||wordMatch(t,'python')||wordMatch(t,'.net')||wordMatch(t,'software')||wordMatch(t,'front-end')||wordMatch(t,'back-end')||wordMatch(t,'fullstack')) return 'Development';
+  return 'Overig IT';
+}
+function sapRol(t){
+  if(wordMatch(t,'abap')) return 'ABAP';
+  if(wordMatch(t,'basis')) return 'Basis';
+  if(wordMatch(t,'fico')||wordMatch(t,'fi')||wordMatch(t,'finance')) return 'FICO / Finance';
+  if(wordMatch(t,'successfactors')||wordMatch(t,'hcm')||wordMatch(t,'hr')) return 'SuccessFactors / HCM';
+  if(wordMatch(t,'s/4hana')||wordMatch(t,'s4hana')||wordMatch(t,'s/4')) return 'S/4HANA';
+  if(wordMatch(t,'sd')) return 'SD (Sales)';
+  if(wordMatch(t,'mm')) return 'MM (Materials)';
+  if(wordMatch(t,'pm')) return 'PM (Onderhoud)';
+  if(wordMatch(t,'pp')) return 'PP (Productie)';
+  if(wordMatch(t,'ewm')||wordMatch(t,'wm')) return 'EWM / Logistiek';
+  if(wordMatch(t,'bw')||wordMatch(t,'bi')||wordMatch(t,'analytics')) return 'BW / Analytics';
+  if(wordMatch(t,'functioneel')) return 'Functioneel beheer';
+  return 'SAP Consultant / overig';
+}
+function grootOrg(o){ return GROOT_ORG.some(k=>o.includes(k)); }
+function regioVan(plaats, org){
+  const p=(plaats||'').toLowerCase();
+  if(/remote|thuis|hybride/.test(p)) return 'Remote';
+  for(const [regio, steden] of Object.entries(REGIO_STEDEN)){
+    if(steden.some(s=>p.includes(s))) return regio;
+  }
+  const o=(org||'').toLowerCase();
+  for(const [regio, steden] of Object.entries(REGIO_STEDEN)){
+    if(steden.some(s=>o.includes(s))) return regio;
+  }
+  return 'Overig / onbekend';
+}
+function recencyDagen(v){
+  const ref = v._eerst || v._pub;
+  if(!ref) return null;
+  return (Date.now()-ref)/86400000;
+}
+function salesScore(v){
+  let s=0;
+  if(v.isIt) s+=30;
+  if(v.isSap) s+=35;
+  if(v.grootOrg) s+=15;
+  const d=recencyDagen(v);
+  if(d!==null){ if(d<1) s+=20; else if(d<7) s+=10; else if(d<31) s+=4; }
+  if(/s\/?4hana|public cloud|\becc\b|\berp\b/i.test(v.titel)) s+=8;
+  if((v.status||'').toLowerCase()!=='open') s-=15;
+  return Math.max(0,Math.min(100,s));
+}
+function scoreKlasse(s){ return s>=80?'s-hot':s>=55?'s-warm':'s-cool'; }
+function scoreIcoon(s){ return s>=80?'🔥 ':s>=55?'⭐ ':''; }
+
+/* ===================== data laden ===================== */
+function loadData(){
+  return fetch('./data/tenders.json', {cache:'no-store'})
+    .then(res=>{
+      if(!res.ok) throw new Error('Kon data/tenders.json niet laden (HTTP '+res.status+').');
+      return res.json();
+    })
+    .then(res=>{
+      if(!res.rows || !res.rows.length) throw new Error('data/tenders.json bevat nog geen rijen. Draai de GitHub Action een keer via Actions > Run workflow.');
+      const rows = res.rows.map(r=>{
+        const titel=r.titel||'(geen titel)';
+        const organisatie=r.organisatie||'-';
+        const orgL=organisatie.toLowerCase();
+        const sap=isSap(titel);
+        const it=sap||isIt(titel);
+        const v={
+          bron:r.bron||'onbekend', nummer:r.nummer||'', titel, organisatie,
+          status:r.status||'-',
+          url:r.url||'',
+          locatie:r.locatie||'',
+          deadline:r.deadline||'',
+          publicatiedatum:r.publicatiedatum||'',
+          _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
+          _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
+          isSap:sap, isIt:it,
+          grootOrg:grootOrg(orgL),
+          categorie: it? categorie(titel,sap) : 'Niet-IT',
+          regio: regioVan(r.locatie, organisatie),
+        };
+        if(v._pub && isNaN(v._pub)) v._pub=null;
+        if(v._eerst && isNaN(v._eerst)) v._eerst=null;
+        v.datum = v._pub;
+        v.score = salesScore(v);
+        const d=recencyDagen(v);
+        v.isVandaag = d!==null && d<1;
+        v.isWeek = d!==null && d<7;
+        return v;
+      });
+      return {rows, meta:res};
+    });
+}
+
+/* ===================== filteren ===================== */
+function relevantRows(){
+  return state.toonNietIt ? state.rows : state.rows.filter(r=>r.isIt);
+}
+function fieldValue(r, field){
+  if(field==='score') return r.score;
+  if(field==='datum') return r.datum||-Infinity;
+  return String(r[field]||'').toLowerCase();
+}
+function cmp(a,b,field,dir){
+  const av=fieldValue(a,field), bv=fieldValue(b,field);
+  if(av<bv) return dir==='asc'?-1:1;
+  if(av>bv) return dir==='asc'?1:-1;
+  return 0;
+}
+function getFiltered(){
+  let rows = relevantRows();
+  if(state.type) rows=rows.filter(r=>r.categorie===state.type);
+  if(state.bron) rows=rows.filter(r=>r.bron===state.bron);
+  if(state.regio) rows=rows.filter(r=>r.regio===state.regio);
+  if(state.periode){
+    const max=parseInt(state.periode,10);
+    rows=rows.filter(r=>{ const d=recencyDagen(r); return d!==null && d<=max; });
+  }
+  if(state.search){
+    const q=state.search.toLowerCase();
+    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q));
+  }
+
+  const [field,dir]=state.sort.split('-');
+  const chain=[{field,dir}];
+  if(state.prevSort){
+    const [pf,pd]=state.prevSort.split('-');
+    if(pf!==field) chain.push({field:pf,dir:pd});
+  }
+  chain.push({field:'score',dir:'desc'});
+
+  rows=rows.slice().sort((a,b)=>{
+    for(const {field,dir} of chain){
+      const c=cmp(a,b,field,dir);
+      if(c!==0) return c;
+    }
+    return 0;
+  });
+  return rows;
+}
+
+/* ===================== render ===================== */
+function renderKpis(){
+  const rel=relevantRows();
+  const vandaag=rel.filter(r=>r.isVandaag).length;
+  const week=rel.filter(r=>r.isWeek).length;
+  const open=rel.filter(r=>(r.status||'').toLowerCase()==='open');
+  const orgs=new Set(open.map(r=>r.organisatie)).size;
+  const sap=state.rows.filter(r=>r.isSap);
+  const sapNieuw=sap.filter(r=>r.isWeek).length;
+  document.getElementById('kpiVandaag').textContent=vandaag;
+  document.getElementById('kpiWeek').textContent=week;
+  document.getElementById('kpiOrgs').textContent=orgs;
+  document.getElementById('kpiSap').textContent=sap.length;
+  document.getElementById('kpiSapNieuw').textContent=sapNieuw+' nieuw deze week';
+}
+function renderCharts(rows){
+  const oc={}; rows.forEach(r=>oc[r.organisatie]=(oc[r.organisatie]||0)+1);
+  const top=Object.entries(oc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const c1=document.getElementById('orgChart').getContext('2d');
+  if(orgChart) orgChart.destroy();
+  orgChart=new Chart(c1,{type:'bar',data:{labels:top.map(e=>e[0]),datasets:[{data:top.map(e=>e[1]),backgroundColor:'#4a6fa5',borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
+  const ce=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+  const c2=document.getElementById('catChart').getContext('2d');
+  if(catChart) catChart.destroy();
+  catChart=new Chart(c2,{type:'doughnut',data:{labels:ce.map(e=>e[0]),datasets:[{data:ce.map(e=>e[1]),
+    backgroundColor:['#5b3fb0','#3f8f4d','#4a6fa5','#d99b1f','#b23c17','#8a8686','#b8b4aa']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
+}
+function renderSapRoles(){
+  const sap=state.rows.filter(r=>r.isSap);
+  const rc={}; sap.forEach(r=>{ const rol=sapRol(r.titel); rc[rol]=(rc[rol]||0)+1; });
+  const rows=Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  document.getElementById('sapRoles').innerHTML = rows.length
+    ? rows.map(([r,c])=>`<li><span>${esc(r)}</span><span class="cnt">${c}</span></li>`).join('')
+    : '<li class="muted">Nog geen SAP-vacatures gevonden.</li>';
+}
+function renderSkills(){
+  const rows=relevantRows();
+  const sc=SKILLS.map(([label,pat])=>{
+    const re=new RegExp('(^|[^a-z0-9])(?:'+pat+')($|[^a-z0-9])','i');
+    return [label, rows.filter(r=>re.test(r.titel)).length];
+  }).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('topSkills').innerHTML = sc.length
+    ? sc.map(([s,c])=>`<li><span>${esc(s)}</span><span class="cnt">${c}</span></li>`).join('')
+    : '<li class="muted">Geen skills herkend.</li>';
+}
+function renderQuickCats(){
+  const rows=relevantRows();
+  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
+  const wrap=document.getElementById('quickCats');
+  wrap.innerHTML=Object.entries(cc).sort((a,b)=>b[1]-a[1])
+    .map(([c,n])=>`<span class="pill" data-cat="${esc(c)}" style="cursor:pointer">${esc(c)} (${n})</span>`).join('');
+  wrap.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
+    const cat=p.dataset.cat;
+    state.type = (state.type===cat)?'':cat;
+    const sel=document.getElementById('typeFilter');
+    if([...sel.options].some(o=>o.value===cat)) sel.value=state.type;
+    state.page=1; render();
+  });
+}
+function renderTable(rows){
+  const totalPages=Math.max(1,Math.ceil(rows.length/state.pageSize));
+  if(state.page>totalPages) state.page=totalPages;
+  const start=(state.page-1)*state.pageSize;
+  const pageRows=rows.slice(start,start+state.pageSize);
+  document.getElementById('tableBody').innerHTML = pageRows.map(r=>`
+    <tr>
+      <td><span class="score ${scoreKlasse(r.score)}">${scoreIcoon(r.score)}${r.score}</span></td>
+      <td>${esc(fmtDate(r.datum))}</td>
+      <td>${esc(r.organisatie)}</td>
+      <td>${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?' <span class="badge badge-sap">SAP</span>':''}${r.nummer?`<div class="muted">${esc(r.nummer)}</div>`:''}</td>
+      <td><span class="cat">${esc(r.categorie)}</span></td>
+      <td>${esc(r.regio)}</td>
+      <td>${esc(r.bron)}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="padding:24px;color:#9a978f">Geen resultaten met deze filters.</td></tr>';
+  document.getElementById('resultCount').textContent=`${rows.length} vacatures`;
+  document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
+  document.getElementById('prevBtn').disabled=state.page<=1;
+  document.getElementById('nextBtn').disabled=state.page>=totalPages;
+}
+function render(){
+  const rows=getFiltered();
+  renderKpis();
+  renderCharts(rows);
+  renderSapRoles();
+  renderSkills();
+  renderQuickCats();
+  renderTable(rows);
+}
+
+/* ===================== filteropties ===================== */
+function buildFilterOptions(){
+  const rel=relevantRows();
+  const bronSel=document.getElementById('bronFilter');
+  const bc={}; state.rows.forEach(r=>bc[r.bron]=(bc[r.bron]||0)+1);
+  bronSel.innerHTML='<option value="">Alle bronnen</option>'+Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([b,c])=>`<option value="${esc(b)}">${esc(b)} (${c})</option>`).join('');
+  bronSel.value=state.bron;
+
+  const regioSel=document.getElementById('regioFilter');
+  const rc={}; rel.forEach(r=>rc[r.regio]=(rc[r.regio]||0)+1);
+  regioSel.innerHTML='<option value="">Alle regio\'s</option>'+Object.entries(rc).sort((a,b)=>b[1]-a[1]).map(([r,c])=>`<option value="${esc(r)}">${esc(r)} (${c})</option>`).join('');
+  regioSel.value=state.regio;
+}
+
+/* ===================== events ===================== */
+function bindEvents(){
+  document.getElementById('typeFilter').onchange=e=>{state.type=e.target.value;state.page=1;render();};
+  document.getElementById('bronFilter').onchange=e=>{state.bron=e.target.value;state.page=1;render();};
+  document.getElementById('regioFilter').onchange=e=>{state.regio=e.target.value;state.page=1;render();};
+  document.getElementById('periodeFilter').onchange=e=>{state.periode=e.target.value;state.page=1;render();};
+  document.getElementById('sortFilter').onchange=e=>{
+    const newSort=e.target.value;
+    const [nf]=newSort.split('-'), [cf]=state.sort.split('-');
+    if(nf!==cf) state.prevSort=state.sort;
+    state.sort=newSort;
+    state.page=1; render();
+  };
+  document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
+  let t;
+  document.getElementById('searchBox').oninput=e=>{clearTimeout(t);t=setTimeout(()=>{state.search=e.target.value.trim();state.page=1;render();},200);};
+  document.getElementById('prevBtn').onclick=()=>{if(state.page>1){state.page--;render();window.scrollTo({top:0,behavior:'smooth'});}};
+  document.getElementById('nextBtn').onclick=()=>{state.page++;render();window.scrollTo({top:0,behavior:'smooth'});};
+  document.getElementById('refreshBtn').onclick=()=>init(true);
+  document.querySelectorAll('th[data-key]').forEach(th=>{
+    th.onclick=()=>{
+      const key=th.dataset.key; const [f,d]=state.sort.split('-');
+      const newSort=(f===key&&d==='desc')?key+'-asc':key+'-desc';
+      if(key!==f) state.prevSort=state.sort;
+      state.sort=newSort;
+      const sel=document.getElementById('sortFilter');
+      if([...sel.options].some(o=>o.value===state.sort)) sel.value=state.sort;
+      state.page=1; render();
+    };
+  });
+}
+
+/* ===================== init ===================== */
+function showError(err){
+  document.getElementById('loading').style.display='none';
+  const box=document.getElementById('errorBox');
+  box.style.display='block';
+  box.innerHTML='<strong>Er ging iets mis bij het laden.</strong><code>'+esc(err&&err.message?err.message:String(err))+'</code>'+
+    '<div class="muted" style="margin-top:10px">Check: staat data/tenders.json in de repo, en is de GitHub Action al minstens één keer succesvol gedraaid?</div>';
+}
+function init(isRefresh){
+  if(isRefresh){
+    document.getElementById('app').style.display='none';
+    document.getElementById('errorBox').style.display='none';
+    document.getElementById('loading').style.display='block';
+  }
+  loadData().then(({rows,meta})=>{
+    state.rows=rows;
+    document.getElementById('subtitle').textContent=
+      `Data uit ${meta.fileName||'tenders'}, laatst bijgewerkt ${meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-'}`;
+    buildFilterOptions();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('errorBox').style.display='none';
+    document.getElementById('app').style.display='block';
+    render();
+  }).catch(showError);
+}
+window.addEventListener('DOMContentLoaded',()=>{bindEvents();init(false);});
+</script>
+</body>
+</html>

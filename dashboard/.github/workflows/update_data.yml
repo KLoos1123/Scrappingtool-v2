@@ -1,0 +1,38 @@
+name: Update tenders data
+
+on:
+  schedule:
+    # Draait elk uur op het hele uur (pas aan naar wens, bv. "0 */6 * * *" voor elke 6 uur)
+    - cron: "0 * * * *"
+  workflow_dispatch: {}   # laat je ook handmatig starten via de Actions-tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run scraper(s)
+        run: |
+          python scraper.py   # vervang dit door jouw daadwerkelijke scraper-script(s)
+
+      - name: Export naar JSON
+        run: |
+          python export_json.py
+
+      - name: Commit en push als er wijzigingen zijn
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tenders.json
+          git diff --quiet --cached || git commit -m "Automatische data-update"
+          git push
