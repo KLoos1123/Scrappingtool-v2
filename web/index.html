@@ -12,6 +12,14 @@
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#f7f7f5; color:#1f1f1f; padding:20px; }
   h1 { font-size:20px; margin:0 0 4px 0; }
   .subtitle { color:#6b6b6b; font-size:13px; margin-bottom:18px; }
+  .topbar { display:flex; align-items:center; gap:18px; margin-bottom:18px; flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; }
+  .brand img { height:40px; width:auto; display:block; }
+  .wordmark { display:inline-flex; align-items:center; gap:9px; }
+  .wordmark .wm-text { font-size:27px; letter-spacing:.3px; color:#2f6fb5; font-weight:400; line-height:1; }
+  .wordmark .wm-text b { color:#1b3576; font-weight:800; }
+  .title-block h1 { margin:0; }
+  .title-block .subtitle { margin:3px 0 0 0; }
   .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
   .card { background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:12px 14px; }
   .card .label { font-size:12px; color:#6b6b6b; margin-bottom:4px; }
@@ -23,11 +31,15 @@
   .panel { background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:14px; }
   .panel h2 { font-size:14px; margin:0 0 10px 0; }
   .chart-wrap { position:relative; height:240px; }
-  .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:12px 14px; }
+  .filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px; background:#fff; border:1px solid #e5e3de; border-radius:10px; padding:12px 14px; }
   .filters label { font-size:12px; color:#444; margin-right:4px; }
   select, input[type=text] { font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid #d8d5cf; background:#fff; color:#1f1f1f; }
   input[type=text] { min-width:220px; }
   .toggle { display:flex; align-items:center; gap:6px; font-size:12px; color:#444; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; min-height:4px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:#eef1f6; color:#3a4a63; border:1px solid #d7dee9; border-radius:999px; padding:3px 6px 3px 10px; font-size:12px; }
+  .chip button { border:none; background:none; cursor:pointer; color:#7a8aa0; font-size:14px; line-height:1; padding:0 2px; }
+  .chip.clear { background:#fbe9e4; color:#b23c17; border-color:#f0cdc2; cursor:pointer; padding:3px 10px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #eeece6; vertical-align:top; }
   th { cursor:pointer; color:#444; font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:1; }
@@ -35,10 +47,10 @@
   a.title-link { color:#1a5fb4; text-decoration:none; }
   a.title-link:hover { text-decoration:underline; }
   .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-  .badge-open { background:#e3f4e5; color:#227a2f; }
-  .badge-dicht { background:#efe9e3; color:#7a6a55; }
-  .badge-overig { background:#eee; color:#666; }
   .badge-sap { background:#ece2ff; color:#5b3fb0; border:1px solid #d8c8f5; }
+  .badge-oracle { background:#ffe4e1; color:#b3261e; border:1px solid #f4c9c4; }
+  .badge-tender { background:#e7eefb; color:#1a5fb4; border:1px solid #cfe0f7; }
+  .badge-vac { background:#e9f6ee; color:#227a2f; border:1px solid #cde9d6; }
   .cat { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; background:#eef1f6; color:#3a4a63; }
   .score { display:inline-block; min-width:44px; text-align:center; padding:3px 6px; border-radius:6px; font-weight:700; font-size:12px; }
   .s-hot { background:#ffe1d6; color:#b23c17; }
@@ -55,17 +67,37 @@
   .muted { color:#9a978f; font-size:11px; }
   .refresh-btn { font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid #d8d5cf; background:#fff; cursor:pointer; }
   .ranklist { list-style:none; margin:0; padding:0; }
-  .ranklist li { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid #f0eee9; font-size:13px; }
+  .ranklist li { display:flex; justify-content:space-between; gap:8px; padding:5px 6px; border-bottom:1px solid #f0eee9; font-size:13px; border-radius:6px; }
   .ranklist li:last-child { border-bottom:none; }
+  .ranklist li.clickable { cursor:pointer; }
+  .ranklist li.clickable:hover { background:#f3f0fb; }
+  .ranklist li.active { background:#ece2ff; }
   .ranklist .cnt { font-weight:700; color:#5b3fb0; }
-  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f2f1ed; color:#555; margin:2px 3px 2px 0; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f2f1ed; color:#555; margin:2px 3px 2px 0; cursor:pointer; }
+  .pill.active { background:#ece2ff; color:#5b3fb0; }
   @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .layout,.layout3{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
 
-<h1>SAP &amp; Marktmonitor</h1>
-<div class="subtitle" id="subtitle">Live data uit de scraper-database</div>
+<div class="topbar">
+  <div class="brand">
+    <img id="logoImg" src="logo.png" alt="Profource"
+         onerror="this.remove();var s=document.getElementById('logoSvg');if(s)s.style.display='inline-flex';">
+    <span id="logoSvg" class="wordmark" style="display:none">
+      <svg width="42" height="34" viewBox="0 0 42 34" aria-hidden="true">
+        <polygon points="5,2 22,2 17,13 0,13" fill="#a5228f"/>
+        <rect x="2" y="15" width="15" height="15" rx="1" fill="#1b3576"/>
+        <rect x="19" y="17" width="12" height="13" rx="1" fill="#5aa0dc"/>
+      </svg>
+      <span class="wm-text"><b>pro</b>fource</span>
+    </span>
+  </div>
+  <div class="title-block">
+    <h1>SAP &amp; Marktmonitor</h1>
+    <div class="subtitle" id="subtitle">Data uit de scraper-database</div>
+  </div>
+</div>
 
 <div id="loading" class="loading">Data wordt geladen...</div>
 <div id="errorBox" class="error" style="display:none"></div>
@@ -75,13 +107,13 @@
   <div class="cards">
     <div class="card"><div class="label">Nieuw vandaag</div><div class="value" id="kpiVandaag">-</div><div class="sub">laatste 24 uur (IT)</div></div>
     <div class="card"><div class="label">Nieuw deze week</div><div class="value" id="kpiWeek">-</div><div class="sub">laatste 7 dagen (IT)</div></div>
-    <div class="card"><div class="label">Unieke opdrachtgevers</div><div class="value" id="kpiOrgs">-</div><div class="sub">met open IT-vacatures</div></div>
-    <div class="card sap"><div class="label">SAP-vacatures</div><div class="value" id="kpiSap" style="color:#5b3fb0">-</div><div class="sub" id="kpiSapNieuw">-</div></div>
+    <div class="card"><div class="label">Unieke eindklanten</div><div class="value" id="kpiOrgs">-</div><div class="sub">met open IT-opdrachten</div></div>
+    <div class="card sap"><div class="label">SAP + Oracle</div><div class="value" id="kpiSap" style="color:#5b3fb0">-</div><div class="sub" id="kpiSapNieuw">-</div></div>
   </div>
 
   <div class="layout">
     <div class="panel">
-      <h2>Top opdrachtgevers (huidige selectie)</h2>
+      <h2 id="orgTitle">Top eindklanten (huidige selectie)</h2>
       <div class="chart-wrap"><canvas id="orgChart"></canvas></div>
     </div>
     <div class="panel">
@@ -92,17 +124,18 @@
 
   <div class="layout3">
     <div class="panel">
-      <h2>Meest gevraagde SAP-rollen</h2>
+      <h2 id="rolesTitle">Meest gevraagde SAP-rollen</h2>
       <ul class="ranklist" id="sapRoles"></ul>
+      <div class="muted" style="margin-top:8px">Klik een rol om erop te filteren.</div>
     </div>
     <div class="panel">
       <h2>Top gevraagde skills</h2>
       <ul class="ranklist" id="topSkills"></ul>
+      <div class="muted" style="margin-top:8px">Klik een skill om erop te filteren.</div>
     </div>
     <div class="panel">
-      <h2>Snel filteren</h2>
+      <h2>Snel filteren op categorie</h2>
       <div id="quickCats"></div>
-      <div class="muted" style="margin-top:10px">Klik een categorie om direct te filteren.</div>
     </div>
   </div>
 
@@ -111,11 +144,21 @@
       <select id="typeFilter">
         <option value="">Alle IT</option>
         <option value="SAP">SAP</option>
+        <option value="Oracle">Oracle</option>
         <option value="Data &amp; BI">Data &amp; BI</option>
         <option value="Cloud &amp; Infra">Cloud &amp; Infra</option>
         <option value="Development">Development</option>
         <option value="Security">Security</option>
+        <option value="Functioneel &amp; Beheer">Functioneel &amp; Beheer</option>
+        <option value="Project &amp; Agile">Project &amp; Agile</option>
         <option value="Overig IT">Overig IT</option>
+      </select>
+    </div>
+    <div><label>Soort</label>
+      <select id="soortFilter">
+        <option value="">Alles</option>
+        <option value="Tender/opdracht">Tender / opdracht</option>
+        <option value="Vacature">Vacature</option>
       </select>
     </div>
     <div><label>Bron</label><select id="bronFilter"></select></div>
@@ -133,14 +176,19 @@
       <select id="sortFilter">
         <option value="score-desc">Sales-score (hoog → laag)</option>
         <option value="datum-desc">Nieuwste eerst</option>
+        <option value="deadline-asc">Deadline (eerst sluitend)</option>
         <option value="organisatie-asc">Organisatie (A-Z)</option>
+        <option value="bron-asc">Bron (A-Z)</option>
       </select>
     </div>
+    <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
     <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
     <div style="flex:1"></div>
     <button class="refresh-btn" id="refreshBtn">Vernieuwen</button>
     <input type="text" id="searchBox" placeholder="Zoek op titel of organisatie...">
   </div>
+
+  <div class="chips" id="activeChips"></div>
 
   <div class="table-wrap">
     <table>
@@ -151,6 +199,7 @@
           <th data-key="organisatie">Organisatie</th>
           <th data-key="titel">Titel</th>
           <th data-key="categorie">Categorie</th>
+          <th data-key="soort">Soort</th>
           <th data-key="regio">Regio</th>
           <th data-key="bron">Bron</th>
         </tr>
@@ -167,28 +216,43 @@
       <button id="nextBtn">Volgende</button>
     </div>
   </div>
-  <div class="muted" style="margin-top:8px;">Sales-score is een indicatie op basis van SAP/IT-trefwoorden, type organisatie en hoe recent de vacature binnenkwam. Bedoeld als prioritering, geen garantie.</div>
+  <div class="muted" style="margin-top:8px;">Sales-score is een indicatie op basis van SAP/Oracle/IT-trefwoorden, type organisatie en hoe recent de opdracht binnenkwam. Bedoeld als prioritering, geen garantie. "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus en onbekende opdrachtgevers.</div>
 </div>
 
 <script>
 /* ===================== trefwoorden ===================== */
-const SAP_STRONG = ['abap','s/4hana','s4hana','s/4','successfactors','fiori','hana','fico','netweaver','sapui5'];
-const SAP_MODULES = ['sd','mm','pm','pp','ewm','bw','fi','co','le','qm','ps','hcm','ariba','ibp'];
+const SAP_STRONG = ['sap','abap','s/4hana','s4hana','s/4','successfactors','fiori','hana','fico','netweaver','sapui5','ariba','ibp'];
+const ORACLE_STRONG = ['oracle','ebs','e-business suite','fusion','peoplesoft','jd edwards','jd-edwards','jde','hyperion','oci','netsuite','plsql','pl/sql'];
 
-const IT_KEYWORDS = ['it','ict','software','applicatie','applicatiebeheer','systeembeheer','netwerk','developer','ontwikkelaar','engineer','devops','architect','azure','aws','cloud','data','database','business analist','business analyst','informatieanalist','scrum','agile','security','informatiebeveiliging','cyber','consultant','java','python','.net','javascript','sap','erp','bi','power bi','powerbi','dynamics','m365','microsoft 365','functioneel beheer','technisch beheer','tester','test','ux','ui','front-end','back-end','fullstack','full-stack','integratie','api','linux','oracle','sql','digitalisering','automatisering','rpa','ai','machine learning','platform','servicenow','salesforce','react','angular','node'];
-const IT_STRONG = ['sap','developer','ontwikkelaar','engineer','software','azure','aws','cloud','devops','architect','security','informatiebeveiliging','ict','data engineer','.net','abap'];
+const IT_KEYWORDS = ['it','ict','software','applicatie','applicatiebeheer','systeembeheer','netwerk','developer','ontwikkelaar','engineer','devops','architect','azure','aws','cloud','data','database','business analist','business analyst','informatieanalist','informatiemanager','informatievoorziening','scrum','agile','security','informatiebeveiliging','cyber','consultant','java','python','.net','javascript','sap','oracle','erp','bi','power bi','powerbi','dynamics','m365','microsoft 365','functioneel beheer','functioneel','technisch beheer','beheerder','servicedesk','support','tester','test','ux','ui','front-end','back-end','fullstack','full-stack','integratie','koppeling','middleware','api','linux','sql','digitalisering','automatisering','rpa','ai','machine learning','platform','servicenow','salesforce','react','angular','node','product owner','scrum master','projectleider ict','implementatie','migratie'];
+const IT_STRONG = ['sap','oracle','developer','ontwikkelaar','engineer','software','azure','aws','cloud','devops','architect','security','informatiebeveiliging','ict','data engineer','.net','abap','servicenow','salesforce'];
 
 const EXCLUDE_KEYWORDS = ['schoonmaak','schoonmaker','interieurverzorger','monteur','chauffeur','buschauffeur','verkoper','verkoopmedewerker','verkoopmedewerkster','magazijn','magazijnmedewerker','operator','productiemedewerker','hovenier','servicemedewerker','beveiliger','receptionist','receptie','kok','catering','facilitair','heftruck','lasser','timmerman','schilder','stratenmaker','bezorger','postbezorger','conducteur','machinist','rangeerder','steward','gastheer','gastvrouw','barista','bediening','groenvoorziening','straatreiniger','kassamedewerker','baliemedewerker','verzorgende','verpleegkundige','apotheek','stukadoor','elektromonteur','installatiemonteur','fietsenmaker','vakkenvuller'];
 
 const GROOT_ORG = ['ns','stedin','alliander','enexis','tennet','prorail','kpn','vodafone','rijkswaterstaat','belastingdienst','defensie','politie','rivm','ministerie','gemeente','provincie','waterschap','universiteit','hogeschool','ziekenhuis','rabobank','ing','abn','achmea','vitens','dow','shell','philips','asml'];
 
+/* Bekende tussenpersonen / consultancy- en detacheringsbureaus + marktplaatsen.
+   Rijen met deze organisatie (of onbekende opdrachtgever) verdwijnen bij
+   "Alleen eindklanten". Lijst is een startpunt; uit te breiden. */
+const BUREAUS = ['striive','magnit','flextender','harvey nash','yacht','brunel','hays','headfirst','myler','between','sthree','experis','modis','randstad','usg','tempo team','olympia','manpower','adecco','start people','young capital','circle8','bergler','ordina','conclusion','centric','cgi','capgemini','sopra steria','atos','accenture','deloitte','kpmg','pwc','info support','ilionx','valid','quintor','devoteam','profource','freelance','detach','consultancy','consultants','interim','recruit','payroll','staffing','uitzend','flexkracht','sourcing'];
+function isBureauOrg(orgL){
+  if(!orgL || orgL==='-' || /unknown|onbekend/.test(orgL)) return true;
+  return BUREAUS.some(b=>orgL.includes(b));
+}
+
+/* Bronnen die vacatures (loondienst) leveren i.p.v. tenders/inhuuropdrachten. */
+const VACATURE_BRONNEN = new Set(['ns','stedin']);
+function soortVan(bron){ return VACATURE_BRONNEN.has(bron) ? 'Vacature' : 'Tender/opdracht'; }
+
 const SKILLS = [
-  ['SAP','sap'],['ABAP','abap'],['S/4HANA','s/?4hana'],['SuccessFactors','successfactors'],
+  ['SAP','sap'],['Oracle','oracle|ebs|fusion|peoplesoft'],['ABAP','abap'],['S/4HANA','s/?4hana'],['SuccessFactors','successfactors'],
   ['Azure','azure'],['AWS','aws'],['Cloud','cloud'],['Power BI','power ?bi'],['Python','python'],
   ['Java','java'],['.NET','\\.net'],['DevOps','devops'],['Data','data'],['Security','security|informatiebeveiliging'],
-  ['Dynamics','dynamics'],['M365','m365|microsoft 365'],['Scrum','scrum|agile'],['Oracle','oracle'],
+  ['Dynamics','dynamics'],['M365','m365|microsoft 365'],['Scrum','scrum|agile'],
   ['SQL','sql'],['Linux','linux'],['ServiceNow','servicenow'],['Salesforce','salesforce'],['RPA','rpa'],['AI/ML','\\bai\\b|machine learning']
 ];
+const SKILL_MAP = {};
+SKILLS.forEach(([label,pat])=>{ SKILL_MAP[label]=new RegExp('(^|[^a-z0-9])(?:'+pat+')($|[^a-z0-9])','i'); });
 
 const REGIO_STEDEN = {
   'Randstad':['amsterdam','rotterdam','den haag','s-gravenhage','gravenhage','utrecht','haarlem','leiden','delft','zoetermeer','amstelveen','almere','hilversum','gouda','dordrecht','schiphol','diemen','capelle','rijswijk','heinenoord'],
@@ -200,9 +264,9 @@ const REGIO_STEDEN = {
 
 /* ===================== state ===================== */
 const state = {
-  rows: [], type:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
-  prevSort: null,
-  toonNietIt:false, page:1, pageSize:50,
+  rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
+  prevSort: null, skill:'', rol:'',
+  verbergBureaus:true, toonNietIt:false, page:1, pageSize:50,
 };
 let orgChart=null, catChart=null;
 
@@ -220,11 +284,8 @@ function fmtDate(iso){
 }
 
 /* ===================== verrijking ===================== */
-function isSap(t){
-  if(wordMatch(t,'sap')) return true;
-  if(SAP_STRONG.some(k=>wordMatch(t,k))) return true;
-  return false;
-}
+function isSap(t){ return SAP_STRONG.some(k=>wordMatch(t,k)); }
+function isOracle(t){ return ORACLE_STRONG.some(k=>wordMatch(t,k)); }
 function isIt(t){
   if(anyMatch(t, IT_STRONG)) return true;
   if(anyMatch(t, EXCLUDE_KEYWORDS)) return false;   // niet-IT gaat voor
@@ -232,27 +293,41 @@ function isIt(t){
 }
 function categorie(t, sap){
   if(sap) return 'SAP';
+  if(isOracle(t)) return 'Oracle';
   if(wordMatch(t,'security')||wordMatch(t,'informatiebeveiliging')||wordMatch(t,'cyber')||wordMatch(t,'soc')) return 'Security';
   if(wordMatch(t,'data')||wordMatch(t,'bi')||wordMatch(t,'power bi')||wordMatch(t,'powerbi')||wordMatch(t,'analytics')||wordMatch(t,'analist')) return 'Data & BI';
   if(wordMatch(t,'cloud')||wordMatch(t,'azure')||wordMatch(t,'aws')||wordMatch(t,'infra')||wordMatch(t,'netwerk')||wordMatch(t,'devops')||wordMatch(t,'systeembeheer')||wordMatch(t,'linux')) return 'Cloud & Infra';
   if(wordMatch(t,'developer')||wordMatch(t,'ontwikkelaar')||wordMatch(t,'engineer')||wordMatch(t,'java')||wordMatch(t,'python')||wordMatch(t,'.net')||wordMatch(t,'software')||wordMatch(t,'front-end')||wordMatch(t,'back-end')||wordMatch(t,'fullstack')) return 'Development';
+  if(wordMatch(t,'functioneel')||wordMatch(t,'beheer')||wordMatch(t,'beheerder')||wordMatch(t,'support')||wordMatch(t,'servicedesk')||wordMatch(t,'applicatiebeheer')||wordMatch(t,'tester')||wordMatch(t,'test')) return 'Functioneel & Beheer';
+  if(wordMatch(t,'projectleider')||wordMatch(t,'projectmanager')||wordMatch(t,'programmamanager')||wordMatch(t,'scrum')||wordMatch(t,'agile')||wordMatch(t,'product owner')||wordMatch(t,'implementatie')||wordMatch(t,'transitie')) return 'Project & Agile';
   return 'Overig IT';
 }
 function sapRol(t){
   if(wordMatch(t,'abap')) return 'ABAP';
   if(wordMatch(t,'basis')) return 'Basis';
-  if(wordMatch(t,'fico')||wordMatch(t,'fi')||wordMatch(t,'finance')) return 'FICO / Finance';
-  if(wordMatch(t,'successfactors')||wordMatch(t,'hcm')||wordMatch(t,'hr')) return 'SuccessFactors / HCM';
+  if(wordMatch(t,'fico')||wordMatch(t,'finance')) return 'FICO / Finance';
+  if(wordMatch(t,'successfactors')||wordMatch(t,'hcm')) return 'SuccessFactors / HCM';
   if(wordMatch(t,'s/4hana')||wordMatch(t,'s4hana')||wordMatch(t,'s/4')) return 'S/4HANA';
   if(wordMatch(t,'sd')) return 'SD (Sales)';
   if(wordMatch(t,'mm')) return 'MM (Materials)';
   if(wordMatch(t,'pm')) return 'PM (Onderhoud)';
   if(wordMatch(t,'pp')) return 'PP (Productie)';
   if(wordMatch(t,'ewm')||wordMatch(t,'wm')) return 'EWM / Logistiek';
-  if(wordMatch(t,'bw')||wordMatch(t,'bi')||wordMatch(t,'analytics')) return 'BW / Analytics';
+  if(wordMatch(t,'bw')||wordMatch(t,'analytics')) return 'BW / Analytics';
+  if(wordMatch(t,'ariba')) return 'Ariba / Inkoop';
   if(wordMatch(t,'functioneel')) return 'Functioneel beheer';
-  if(wordMatch(t,'basis')) return 'Basis';
-  return 'SAP Consultant / overig';
+  return 'SAP consultant / overig';
+}
+function oracleRol(t){
+  if(wordMatch(t,'ebs')||wordMatch(t,'e-business')) return 'EBS';
+  if(wordMatch(t,'fusion')) return 'Fusion';
+  if(wordMatch(t,'peoplesoft')) return 'PeopleSoft';
+  if(wordMatch(t,'jde')||wordMatch(t,'jd edwards')||wordMatch(t,'jd-edwards')) return 'JD Edwards';
+  if(wordMatch(t,'hyperion')||wordMatch(t,'epm')) return 'Hyperion / EPM';
+  if(wordMatch(t,'netsuite')) return 'NetSuite';
+  if(wordMatch(t,'oci')||wordMatch(t,'oracle cloud')) return 'OCI / Cloud';
+  if(wordMatch(t,'plsql')||wordMatch(t,'pl/sql')||wordMatch(t,'dba')) return 'DBA / PL-SQL';
+  return 'Oracle consultant / overig';
 }
 function grootOrg(o){ return GROOT_ORG.some(k=>o.includes(k)); }
 function regioVan(plaats, org){
@@ -261,7 +336,6 @@ function regioVan(plaats, org){
   for(const [regio, steden] of Object.entries(REGIO_STEDEN)){
     if(steden.some(s=>p.includes(s))) return regio;
   }
-  // val terug op organisatie (bv. "Gemeente Rotterdam")
   const o=(org||'').toLowerCase();
   for(const [regio, steden] of Object.entries(REGIO_STEDEN)){
     if(steden.some(s=>o.includes(s))) return regio;
@@ -276,36 +350,39 @@ function recencyDagen(v){
 function salesScore(v){
   let s=0;
   if(v.isIt) s+=30;
-  if(v.isSap) s+=35;
+  if(v.isSap||v.isOracle) s+=35;
   if(v.grootOrg) s+=15;
+  if(!v.isBureau) s+=8;                 // bekende eindklant weegt zwaarder
   const d=recencyDagen(v);
   if(d!==null){ if(d<1) s+=20; else if(d<7) s+=10; else if(d<31) s+=4; }
   if(/s\/?4hana|public cloud|\becc\b|\berp\b/i.test(v.titel)) s+=8;
-  if((v.status||'').toLowerCase()!=='open') s-=15; // gesloten = lagere prioriteit
+  if((v.status||'').toLowerCase()!=='open') s-=15;
   return Math.max(0,Math.min(100,s));
 }
 function scoreKlasse(s){ return s>=80?'s-hot':s>=55?'s-warm':'s-cool'; }
 function scoreIcoon(s){ return s>=80?'🔥 ':s>=55?'⭐ ':''; }
+function rolVan(r){ return r.isSap?sapRol(r.titel):(r.isOracle?oracleRol(r.titel):null); }
+function focusDomein(){ return state.type==='Oracle'?'Oracle':'SAP'; }
 
 /* ===================== data laden ===================== */
 function loadData(){
-  // Data komt uit een statische tenders.json die de GitHub Action genereert
-  // uit tenders.db (cache-buster zodat je altijd de laatste run ziet).
   return fetch('tenders.json?_=' + Date.now())
     .then(r=>{
       if(!r.ok) throw new Error('tenders.json kon niet geladen worden (HTTP '+r.status+').');
       return r.json();
     })
     .then(res=>{
-      if(!res.rows || !res.rows.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action een keer via Actions > Tender Scrapers > Run workflow.');
+      if(!res.rows || !res.rows.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
       const rows = res.rows.map(r=>{
         const titel=r.titel||'(geen titel)';
         const organisatie=r.organisatie||'-';
         const orgL=organisatie.toLowerCase();
         const sap=isSap(titel);
-        const it=sap||isIt(titel);
+        const orc=isOracle(titel);
+        const it=sap||orc||isIt(titel);
+        const bron=r.bron||'onbekend';
         const v={
-          bron:r.bron||'onbekend', nummer:r.nummer||'', titel, organisatie,
+          bron, nummer:r.nummer||'', titel, organisatie,
           status:r.status||'-',
           url:r.url||'',
           locatie:r.locatie||'',
@@ -313,13 +390,17 @@ function loadData(){
           publicatiedatum:r.publicatiedatum||'',
           _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
           _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
-          isSap:sap, isIt:it,
+          _deadline: r.deadline? new Date(r.deadline).getTime(): null,
+          isSap:sap, isOracle:orc, isIt:it,
+          isBureau: isBureauOrg(orgL),
           grootOrg:grootOrg(orgL),
+          soort: soortVan(bron),
           categorie: it? categorie(titel,sap) : 'Niet-IT',
           regio: regioVan(r.locatie, organisatie),
         };
         if(v._pub && isNaN(v._pub)) v._pub=null;
         if(v._eerst && isNaN(v._eerst)) v._eerst=null;
+        if(v._deadline && isNaN(v._deadline)) v._deadline=null;
         v.datum = v._pub;
         v.score = salesScore(v);
         const d=recencyDagen(v);
@@ -332,12 +413,17 @@ function loadData(){
 }
 
 /* ===================== filteren ===================== */
+function baseRows(){
+  return state.verbergBureaus ? state.rows.filter(r=>!r.isBureau) : state.rows;
+}
 function relevantRows(){
-  return state.toonNietIt ? state.rows : state.rows.filter(r=>r.isIt);
+  const b=baseRows();
+  return state.toonNietIt ? b : b.filter(r=>r.isIt);
 }
 function fieldValue(r, field){
   if(field==='score') return r.score;
   if(field==='datum') return r.datum||-Infinity;
+  if(field==='deadline') return r._deadline||Infinity;   // geen deadline = achteraan bij 'eerst sluitend'
   return String(r[field]||'').toLowerCase();
 }
 function cmp(a,b,field,dir){
@@ -347,10 +433,12 @@ function cmp(a,b,field,dir){
   return 0;
 }
 function getFiltered(rows){
-  // let rows = relevantRows();
   if(state.type) rows=rows.filter(r=>r.categorie===state.type);
+  if(state.soort) rows=rows.filter(r=>r.soort===state.soort);
   if(state.bron) rows=rows.filter(r=>r.bron===state.bron);
   if(state.regio) rows=rows.filter(r=>r.regio===state.regio);
+  if(state.skill && SKILL_MAP[state.skill]) rows=rows.filter(r=>SKILL_MAP[state.skill].test(r.titel));
+  if(state.rol) rows=rows.filter(r=>rolVan(r)===state.rol);
   if(state.periode){
     const max=parseInt(state.periode,10);
     rows=rows.filter(r=>{ const d=recencyDagen(r); return d!==null && d<=max; });
@@ -365,7 +453,7 @@ function getFiltered(rows){
     const [pf,pd]=state.prevSort.split('-');
     if(pf!==field) chain.push({field:pf,dir:pd});
   }
-  chain.push({field:'score',dir:'desc'}); // final fallback, same as before
+  chain.push({field:'score',dir:'desc'});
 
   rows=rows.slice().sort((a,b)=>{
     for(const {field,dir} of chain){
@@ -377,6 +465,43 @@ function getFiltered(rows){
   return rows;
 }
 
+/* ===================== actieve filters (chips) ===================== */
+function renderChips(){
+  const chips=[];
+  const add=(label,clear)=>chips.push({label,clear});
+  if(state.type) add('Type: '+state.type, ()=>{state.type='';syncSelect('typeFilter','');});
+  if(state.soort) add('Soort: '+state.soort, ()=>{state.soort='';syncSelect('soortFilter','');});
+  if(state.bron) add('Bron: '+state.bron, ()=>{state.bron='';syncSelect('bronFilter','');});
+  if(state.regio) add('Regio: '+state.regio, ()=>{state.regio='';syncSelect('regioFilter','');});
+  if(state.periode){
+    const lbl={'1':'Vandaag','3':'Laatste 3 dagen','7':'Deze week','31':'Deze maand'}[state.periode]||state.periode;
+    add('Periode: '+lbl, ()=>{state.periode='';syncSelect('periodeFilter','');});
+  }
+  if(state.skill) add('Skill: '+state.skill, ()=>{state.skill='';});
+  if(state.rol) add('Rol: '+state.rol, ()=>{state.rol='';});
+  if(state.search) add('Zoek: '+state.search, ()=>{state.search='';document.getElementById('searchBox').value='';});
+
+  const wrap=document.getElementById('activeChips');
+  if(!chips.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML='';
+  chips.forEach(c=>{
+    const el=document.createElement('span'); el.className='chip';
+    el.innerHTML=esc(c.label)+' <button title="verwijder">&times;</button>';
+    el.querySelector('button').onclick=()=>{ c.clear(); state.page=1; render(); };
+    wrap.appendChild(el);
+  });
+  const clr=document.createElement('span'); clr.className='chip clear'; clr.textContent='Alles wissen';
+  clr.onclick=()=>{ wisAlles(); };
+  wrap.appendChild(clr);
+}
+function syncSelect(id,val){ const s=document.getElementById(id); if(s) s.value=val; }
+function wisAlles(){
+  Object.assign(state,{type:'',soort:'',bron:'',regio:'',periode:'',search:'',skill:'',rol:'',page:1});
+  ['typeFilter','soortFilter','bronFilter','regioFilter','periodeFilter'].forEach(id=>syncSelect(id,''));
+  document.getElementById('searchBox').value='';
+  render();
+}
+
 /* ===================== render ===================== */
 function renderKpis(){
   const rel=relevantRows();
@@ -384,7 +509,7 @@ function renderKpis(){
   const week=rel.filter(r=>r.isWeek).length;
   const open=rel.filter(r=>(r.status||'').toLowerCase()==='open');
   const orgs=new Set(open.map(r=>r.organisatie)).size;
-  const sap=state.rows.filter(r=>r.isSap);
+  const sap=baseRows().filter(r=>r.isSap||r.isOracle);
   const sapNieuw=sap.filter(r=>r.isWeek).length;
   document.getElementById('kpiVandaag').textContent=vandaag;
   document.getElementById('kpiWeek').textContent=week;
@@ -393,54 +518,65 @@ function renderKpis(){
   document.getElementById('kpiSapNieuw').textContent=sapNieuw+' nieuw deze week';
 }
 function renderCharts(rows){
-  // top opdrachtgevers
   const oc={}; rows.forEach(r=>oc[r.organisatie]=(oc[r.organisatie]||0)+1);
   const top=Object.entries(oc).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const c1=document.getElementById('orgChart').getContext('2d');
   if(orgChart) orgChart.destroy();
   orgChart=new Chart(c1,{type:'bar',data:{labels:top.map(e=>e[0]),datasets:[{data:top.map(e=>e[1]),backgroundColor:'#4a6fa5',borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
-  // categorieverdeling
   const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
   const ce=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
   const c2=document.getElementById('catChart').getContext('2d');
   if(catChart) catChart.destroy();
   catChart=new Chart(c2,{type:'doughnut',data:{labels:ce.map(e=>e[0]),datasets:[{data:ce.map(e=>e[1]),
-    backgroundColor:['#5b3fb0','#3f8f4d','#4a6fa5','#d99b1f','#b23c17','#8a8686','#b8b4aa']}]},
+    backgroundColor:['#5b3fb0','#b3261e','#3f8f4d','#4a6fa5','#d99b1f','#2a9d8f','#8a8686','#c77dff','#b8b4aa']}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
 }
-function renderSapRoles(){
-  const sap=state.rows.filter(r=>r.isSap);
-  const rc={}; sap.forEach(r=>{ const rol=sapRol(r.titel); rc[rol]=(rc[rol]||0)+1; });
+function renderRoles(){
+  const domein=focusDomein();
+  document.getElementById('rolesTitle').textContent='Meest gevraagde '+domein+'-rollen';
+  const rijen0=baseRows().filter(r=> domein==='Oracle'? r.isOracle : r.isSap);
+  const rc={}; rijen0.forEach(r=>{ const rol=domein==='Oracle'?oracleRol(r.titel):sapRol(r.titel); rc[rol]=(rc[rol]||0)+1; });
   const rows=Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  document.getElementById('sapRoles').innerHTML = rows.length
-    ? rows.map(([r,c])=>`<li><span>${esc(r)}</span><span class="cnt">${c}</span></li>`).join('')
-    : '<li class="muted">Nog geen SAP-vacatures gevonden.</li>';
+  const ul=document.getElementById('sapRoles');
+  ul.innerHTML = rows.length
+    ? rows.map(([r,c])=>`<li class="clickable ${state.rol===r?'active':''}" data-rol="${esc(r)}"><span>${esc(r)}</span><span class="cnt">${c}</span></li>`).join('')
+    : `<li class="muted">Nog geen ${esc(domein)}-opdrachten gevonden.</li>`;
+  ul.querySelectorAll('li[data-rol]').forEach(li=>li.onclick=()=>{
+    const rol=li.dataset.rol;
+    state.rol = (state.rol===rol)?'':rol;
+    state.page=1; render();
+  });
 }
 function renderSkills(){
   const rows=relevantRows();
-  const sc=SKILLS.map(([label,pat])=>{
-    const re=new RegExp('(^|[^a-z0-9])(?:'+pat+')($|[^a-z0-9])','i');
-    return [label, rows.filter(r=>re.test(r.titel)).length];
-  }).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  document.getElementById('topSkills').innerHTML = sc.length
-    ? sc.map(([s,c])=>`<li><span>${esc(s)}</span><span class="cnt">${c}</span></li>`).join('')
+  const sc=SKILLS.map(([label])=>[label, rows.filter(r=>SKILL_MAP[label].test(r.titel)).length])
+    .filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const ul=document.getElementById('topSkills');
+  ul.innerHTML = sc.length
+    ? sc.map(([s,c])=>`<li class="clickable ${state.skill===s?'active':''}" data-skill="${esc(s)}"><span>${esc(s)}</span><span class="cnt">${c}</span></li>`).join('')
     : '<li class="muted">Geen skills herkend.</li>';
+  ul.querySelectorAll('li[data-skill]').forEach(li=>li.onclick=()=>{
+    const sk=li.dataset.skill;
+    state.skill = (state.skill===sk)?'':sk;
+    state.page=1; render();
+  });
 }
 function renderQuickCats(){
   const rows=relevantRows();
   const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
   const wrap=document.getElementById('quickCats');
   wrap.innerHTML=Object.entries(cc).sort((a,b)=>b[1]-a[1])
-    .map(([c,n])=>`<span class="pill" data-cat="${esc(c)}" style="cursor:pointer">${esc(c)} (${n})</span>`).join('');
+    .map(([c,n])=>`<span class="pill ${state.type===c?'active':''}" data-cat="${esc(c)}">${esc(c)} (${n})</span>`).join('');
   wrap.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
     const cat=p.dataset.cat;
     state.type = (state.type===cat)?'':cat;
     const sel=document.getElementById('typeFilter');
-    if([...sel.options].some(o=>o.value===cat)) sel.value=state.type;
+    if([...sel.options].some(o=>o.value===cat)) sel.value=state.type; else sel.value='';
     state.page=1; render();
   });
 }
+function soortBadge(s){ return s==='Vacature'?'<span class="badge badge-vac">Vacature</span>':'<span class="badge badge-tender">Tender</span>'; }
 function renderTable(rows){
   const totalPages=Math.max(1,Math.ceil(rows.length/state.pageSize));
   if(state.page>totalPages) state.page=totalPages;
@@ -451,24 +587,25 @@ function renderTable(rows){
       <td><span class="score ${scoreKlasse(r.score)}">${scoreIcoon(r.score)}${r.score}</span></td>
       <td>${esc(fmtDate(r.datum))}</td>
       <td>${esc(r.organisatie)}</td>
-      <td>${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?' <span class="badge badge-sap">SAP</span>':''}${r.nummer?`<div class="muted">${esc(r.nummer)}</div>`:''}</td>
+      <td>${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?' <span class="badge badge-sap">SAP</span>':''}${r.isOracle?' <span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="muted">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat">${esc(r.categorie)}</span></td>
+      <td>${soortBadge(r.soort)}</td>
       <td>${esc(r.regio)}</td>
       <td>${esc(r.bron)}</td>
-    </tr>`).join('') || '<tr><td colspan="7" style="padding:24px;color:#9a978f">Geen resultaten met deze filters.</td></tr>';
-  document.getElementById('resultCount').textContent=`${rows.length} vacatures`;
+    </tr>`).join('') || '<tr><td colspan="8" style="padding:24px;color:#9a978f">Geen resultaten met deze filters.</td></tr>';
+  document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
   document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
   document.getElementById('prevBtn').disabled=state.page<=1;
   document.getElementById('nextBtn').disabled=state.page>=totalPages;
 }
 function render(){
-  let raw_rows = relevantRows();
-  const rows=getFiltered(raw_rows);
+  const rows=getFiltered(relevantRows());
   renderKpis();
   renderCharts(rows);
-  renderSapRoles();
+  renderRoles();
   renderSkills();
   renderQuickCats();
+  renderChips();
   renderTable(rows);
 }
 
@@ -476,7 +613,7 @@ function render(){
 function buildFilterOptions(){
   const rel=relevantRows();
   const bronSel=document.getElementById('bronFilter');
-  const bc={}; state.rows.forEach(r=>bc[r.bron]=(bc[r.bron]||0)+1);
+  const bc={}; baseRows().forEach(r=>bc[r.bron]=(bc[r.bron]||0)+1);
   bronSel.innerHTML='<option value="">Alle bronnen</option>'+Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([b,c])=>`<option value="${esc(b)}">${esc(b)} (${c})</option>`).join('');
   bronSel.value=state.bron;
 
@@ -489,6 +626,7 @@ function buildFilterOptions(){
 /* ===================== events ===================== */
 function bindEvents(){
   document.getElementById('typeFilter').onchange=e=>{state.type=e.target.value;state.page=1;render();};
+  document.getElementById('soortFilter').onchange=e=>{state.soort=e.target.value;state.page=1;render();};
   document.getElementById('bronFilter').onchange=e=>{state.bron=e.target.value;state.page=1;render();};
   document.getElementById('regioFilter').onchange=e=>{state.regio=e.target.value;state.page=1;render();};
   document.getElementById('periodeFilter').onchange=e=>{state.periode=e.target.value;state.page=1;render();};
@@ -499,6 +637,7 @@ function bindEvents(){
     state.sort=newSort;
     state.page=1; render();
   };
+  document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   let t;
   document.getElementById('searchBox').oninput=e=>{clearTimeout(t);t=setTimeout(()=>{state.search=e.target.value.trim();state.page=1;render();},200);};
@@ -509,10 +648,10 @@ function bindEvents(){
     th.onclick=()=>{
       const key=th.dataset.key; const [f,d]=state.sort.split('-');
       const newSort=(f===key&&d==='desc')?key+'-asc':key+'-desc';
-      if(key!==f) state.prevSort = state.sort;   // <-- remember old sort as tiebreaker
+      if(key!==f) state.prevSort = state.sort;
       state.sort=newSort;
       const sel=document.getElementById('sortFilter');
-      if([...sel.options].some(o=>o.value===state.sort)) sel.value=state.sort;
+      sel.value=[...sel.options].some(o=>o.value===state.sort)?state.sort:'';
       state.page=1; render();
     };
   });
@@ -535,7 +674,7 @@ function init(isRefresh){
   loadData().then(({rows,meta})=>{
     state.rows=rows;
     document.getElementById('subtitle').textContent=
-      `Data uit de scraper-database (${meta.count||rows.length} vacatures), laatst bijgewerkt ${meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-'}`;
+      `Data uit de scraper-database (${meta.count||rows.length} regels), laatst bijgewerkt ${meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-'}`;
     buildFilterOptions();
     document.getElementById('loading').style.display='none';
     document.getElementById('errorBox').style.display='none';
