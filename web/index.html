@@ -186,7 +186,7 @@
         <option value="bron-asc">Bron (A-Z)</option>
       </select>
     </div>
-    <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen</label>
+    <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude (&gt;3 mnd)</label>
     <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
     <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
     <div style="flex:1"></div>
@@ -223,7 +223,7 @@
       <button id="nextBtn">Volgende</button>
     </div>
   </div>
-  <div class="muted" style="margin-top:8px;">Sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie: met een deadline telt "sluit binnenkort" zwaarder; zonder deadline loopt de interesse wekelijks af (−5 p/week vanaf 20, na ~4 weken op 0). "Verberg verlopen" haalt opdrachten met een gepasseerde sluitingsdatum weg; "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus en onbekende opdrachtgevers. Indicatie, geen garantie.</div>
+  <div class="muted" style="margin-top:8px;">Sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie: met een deadline telt "sluit binnenkort" zwaarder; zonder deadline loopt de interesse wekelijks af (−5 p/week vanaf 20, na ~4 weken op 0). "Verberg verlopen &amp; oude" haalt opdrachten met een gepasseerde sluitingsdatum weg, én opdrachten zonder toekomstige deadline die ouder zijn dan 3 maanden (bv. langlopende raamovereenkomsten); "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus en onbekende opdrachtgevers. Indicatie, geen garantie.</div>
 </div>
 
 <script>
@@ -367,10 +367,10 @@ function tijdComponent(v){
     if(dg<=21) return 12;
     return 8;
   }
-  const d=recencyDagen(v);
+  const d=(v.leeftijdDagen!=null)? v.leeftijdDagen : recencyDagen(v);
   if(d===null) return 6;
   const weken=d/7;
-  return Math.max(0, Math.round(20 - 5*weken));
+  return Math.round(20 - 5*weken);   // kan negatief worden voor oude opdrachten
 }
 function salesScore(v){
   let s=0;
@@ -426,8 +426,15 @@ function loadData(){
         if(v._eerst && isNaN(v._eerst)) v._eerst=null;
         if(v._deadline && isNaN(v._deadline)) v._deadline=null;
         v.datum = v._pub;
-        v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - Date.now())/86400000) : null;
-        v.verlopen = v._deadline!=null && v._deadline < Date.now();
+        const _now=Date.now();
+        v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - _now)/86400000) : null;
+        v.verlopen = v._deadline!=null && v._deadline < _now;
+        // leeftijd op basis van publicatiedatum (val terug op eerst gezien)
+        const _pubRef = v._pub || v._eerst;
+        v.leeftijdDagen = _pubRef!=null ? (_now-_pubRef)/86400000 : null;
+        // verouderd = geen toekomstige deadline én ouder dan 3 maanden
+        const _heeftToekomstDeadline = v._deadline!=null && v._deadline >= _now;
+        v.verouderd = !_heeftToekomstDeadline && v.leeftijdDagen!=null && v.leeftijdDagen > 90;
         v.score = salesScore(v);
         const d=recencyDagen(v);
         v.isVandaag = d!==null && d<1;
@@ -441,7 +448,7 @@ function loadData(){
 /* ===================== filteren ===================== */
 function baseRows(){
   let r = state.rows;
-  if(state.verbergVerlopen) r = r.filter(x=>!x.verlopen);
+  if(state.verbergVerlopen) r = r.filter(x=>!x.verlopen && !x.verouderd);
   if(state.verbergBureaus)  r = r.filter(x=>!x.isBureau);
   return r;
 }
