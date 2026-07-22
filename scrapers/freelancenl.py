@@ -169,8 +169,8 @@ def _ingelogd(email, wachtwoord):
         if "vars" not in vangst:
             raise RuntimeError("search-verzoek niet afgevangen")
 
-        # eerste pagina uit de afgevangen response
-        limit = 100
+        # het ingelogde endpoint begrenst limit op 36
+        limit = 36
         basis = vangst["vars"]
         query = basis.get("query")
         variabelen = dict(basis.get("variables") or {})
@@ -191,12 +191,9 @@ def _ingelogd(email, wachtwoord):
                                     headers=headers, timeout=30000)
             if not resp.ok:
                 raise RuntimeError(f"search gaf {resp.status}")
-            tekst = resp.text()
-            if os.environ.get("FREELANCE_DEBUG") and offset == 0:
-                print(f"  [debug] url={vangst['url']}")
-                print(f"  [debug] variables={json.dumps(variabelen)[:400]}")
-                print(f"  [debug] respons({len(tekst)}): {tekst[:900]}")
-            data = _parse_graphql(tekst)
+            data = _parse_graphql(resp.text())
+            if data.get("errors"):
+                raise RuntimeError(f"search-fout: {data['errors'][0].get('message')}")
             zoek = ((data.get("data") or {}).get("search")) or {}
             if totaal is None:
                 totaal = zoek.get("count") or 0
