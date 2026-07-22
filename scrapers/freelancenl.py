@@ -191,7 +191,12 @@ def _ingelogd(email, wachtwoord):
                                     headers=headers, timeout=30000)
             if not resp.ok:
                 raise RuntimeError(f"search gaf {resp.status}")
-            data = _parse_graphql(resp.text())
+            tekst = resp.text()
+            if os.environ.get("FREELANCE_DEBUG") and offset == 0:
+                print(f"  [debug] url={vangst['url']}")
+                print(f"  [debug] variables={json.dumps(variabelen)[:400]}")
+                print(f"  [debug] respons({len(tekst)}): {tekst[:900]}")
+            data = _parse_graphql(tekst)
             zoek = ((data.get("data") or {}).get("search")) or {}
             if totaal is None:
                 totaal = zoek.get("count") or 0

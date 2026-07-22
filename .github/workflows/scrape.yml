@@ -24,6 +24,7 @@ jobs:
           RET_WACHTWOORD: ${{ secrets.RET_WACHTWOORD }}
           STEDINVMS_EMAIL: ${{ secrets.STEDINVMS_EMAIL }}
           STEDINVMS_WACHTWOORD: ${{ secrets.STEDINVMS_WACHTWOORD }}
+          FREELANCE_DEBUG: "1"
         run: python verken.py
       - name: Debug-screenshots uploaden
         if: always()
