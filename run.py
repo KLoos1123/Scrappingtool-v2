@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 import db
+import beschrijvingen
 import sheets_writer
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
                       stedin, tenderned, inhuurdesk_regio, gelderland,
@@ -76,6 +77,18 @@ def main():
     print(f"  {nieuw} nieuw, {totaal} totaal")
     for r in db.per_bron():
         print(f"  {r['bron']}: {r['aantal']}")
+
+    # Omschrijvingen apart bewaren (hoofdtabel blijft licht). Scrapers die een
+    # 'omschrijving' meegeven voeden zo de latere AI-inschatting van de eindklant.
+    print(f"\n=== omschrijvingen ===")
+    try:
+        met_oms = [r for r in alles if r.get("omschrijving")]
+        opgeslagen = beschrijvingen.opslaan(met_oms)
+        print(f"  {opgeslagen} omschrijvingen bewaard")
+        for r in beschrijvingen.per_bron():
+            print(f"  {r[0]}: {r[1]}")
+    except Exception as e:
+        print(f"  omschrijvingen MISLUKT: {e}")
 
     print(f"\n=== export ===")
     alle = db.alle_rijen()
