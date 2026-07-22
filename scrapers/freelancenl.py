@@ -176,10 +176,11 @@ def _ingelogd(email, wachtwoord):
         variabelen = dict(basis.get("variables") or {})
         variabelen["limit"] = limit
 
+        # behoud de originele headers (incl. accept: multipart/mixed voor @defer);
+        # _parse_graphql haalt de JSON uit een multipart-body.
         headers = {k: v for k, v in vangst["headers"].items()
                    if k.lower() not in ("content-length", "host", "accept-encoding")}
         headers["content-type"] = "application/json"
-        headers["accept"] = "application/json"
 
         offset = 0
         totaal = None

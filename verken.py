@@ -97,6 +97,20 @@ def freelance_check():
         print(f"  freelance MISLUKT: {e}")
 
 
+def stedin_vms_check():
+    print(f"\n{'='*70}\n### stedin_vms scraper (validatie)\n{'='*70}")
+    try:
+        from scrapers import stedin_vms
+        rijen = stedin_vms.haal_op()
+        print(f"  RESULTAAT: {len(rijen)} aanvragen")
+        for r in rijen[:3]:
+            print(f"    {r['nummer']} | {r['titel'][:40]} | {r['organisatie']} | {r['url']}")
+    except Exception as e:
+        import traceback
+        print(f"  stedin_vms MISLUKT: {e}")
+        traceback.print_exc()
+
+
 if __name__ == "__main__":
     freelance_check()
-    stedinvms()
+    stedin_vms_check()

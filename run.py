@@ -12,7 +12,7 @@ import db
 import sheets_writer
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
                       stedin, tenderned, inhuurdesk_regio, gelderland,
-                      flexwestbrabant, magnit)
+                      flexwestbrabant, magnit, stedin_vms)
 # import sharepoint_writer
 
 
@@ -29,6 +29,7 @@ SCRAPERS = [
     gelderland,
     flexwestbrabant,
     magnit,
+    stedin_vms,
 ]
 
 CSV_ALLES = "tenders.csv"
