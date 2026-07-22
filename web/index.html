@@ -75,6 +75,11 @@
   .ranklist .cnt { font-weight:700; color:#5b3fb0; }
   .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; background:#f2f1ed; color:#555; margin:2px 3px 2px 0; cursor:pointer; }
   .pill.active { background:#ece2ff; color:#5b3fb0; }
+  .dl { font-size:10px; margin-top:2px; }
+  .dl-kort { color:#b23c17; font-weight:700; }
+  .dl-mid { color:#8a5a00; }
+  .dl-ok { color:#6b8a5b; }
+  .dl-verlopen { color:#9a978f; }
   @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .layout,.layout3{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -181,6 +186,7 @@
         <option value="bron-asc">Bron (A-Z)</option>
       </select>
     </div>
+    <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen</label>
     <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
     <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
     <div style="flex:1"></div>
@@ -196,6 +202,7 @@
         <tr>
           <th data-key="score">Score</th>
           <th data-key="datum">Datum</th>
+          <th data-key="deadline">Deadline</th>
           <th data-key="organisatie">Organisatie</th>
           <th data-key="titel">Titel</th>
           <th data-key="categorie">Categorie</th>
@@ -216,7 +223,7 @@
       <button id="nextBtn">Volgende</button>
     </div>
   </div>
-  <div class="muted" style="margin-top:8px;">Sales-score is een indicatie op basis van SAP/Oracle/IT-trefwoorden, type organisatie en hoe recent de opdracht binnenkwam. Bedoeld als prioritering, geen garantie. "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus en onbekende opdrachtgevers.</div>
+  <div class="muted" style="margin-top:8px;">Sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie: met een deadline telt "sluit binnenkort" zwaarder; zonder deadline loopt de interesse wekelijks af (−5 p/week vanaf 20, na ~4 weken op 0). "Verberg verlopen" haalt opdrachten met een gepasseerde sluitingsdatum weg; "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus en onbekende opdrachtgevers. Indicatie, geen garantie.</div>
 </div>
 
 <script>
@@ -266,7 +273,7 @@ const REGIO_STEDEN = {
 const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
   prevSort: null, skill:'', rol:'',
-  verbergBureaus:true, toonNietIt:false, page:1, pageSize:50,
+  verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
 };
 let orgChart=null, catChart=null;
 
@@ -347,14 +354,31 @@ function recencyDagen(v){
   if(!ref) return null;
   return (Date.now()-ref)/86400000;
 }
+/* Tijd/urgentie-component (max ~22):
+   - deadline bekend & in toekomst: hoe dichter bij sluiten, hoe urgenter.
+   - deadline verlopen: zwaar negatief (wordt normaal ook weggefilterd).
+   - geen deadline: interesse loopt wekelijks af (start 20, -5 per week). */
+function tijdComponent(v){
+  if(v._deadline!=null){
+    const dg=v.dagenTotDeadline;
+    if(dg<0) return -40;
+    if(dg<=3) return 22;
+    if(dg<=7) return 18;
+    if(dg<=21) return 12;
+    return 8;
+  }
+  const d=recencyDagen(v);
+  if(d===null) return 6;
+  const weken=d/7;
+  return Math.max(0, Math.round(20 - 5*weken));
+}
 function salesScore(v){
   let s=0;
   if(v.isIt) s+=30;
   if(v.isSap||v.isOracle) s+=35;
   if(v.grootOrg) s+=15;
   if(!v.isBureau) s+=8;                 // bekende eindklant weegt zwaarder
-  const d=recencyDagen(v);
-  if(d!==null){ if(d<1) s+=20; else if(d<7) s+=10; else if(d<31) s+=4; }
+  s+=tijdComponent(v);
   if(/s\/?4hana|public cloud|\becc\b|\berp\b/i.test(v.titel)) s+=8;
   if((v.status||'').toLowerCase()!=='open') s-=15;
   return Math.max(0,Math.min(100,s));
@@ -402,6 +426,8 @@ function loadData(){
         if(v._eerst && isNaN(v._eerst)) v._eerst=null;
         if(v._deadline && isNaN(v._deadline)) v._deadline=null;
         v.datum = v._pub;
+        v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - Date.now())/86400000) : null;
+        v.verlopen = v._deadline!=null && v._deadline < Date.now();
         v.score = salesScore(v);
         const d=recencyDagen(v);
         v.isVandaag = d!==null && d<1;
@@ -414,7 +440,10 @@ function loadData(){
 
 /* ===================== filteren ===================== */
 function baseRows(){
-  return state.verbergBureaus ? state.rows.filter(r=>!r.isBureau) : state.rows;
+  let r = state.rows;
+  if(state.verbergVerlopen) r = r.filter(x=>!x.verlopen);
+  if(state.verbergBureaus)  r = r.filter(x=>!x.isBureau);
+  return r;
 }
 function relevantRows(){
   const b=baseRows();
@@ -577,6 +606,17 @@ function renderQuickCats(){
   });
 }
 function soortBadge(s){ return s==='Vacature'?'<span class="badge badge-vac">Vacature</span>':'<span class="badge badge-tender">Tender</span>'; }
+function deadlineCell(r){
+  if(r._deadline==null) return '<span class="muted">—</span>';
+  const dg=r.dagenTotDeadline;
+  let cls,lbl;
+  if(dg<0){ cls='dl-verlopen'; lbl='verlopen'; }
+  else if(dg===0){ cls='dl-kort'; lbl='sluit vandaag'; }
+  else if(dg<=7){ cls='dl-kort'; lbl='nog '+dg+' d'; }
+  else if(dg<=21){ cls='dl-mid'; lbl='nog '+dg+' d'; }
+  else { cls='dl-ok'; lbl='nog '+dg+' d'; }
+  return `${esc(fmtDate(r.deadline))}<div class="dl ${cls}">${lbl}</div>`;
+}
 function renderTable(rows){
   const totalPages=Math.max(1,Math.ceil(rows.length/state.pageSize));
   if(state.page>totalPages) state.page=totalPages;
@@ -586,13 +626,14 @@ function renderTable(rows){
     <tr>
       <td><span class="score ${scoreKlasse(r.score)}">${scoreIcoon(r.score)}${r.score}</span></td>
       <td>${esc(fmtDate(r.datum))}</td>
+      <td>${deadlineCell(r)}</td>
       <td>${esc(r.organisatie)}</td>
       <td>${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?' <span class="badge badge-sap">SAP</span>':''}${r.isOracle?' <span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="muted">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
       <td>${esc(r.regio)}</td>
       <td>${esc(r.bron)}</td>
-    </tr>`).join('') || '<tr><td colspan="8" style="padding:24px;color:#9a978f">Geen resultaten met deze filters.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9" style="padding:24px;color:#9a978f">Geen resultaten met deze filters.</td></tr>';
   document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
   document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
   document.getElementById('prevBtn').disabled=state.page<=1;
@@ -637,6 +678,7 @@ function bindEvents(){
     state.sort=newSort;
     state.page=1; render();
   };
+  document.getElementById('verbergVerlopen').onchange=e=>{state.verbergVerlopen=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   let t;
