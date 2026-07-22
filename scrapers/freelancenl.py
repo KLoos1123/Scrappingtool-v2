@@ -45,6 +45,29 @@ query PublicSearch($query: SearchQueryInput!, $sortMethod: String!, $limit: Int!
 """
 
 
+def _parse_graphql(tekst):
+    """freelance's ingelogde endpoint kan multipart/mixed teruggeven (Apollo
+    @defer): een body die begint met '--graphql' met JSON-delen ertussen.
+    Deze helper haalt het eerste JSON-object met een 'data'-veld eruit; valt
+    terug op gewone json.loads voor een kale JSON-body."""
+    t = tekst.lstrip()
+    if t.startswith("{"):
+        return json.loads(t)
+    # multipart: zoek per deel het JSON-blok
+    for deel in tekst.split("--graphql"):
+        deel = deel.strip()
+        i = deel.find("{")
+        if i == -1:
+            continue
+        try:
+            obj = json.loads(deel[i:])
+        except Exception:
+            continue
+        if isinstance(obj, dict) and ("data" in obj or "incremental" in obj):
+            return obj
+    raise ValueError("geen JSON in graphql-response")
+
+
 def _slug(titel):
     s = (titel or "").lower()
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
@@ -156,6 +179,7 @@ def _ingelogd(email, wachtwoord):
         headers = {k: v for k, v in vangst["headers"].items()
                    if k.lower() not in ("content-length", "host", "accept-encoding")}
         headers["content-type"] = "application/json"
+        headers["accept"] = "application/json"
 
         offset = 0
         totaal = None
@@ -166,7 +190,8 @@ def _ingelogd(email, wachtwoord):
                                     headers=headers, timeout=30000)
             if not resp.ok:
                 raise RuntimeError(f"search gaf {resp.status}")
-            zoek = ((resp.json().get("data") or {}).get("search")) or {}
+            data = _parse_graphql(resp.text())
+            zoek = ((data.get("data") or {}).get("search")) or {}
             if totaal is None:
                 totaal = zoek.get("count") or 0
                 print(f"  {totaal} opdrachten beschikbaar (ingelogd)")

@@ -53,29 +53,34 @@ def stedinvms():
         page.wait_for_timeout(9000)
         print(f"  na login: {page.url}")
 
-        # klik door naar de relevante pagina's en dump tabellen
-        for tekst in ["Dynamisch aankoopsystemen", "Aanvragen", "Opdrachten"]:
+        base = "https://stedin-vms.my.site.com/vms/servlet/networks/switch?networkId=0DB2p00000002OA&startURL="
+        paginas = {
+            "Aanvragen (/a1J/l)": base + "/a1J/l?bid=stedin",
+            "Opdrachten (/a0j/o)": base + "/a0j/o?bid=stedin",
+            "DAS TenderDashboard": base + "/apex/c__TenderDashboard?bid=stedin",
+        }
+        for label, url in paginas.items():
             try:
-                el = page.query_selector(f"a:has-text('{tekst}')")
-                if not el:
-                    print(f"\n  link '{tekst}' niet gevonden")
-                    continue
-                el.click()
-                page.wait_for_timeout(8000)
-                # soms opent een iframe (Visualforce)
-                dump_tabellen(page, tekst)
+                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                page.wait_for_timeout(7000)
+                print(f"\n  ===== {label} -> {page.url}")
+                # dump zichtbare tekst (kort) + tabellen
+                try:
+                    txt = page.inner_text("body")
+                    print(f"  body-tekst({len(txt)}): {txt[:800]}")
+                except Exception:
+                    pass
+                dump_tabellen(page, label)
                 for fr in page.frames:
                     if fr == page.main_frame:
                         continue
                     try:
-                        tb = fr.query_selector_all("table")
-                        if tb:
-                            print(f"  [iframe {fr.url[:80]}] {len(tb)} tabellen")
-                            dump_tabellen(fr, f"{tekst}/iframe")
+                        if fr.query_selector_all("table"):
+                            dump_tabellen(fr, f"{label}/iframe")
                     except Exception:
                         pass
             except Exception as e:
-                print(f"  '{tekst}' fout: {e}")
+                print(f"  '{label}' fout: {e}")
         browser.close()
 
 
