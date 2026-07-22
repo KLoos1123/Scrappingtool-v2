@@ -114,7 +114,22 @@ def haal_op():
         ctx = browser.new_context(user_agent=UA, locale="nl-NL")
         page = ctx.new_page()
         try:
-            _login(page, email, wachtwoord)
+            # Salesforce-login is soms flakey. Twee pogingen; lukt het niet,
+            # dan slaan we de bron over (levert nu tóch 0 aanvragen) i.p.v. de
+            # hele run te laten falen.
+            ingelogd = False
+            for poging in range(2):
+                try:
+                    _login(page, email, wachtwoord)
+                    ingelogd = True
+                    break
+                except Exception as e:
+                    print(f"  login-poging {poging + 1} mislukt: {e}")
+                    page.wait_for_timeout(4000)
+            if not ingelogd:
+                print("  inloggen niet gelukt; bron overgeslagen (geen data)")
+                return []
+
             page.goto(AANVRAGEN, timeout=60000, wait_until="domcontentloaded")
             page.wait_for_timeout(8000)
             ruw = _lees_datatable(page)
