@@ -285,7 +285,7 @@ function scoreIcoon(s){ return s>=80?'🔥 ':s>=55?'⭐ ':''; }
 
 /* ===================== data laden ===================== */
 function loadData(){
-  return fetch('./data/tenders.json', {cache:'no-store'})
+  return fetch('dashboard/data/tenders.json', {cache:'no-store'})
     .then(res=>{
       if(!res.ok) throw new Error('Kon data/tenders.json niet laden (HTTP '+res.status+').');
       return res.json();
