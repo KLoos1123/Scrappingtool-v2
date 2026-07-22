@@ -84,6 +84,8 @@ jobs:
       - name: Pages configureren
         if: always()
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: web/ uploaden (dashboard + tenders.json)
         if: always()
