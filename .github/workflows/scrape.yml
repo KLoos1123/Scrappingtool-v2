@@ -12,10 +12,15 @@ concurrency:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,7 +53,7 @@ jobs:
           SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
         run: python run.py
 
-      - name: CSV, dashboard en debug uploaden
+      - name: CSV en debug uploaden
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -56,7 +61,7 @@ jobs:
           path: |
             tenders.csv
             tenders_nieuw.csv
-            dashboard.html
+            web/tenders.json
             debug_*.png
           if-no-files-found: ignore
 
@@ -70,3 +75,23 @@ jobs:
           git commit -m "Tenders bijgewerkt $(date -u +%F)"
           git pull --rebase --autostash
           git push
+
+      # --- Dashboard publiceren op GitHub Pages ---
+      - name: Dashboard-data genereren
+        if: always()
+        run: python dashboard.py
+
+      - name: Pages configureren
+        if: always()
+        uses: actions/configure-pages@v5
+
+      - name: web/ uploaden (dashboard + tenders.json)
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - name: Deployen naar Pages
+        id: deployment
+        if: always()
+        uses: actions/deploy-pages@v4
