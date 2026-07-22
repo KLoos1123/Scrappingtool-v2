@@ -1,9 +1,9 @@
-"""Ingelogde recon: freelance.nl (GraphQL), Stedin-VMS (Aura), RET-link (TIJDELIJK).
-
-Legt per site de data-call + structuur vast. Print geen wachtwoorden/tokens.
+"""Ingelogde recon (TIJDELIJK). Leest response-bodies IN de handler zodat ze
+niet uit de cache verdwijnen. Print geen wachtwoorden/tokens.
 """
 
 import os
+import json
 from playwright.sync_api import sync_playwright
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -11,15 +11,20 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 
 def _accept_cookies(page):
-    for txt in ["Accepteer alles", "Akkoord", "Accept", "Alles accepteren"]:
+    for txt in ["Accepteer alles", "Akkoord", "Accept", "Alles accepteren",
+                "Alles toestaan", "Accepteren"]:
         try:
             b = page.query_selector(f"button:has-text('{txt}')")
             if b:
                 b.click()
-                page.wait_for_timeout(1000)
+                page.wait_for_timeout(800)
                 return
         except Exception:
             pass
+
+
+def _knip(s, n):
+    return s if len(s) <= n else s[:n] + f"...<+{len(s)-n}>"
 
 
 # ---------------------------------------------------------------- freelance
@@ -30,46 +35,67 @@ def freelance(ctx):
     if not email or not pw:
         print("  secrets ontbreken"); return
     page = ctx.new_page()
-    calls = []
-    page.on("response", lambda r: calls.append(r) if "/graphql" in r.url and r.request.method == "POST" else None)
+    calls = []  # (post_data, body) meteen gelezen
+
+    def handler(r):
+        try:
+            if "/graphql" in r.url and r.request.method == "POST":
+                calls.append((r.request.post_data or "", r.text()))
+        except Exception:
+            pass
+
+    page.on("response", handler)
 
     page.goto("https://mijn.freelance.nl/inloggen", timeout=60000, wait_until="domcontentloaded")
     _accept_cookies(page)
     page.wait_for_timeout(1500)
-    page.fill("input[name='email']", email)
-    page.fill("input[name='password']", pw)
-    (page.query_selector("button[type='submit']") or page.query_selector("button:has-text('Inloggen')")).click()
+    try:
+        page.fill("input[name='email']", email)
+        page.fill("input[name='password']", pw)
+        btn = page.query_selector("button[type='submit']") or page.query_selector("button:has-text('Inloggen')")
+        btn.click()
+    except Exception as e:
+        print(f"  login-invoer fout: {e}")
     page.wait_for_timeout(6000)
     print(f"  na login: {page.url}")
 
+    calls.clear()
     page.goto("https://mijn.freelance.nl/opdracht-vinden/zoeken?resultaten=36",
               timeout=60000, wait_until="domcontentloaded")
     page.wait_for_timeout(9000)
 
-    print(f"  {len(calls)} graphql-calls")
-    for r in calls[-6:]:
-        pd = (r.request.post_data or "")[:400]
-        try:
-            body = r.text()
-        except Exception as e:
-            body = f"<{e}>"
-        if "opdracht" in (pd + body).lower() or "assignment" in (pd + body).lower() or len(body) > 3000:
-            print(f"\n  >>> POST /graphql")
-            print(f"      QUERY: {pd}")
-            print(f"      BODY({len(body)}): {body[:1800]}")
+    print(f"  {len(calls)} graphql-calls op de zoekpagina")
+    for pd, body in calls:
+        low = (pd + body).lower()
+        if ("assignment" in low or "opdracht" in low or "search" in low) and len(body) > 1500:
+            try:
+                qname = json.loads(pd).get("operationName") or json.loads(pd).get("query", "")[:60]
+            except Exception:
+                qname = pd[:80]
+            print(f"\n  >>> operation={qname}")
+            print(f"      QUERY: {_knip(pd, 700)}")
+            print(f"      BODY:  {_knip(body, 2600)}")
     page.close()
 
 
 # ---------------------------------------------------------------- stedin-vms
 def stedinvms(ctx):
-    print(f"\n{'='*70}\n### Stedin-VMS (Salesforce)\n{'='*70}")
+    print(f"\n{'='*70}\n### Stedin-VMS (Salesforce/Netive)\n{'='*70}")
     email = os.environ.get("STEDINVMS_EMAIL")
     pw = os.environ.get("STEDINVMS_WACHTWOORD")
     if not email or not pw:
         print("  secrets ontbreken"); return
     page = ctx.new_page()
     aura = []
-    page.on("response", lambda r: aura.append(r) if "/sfsites/aura" in r.url and r.request.method == "POST" else None)
+
+    def handler(r):
+        try:
+            if "/aura" in r.url and r.request.method == "POST":
+                aura.append((r.request.post_data or "", r.text()))
+        except Exception:
+            pass
+
+    page.on("response", handler)
 
     page.goto("https://stedin-vms.my.site.com/vms/s/login", timeout=60000, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
@@ -82,49 +108,56 @@ def stedinvms(ctx):
     page.wait_for_timeout(9000)
     print(f"  na login: {page.url}")
 
-    # navigeer naar opdrachten/aanvragen als er zo'n link is
+    # probeer naar opdrachten/aanvragen te navigeren
+    aura.clear()
     for sel in ["a:has-text('Opdrachten')", "a:has-text('Aanvragen')",
-                "a:has-text('Marktplaats')", "a:has-text('Jobs')"]:
+                "a:has-text('Assignments')", "a:has-text('Marktplaats')",
+                "a:has-text('Jobs')", "a:has-text('Requests')"]:
         try:
             el = page.query_selector(sel)
             if el:
-                el.click(); page.wait_for_timeout(6000); break
+                print(f"  klik op {sel}")
+                el.click()
+                page.wait_for_timeout(7000)
+                break
         except Exception:
             pass
     page.wait_for_timeout(4000)
 
-    print(f"  {len(aura)} aura-POSTs")
-    for r in aura:
-        try:
-            body = r.text()
-        except Exception:
-            continue
-        if len(body) > 2500 and ('"records"' in body or '"Id"' in body or 'apex' in r.request.url.lower() or 'getRecord' in body):
-            pd = (r.request.post_data or "")
-            # welke aura-actions
-            acties = [w for w in ["getItems", "getRecord", "Opdracht", "Assignment", "JobRequest", "search", "getList"] if w in pd or w in body]
-            print(f"\n  >>> aura-POST (acties~{acties}) body={len(body)}")
-            print(f"      {body[:2200]}")
+    # dump nav-links zodat we de juiste pagina kennen
+    try:
+        links = page.eval_on_selector_all(
+            "a[href]", "els => els.map(e => (e.textContent||'').trim()+' | '+e.getAttribute('href'))")
+        print("  navigatielinks:")
+        for l in links[:40]:
+            if l.strip(" |"):
+                print(f"    {l}")
+    except Exception:
+        pass
+
+    print(f"\n  {len(aura)} aura-POSTs")
+    for pd, body in aura:
+        # zoek records met veldnamen als jRequest__c e.d.
+        if len(body) > 2000 and ("__c" in body or '"records"' in body or "jRequest" in body):
+            acties = [w for w in ["getItems", "getRecord", "jRequest", "jCandidateRequest",
+                                  "Opdracht", "Assignment", "search", "getList", "ui-force"]
+                      if w in pd or w in body]
+            print(f"\n  >>> aura body={len(body)} acties~{acties}")
+            print(f"      {_knip(body, 3000)}")
     page.close()
 
 
 # ---------------------------------------------------------------- ret
 def ret(ctx):
-    print(f"\n{'='*70}\n### RET (portaal-link zoeken)\n{'='*70}")
+    print(f"\n{'='*70}\n### RET (portaal-link)\n{'='*70}")
     page = ctx.new_page()
     page.goto("https://werkenbijderet.nl/over-ons/inhuur", timeout=60000, wait_until="domcontentloaded")
     _accept_cookies(page)
     page.wait_for_timeout(3000)
     hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.getAttribute('href'))")
-    extern = [h for h in hrefs if h and h.startswith("http")
-              and not any(s in h for s in ["werkenbijderet", "facebook", "linkedin",
-              "instagram", "youtube", "twitter", "cookie", "google"])]
-    print(f"  {len(set(extern))} externe links:")
-    for h in dict.fromkeys(extern):
-        print(f"   {h}")
-    # zoek specifiek naar portaal-woorden
     for h in dict.fromkeys(hrefs):
-        if h and any(w in h.lower() for w in ["negometrix", "mercell", "inhuur", "portal", "opdracht", "tender", "vms"]):
+        if h and any(w in h.lower() for w in ["negometrix", "mercell", "s2c", "inhuur",
+                     "portal", "opdracht", "tender", "vms"]):
             print(f"   [portaal?] {h}")
     page.close()
 
