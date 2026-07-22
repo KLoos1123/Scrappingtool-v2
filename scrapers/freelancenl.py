@@ -117,6 +117,10 @@ def _uit_search(a):
         "publicatiedatum": a.get("publishAt"),
         "locatie": a.get("place") or None,
         "uren_per_week": _uren(a),
+        # omschrijving zit al in de ingelogde search-respons; wordt door run.py
+        # apart bewaard (niet in de hoofdtabel). Juist hier waardevol: de
+        # opdrachtgever is verborgen, dus deze tekst voedt straks de AI-inschatting.
+        "omschrijving": a.get("description") or None,
         "url": _url(aid, titel),
     }
 
