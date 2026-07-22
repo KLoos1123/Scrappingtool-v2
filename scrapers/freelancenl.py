@@ -306,8 +306,13 @@ def haal_op():
     email = os.environ.get("FREELANCE_EMAIL")
     wachtwoord = os.environ.get("FREELANCE_WACHTWOORD")
     if email and wachtwoord:
-        try:
-            return _ingelogd(email, wachtwoord)
-        except Exception as e:
-            print(f"  ingelogd mislukt ({e}); val terug op publiek")
+        # twee pogingen; de ingelogde modus geeft deadlines + omschrijvingen.
+        for poging in range(2):
+            try:
+                return _ingelogd(email, wachtwoord)
+            except Exception as e:
+                # NOOIT de volledige exception loggen: een Playwright-request-fout
+                # bevat de request-headers incl. auth-cookies/tokens. Alleen het type.
+                print(f"  ingelogd poging {poging + 1} mislukt ({type(e).__name__})")
+        print("  val terug op publiek (geen omschrijvingen)")
     return _publiek()

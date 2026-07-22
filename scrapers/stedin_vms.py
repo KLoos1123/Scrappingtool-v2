@@ -124,7 +124,8 @@ def haal_op():
                     ingelogd = True
                     break
                 except Exception as e:
-                    print(f"  login-poging {poging + 1} mislukt: {e}")
+                    # geen volledige exception loggen (kan URL/sessie-info bevatten)
+                    print(f"  login-poging {poging + 1} mislukt ({type(e).__name__})")
                     page.wait_for_timeout(4000)
             if not ingelogd:
                 print("  inloggen niet gelukt; bron overgeslagen (geen data)")
