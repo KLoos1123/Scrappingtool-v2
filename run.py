@@ -2,11 +2,17 @@
 Een scraper die crasht stopt de rest niet, maar de run eindigt wel in een fout
 zodat je het in GitHub Actions ziet.
 """
+import os
 import csv
 import sys
 import subprocess
 import traceback
 from datetime import datetime, timezone, timedelta
+
+# Zoveel bronnen mogen falen zonder de hele run rood te maken. Login-scrapers
+# (mercell, striive, magnit, stedin-vms) zijn af en toe flakey; pas bij brede
+# uitval is er echt iets structureel mis.
+MAX_MISLUKT = 3
 
 import db
 import beschrijvingen
@@ -107,8 +113,21 @@ def main():
     subprocess.run(["python", "dashboard.py"], check=True)
 
     if mislukt:
-        print(f"\nMislukte bronnen: {', '.join(mislukt)}")
-        sys.exit(1)
+        melding = f"Mislukte bronnen ({len(mislukt)}): {', '.join(mislukt)}"
+        print(f"\n{melding}")
+        # zichtbaar maken in de GitHub-samenvatting, ook als de run groen blijft
+        samenvatting = os.environ.get("GITHUB_STEP_SUMMARY")
+        if samenvatting:
+            try:
+                with open(samenvatting, "a", encoding="utf-8") as f:
+                    f.write(f"\n⚠️ {melding}\n")
+            except Exception:
+                pass
+        # een paar flakey (login-)bronnen tolereren; alleen bij brede uitval falen
+        if len(mislukt) > MAX_MISLUKT:
+            print(f"  meer dan {MAX_MISLUKT} bronnen mislukt -> run faalt")
+            sys.exit(1)
+        print(f"  binnen tolerantie ({len(mislukt)}/{MAX_MISLUKT}); run blijft groen")
 
     print("\nKlaar.")
 
