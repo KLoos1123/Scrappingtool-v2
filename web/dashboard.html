@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base target="_top">
+<title>Profource · SAP & Marktmonitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
+    --panel:#1b2b3d; --panel2:#22344a; --border:#2a3a4d;
+    --blauw:#199DD9; --blauw-l:#4ab8e6; --indigo:#11448D; --violet:#83007D; --magenta:#E9167D;
+    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:'IBM Plex Sans',sans-serif; color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
+      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
+      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
+    background-attachment:fixed;
+    padding:28px 32px 60px; min-height:100vh;
+  }
+  a{ color:var(--blauw); }
+  a:hover{ color:var(--magenta); }
+  h1,h2{ font-family:'Archivo',sans-serif; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:6px; }
+  @keyframes pulseGlow{ 0%{opacity:1;} 50%{opacity:.35;} 100%{opacity:1;} }
+  @keyframes fadeInUp{ from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .brand{ display:flex; align-items:center; gap:16px; }
+  .brand img{ height:38px; width:auto; display:block; background:#fff; padding:8px 12px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.25); }
+  .wordmark{ display:none; align-items:center; gap:9px; }
+  .wordmark .wm-text{ font-family:'Archivo',sans-serif; font-size:22px; color:var(--blauw); font-weight:500; line-height:1; }
+  .wordmark .wm-text b{ color:var(--text); font-weight:700; }
+  .title-block{ padding-left:16px; border-left:1px solid rgba(255,255,255,0.12); }
+  .title-block h1{ font-size:16px; font-weight:600; margin:0; line-height:1.1; }
+  .title-block .subtitle{ font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.05em; text-transform:uppercase; }
+  .topmeta{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .live{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+  .live .dot{ width:8px; height:8px; border-radius:50%; background:var(--blauw-l); display:inline-block; animation:pulseGlow 2s infinite; }
+  .refresh-btn{ font-size:12px; padding:8px 16px; border-radius:8px; border:1px solid rgba(25,157,217,0.4); background:rgba(25,157,217,0.10); color:var(--blauw); cursor:pointer; font-weight:600; }
+  .refresh-btn:hover{ background:rgba(25,157,217,0.18); }
+
+  .ticker{ display:flex; align-items:center; gap:12px; background:rgba(233,22,125,0.10); border:1px solid rgba(233,22,125,0.35); border-radius:12px; padding:10px 14px; margin-bottom:18px; }
+  .ticker .lbl{ font-size:11px; font-weight:700; color:var(--magenta); white-space:nowrap; letter-spacing:.05em; }
+  .ticker .items{ display:flex; gap:8px; overflow-x:auto; flex:1; }
+  .ticker a{ text-decoration:none; white-space:nowrap; font-size:12px; color:var(--text); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:5px 12px; }
+  .ticker a b{ color:var(--magenta); }
+  .ticker .close{ border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 4px; }
+
+  .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; animation:fadeInUp .5s ease both; }
+  .card .label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+  .card .value{ font-family:'Archivo',sans-serif; font-size:32px; font-weight:700; line-height:1; }
+  .card .sub{ font-size:11px; color:var(--dim); margin-top:6px; }
+  .card .spark{ display:flex; align-items:flex-end; gap:2px; height:26px; margin-top:12px; }
+  .card .spark i{ flex:1; background:var(--blauw); border-radius:2px; opacity:.85; }
+  .card.sap{ background:rgba(25,157,217,0.08); border-color:rgba(25,157,217,0.35); }
+  .card.sap .value{ color:var(--blauw); }
+
+  .views{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+  .view-btn{ font-size:12px; font-weight:600; padding:8px 16px; border-radius:999px; cursor:pointer; background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid rgba(255,255,255,0.1); }
+  .view-btn:hover{ color:var(--text); }
+  .view-btn.active{ background:rgba(25,157,217,0.18); color:var(--blauw); border-color:rgba(25,157,217,0.45); }
+
+  .layout{ display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+  .layout3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .panel h2{ font-size:14px; font-weight:600; margin:0 0 12px 0; color:var(--text); }
+  .panel h2 .hint{ color:var(--dim); font-weight:400; font-size:11px; }
+  .chart-wrap{ position:relative; height:250px; }
+
+  .filters{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:14px; }
+  .filters label{ font-size:11px; color:var(--muted); margin-right:6px; }
+  select, input[type=text]{ font-family:'IBM Plex Sans',sans-serif; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+  input[type=text]{ min-width:220px; padding:8px 12px; }
+  select:focus, input:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
+  .toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; }
+  .toggle input{ accent-color:var(--blauw); }
+  .csv-btn{ font-size:12px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; }
+  .csv-btn:hover{ border-color:var(--blauw); color:var(--text); }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; background:rgba(25,157,217,0.14); color:#9fc4ec; border:1px solid rgba(25,157,217,0.3); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px; }
+  .chip button{ border:none; background:none; cursor:pointer; color:#7a9bc4; font-size:14px; line-height:1; padding:0 2px; }
+  .chip.clear{ background:rgba(233,22,125,0.14); color:var(--magenta); border-color:rgba(233,22,125,0.3); cursor:pointer; padding:4px 12px; }
+
+  .table-wrap{ max-height:640px; overflow:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:600; white-space:nowrap; position:sticky; top:0; background:var(--panel2); border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.04em; z-index:1; }
+  td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }
+  tr:hover td{ background:rgba(255,255,255,0.03); }
+  a.title-link{ color:var(--blauw); text-decoration:none; }
+  a.title-link:hover{ color:var(--magenta); }
+  .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; margin-left:6px; }
+  .badge-sap{ background:rgba(25,157,217,0.16); color:var(--blauw); border:1px solid rgba(25,157,217,0.35); }
+  .badge-oracle{ background:rgba(233,22,125,0.16); color:var(--magenta); border:1px solid rgba(233,22,125,0.35); }
+  .badge-tender{ display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; background:rgba(25,157,217,0.15); color:var(--blauw); }
+  .badge-vac{ display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; background:rgba(74,184,230,0.15); color:var(--blauw-l); }
+  .cat{ display:inline-block; padding:3px 9px; border-radius:8px; font-size:11px; background:rgba(255,255,255,0.06); }
+  .score{ display:inline-block; min-width:42px; text-align:center; padding:3px 8px; border-radius:8px; font-weight:700; font-size:12px; }
+  .s-hot{ background:rgba(233,22,125,0.18); color:var(--magenta); border:1px solid rgba(233,22,125,0.4); }
+  .s-warm{ background:rgba(25,157,217,0.18); color:#5ab6e6; border:1px solid rgba(25,157,217,0.4); }
+  .s-cool{ background:rgba(255,255,255,0.06); color:var(--muted); border:1px solid rgba(255,255,255,0.12); }
+  .nieuw{ font-size:9px; background:var(--indigo); color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; }
+  .num{ font-size:10px; color:var(--dim); margin-top:2px; }
+  .dl{ font-size:10px; font-weight:700; margin-top:2px; }
+  .dl-kort{ color:var(--magenta); }
+  .dl-mid{ color:var(--blauw); }
+  .dl-ok{ color:var(--blauw-l); }
+  .dl-verlopen{ color:var(--muted); }
+
+  .ranklist{ list-style:none; margin:0; padding:0; }
+  .ranklist li{ display:flex; justify-content:space-between; gap:8px; padding:7px 8px; font-size:13px; border-radius:8px; margin-bottom:3px; }
+  .ranklist li span:first-child{ color:var(--sub); }
+  .ranklist li.clickable{ cursor:pointer; }
+  .ranklist li.clickable:hover{ background:rgba(255,255,255,0.04); }
+  .ranklist li.active{ background:rgba(25,157,217,0.12); }
+  .ranklist .cnt{ font-weight:700; color:var(--blauw); }
+  .ranklist li.muted span{ color:var(--dim); }
+  .pill{ display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:11px; background:rgba(255,255,255,0.04); color:var(--sub); border:1px solid rgba(255,255,255,0.08); cursor:pointer; margin:2px 3px 2px 0; }
+  .pill .d{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .pill.active{ background:rgba(25,157,217,0.14); color:var(--blauw); border-color:rgba(25,157,217,0.35); }
+
+  .footer-row{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--muted); }
+  .pager button{ font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--sub); cursor:pointer; margin-left:6px; }
+  .pager button:disabled{ opacity:.4; cursor:default; }
+  .disclaimer{ font-size:11px; color:var(--dim); margin-top:10px; line-height:1.5; }
+  .loading, .error{ padding:40px; text-align:center; color:var(--muted); }
+  .error{ color:#f0b6cf; background:var(--panel); border:1px solid rgba(233,22,125,0.35); border-radius:14px; text-align:left; }
+  .error code{ display:block; margin-top:8px; font-size:12px; color:var(--muted); white-space:pre-wrap; }
+  .muted{ color:var(--dim); font-size:11px; }
+  @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .layout,.layout3{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <img id="logoImg" src="logo.png" alt="Profource"
+         onerror="this.remove();var s=document.getElementById('logoSvg');if(s)s.style.display='inline-flex';">
+    <span id="logoSvg" class="wordmark">
+      <svg width="42" height="34" viewBox="0 0 42 34" aria-hidden="true">
+        <polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon>
+        <rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect>
+        <rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect>
+      </svg>
+      <span class="wm-text"><b>pro</b>fource</span>
+    </span>
+    <div class="title-block">
+      <h1>Marktmonitor</h1>
+      <div class="subtitle" id="subtitle">SAP &amp; Oracle · leadradar</div>
+    </div>
+  </div>
+  <div class="topmeta">
+    <div class="live"><span class="dot"></span><span id="liveText">Live · data laden…</span></div>
+    <button class="refresh-btn" id="refreshBtn">Vernieuwen</button>
+  </div>
+</div>
+
+<div id="loading" class="loading">Data wordt geladen...</div>
+<div id="errorBox" class="error" style="display:none"></div>
+
+<div id="app" style="display:none">
+
+  <div id="ticker" class="ticker" style="display:none">
+    <div class="lbl">SLUIT BINNENKORT</div>
+    <div class="items" id="tickerItems"></div>
+    <button class="close" id="tickerClose" title="verbergen">&times;</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Nieuw vandaag</div><div class="value" id="kpiVandaag">-</div><div class="sub">laatste 24 uur (IT)</div><div class="spark" id="sparkVandaag"></div></div>
+    <div class="card"><div class="label">Nieuw deze week</div><div class="value" id="kpiWeek">-</div><div class="sub">laatste 7 dagen (IT)</div><div class="spark" id="sparkWeek"></div></div>
+    <div class="card"><div class="label">Unieke eindklanten</div><div class="value" id="kpiOrgs">-</div><div class="sub">met open IT-opdrachten</div><div class="spark" id="sparkOrgs"></div></div>
+    <div class="card sap"><div class="label">SAP + Oracle</div><div class="value" id="kpiSap">-</div><div class="sub" id="kpiSapNieuw">-</div><div class="spark" id="sparkSap"></div></div>
+  </div>
+
+  <div class="views" id="smartViews"></div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2 id="orgTitle">Top eindklanten <span class="hint">(klik om te filteren)</span></h2>
+      <div class="chart-wrap"><canvas id="orgChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Categorieverdeling</h2>
+      <div class="chart-wrap"><canvas id="catChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="layout3">
+    <div class="panel">
+      <h2 id="rolesTitle">Meest gevraagde SAP-rollen</h2>
+      <ul class="ranklist" id="sapRoles"></ul>
+      <div class="muted" style="margin-top:8px">Klik een rol om erop te filteren.</div>
+    </div>
+    <div class="panel">
+      <h2>Top gevraagde skills</h2>
+      <ul class="ranklist" id="topSkills"></ul>
+      <div class="muted" style="margin-top:8px">Klik een skill om erop te filteren.</div>
+    </div>
+    <div class="panel">
+      <h2>Snel filteren op categorie</h2>
+      <div id="quickCats"></div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div><label>Type</label>
+      <select id="typeFilter">
+        <option value="">Alle IT</option>
+        <option value="SAP">SAP</option>
+        <option value="Oracle">Oracle</option>
+        <option value="Data &amp; BI">Data &amp; BI</option>
+        <option value="Cloud &amp; Infra">Cloud &amp; Infra</option>
+        <option value="Development">Development</option>
+        <option value="Security">Security</option>
+        <option value="Functioneel &amp; Beheer">Functioneel &amp; Beheer</option>
+        <option value="Project &amp; Agile">Project &amp; Agile</option>
+        <option value="Overig IT">Overig IT</option>
+      </select>
+    </div>
+    <div><label>Soort</label>
+      <select id="soortFilter">
+        <option value="">Alles</option>
+        <option value="Tender/opdracht">Tender / opdracht</option>
+        <option value="Vacature">Vacature</option>
+      </select>
+    </div>
+    <div><label>Bron</label><select id="bronFilter"></select></div>
+    <div><label>Regio</label><select id="regioFilter"></select></div>
+    <div><label>Periode</label>
+      <select id="periodeFilter">
+        <option value="">Alle</option>
+        <option value="1">Vandaag</option>
+        <option value="3">Laatste 3 dagen</option>
+        <option value="7">Deze week</option>
+        <option value="31">Deze maand</option>
+      </select>
+    </div>
+    <div><label>Sorteer</label>
+      <select id="sortFilter">
+        <option value="score-desc">Sales-score (hoog &rarr; laag)</option>
+        <option value="datum-desc">Nieuwste eerst</option>
+        <option value="deadline-asc">Deadline (eerst sluitend)</option>
+        <option value="organisatie-asc">Organisatie (A-Z)</option>
+        <option value="bron-asc">Bron (A-Z)</option>
+      </select>
+    </div>
+    <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude</label>
+    <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
+    <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
+    <div style="flex:1"></div>
+    <button class="csv-btn" id="csvBtn">Exporteer CSV</button>
+    <input type="text" id="searchBox" placeholder="Zoek op titel of organisatie...">
+  </div>
+
+  <div class="chips" id="activeChips"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="score">Score</th>
+          <th data-key="datum">Datum</th>
+          <th data-key="deadline">Deadline</th>
+          <th data-key="organisatie">Organisatie</th>
+          <th data-key="titel">Titel</th>
+          <th data-key="categorie">Categorie</th>
+          <th data-key="soort">Soort</th>
+          <th data-key="regio">Regio</th>
+          <th data-key="bron">Bron</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer-row">
+    <div id="resultCount">-</div>
+    <div class="pager">
+      <button id="prevBtn">Vorige</button>
+      <span id="pageInfo"></span>
+      <button id="nextBtn">Volgende</button>
+    </div>
+  </div>
+  <div class="disclaimer">Sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie: met een deadline telt "sluit binnenkort" zwaarder; zonder deadline loopt de interesse wekelijks af. "Verberg verlopen &amp; oude" haalt gepasseerde sluitingsdata weg, én opdrachten zonder toekomstige deadline ouder dan 3 maanden; "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus. Indicatie, geen garantie.</div>
+</div>
+
+<script>
+/* ===================== trefwoorden ===================== */
+const SAP_STRONG = ['sap','abap','s/4hana','s4hana','s/4','successfactors','fiori','hana','fico','netweaver','sapui5','ariba','ibp'];
+const ORACLE_STRONG = ['oracle','ebs','e-business suite','fusion','peoplesoft','jd edwards','jd-edwards','jde','hyperion','oci','netsuite','plsql','pl/sql'];
+const IT_KEYWORDS = ['it','ict','software','applicatie','applicatiebeheer','systeembeheer','netwerk','developer','ontwikkelaar','engineer','devops','architect','azure','aws','cloud','data','database','business analist','business analyst','informatieanalist','informatiemanager','informatievoorziening','scrum','agile','security','informatiebeveiliging','cyber','consultant','java','python','.net','javascript','sap','oracle','erp','bi','power bi','powerbi','dynamics','m365','microsoft 365','functioneel beheer','functioneel','technisch beheer','beheerder','servicedesk','support','tester','test','ux','ui','front-end','back-end','fullstack','full-stack','integratie','koppeling','middleware','api','linux','sql','digitalisering','automatisering','rpa','ai','machine learning','platform','servicenow','salesforce','react','angular','node','product owner','scrum master','projectleider ict','implementatie','migratie'];
+const IT_STRONG = ['sap','oracle','developer','ontwikkelaar','engineer','software','azure','aws','cloud','devops','architect','security','informatiebeveiliging','ict','data engineer','.net','abap','servicenow','salesforce'];
+const EXCLUDE_KEYWORDS = ['schoonmaak','schoonmaker','interieurverzorger','monteur','chauffeur','buschauffeur','verkoper','verkoopmedewerker','verkoopmedewerkster','magazijn','magazijnmedewerker','operator','productiemedewerker','hovenier','servicemedewerker','beveiliger','receptionist','receptie','kok','catering','facilitair','heftruck','lasser','timmerman','schilder','stratenmaker','bezorger','postbezorger','conducteur','machinist','rangeerder','steward','gastheer','gastvrouw','barista','bediening','groenvoorziening','straatreiniger','kassamedewerker','baliemedewerker','verzorgende','verpleegkundige','apotheek','stukadoor','elektromonteur','installatiemonteur','fietsenmaker','vakkenvuller'];
+const GROOT_ORG = ['ns','stedin','alliander','enexis','tennet','prorail','kpn','vodafone','rijkswaterstaat','belastingdienst','defensie','politie','rivm','ministerie','gemeente','provincie','waterschap','universiteit','hogeschool','ziekenhuis','rabobank','ing','abn','achmea','vitens','dow','shell','philips','asml'];
+const BUREAUS = ['striive','magnit','flextender','harvey nash','yacht','brunel','hays','headfirst','myler','between','sthree','experis','modis','randstad','usg','tempo team','olympia','manpower','adecco','start people','young capital','circle8','bergler','ordina','conclusion','centric','cgi','capgemini','sopra steria','atos','accenture','deloitte','kpmg','pwc','info support','ilionx','valid','quintor','devoteam','profource','freelance','detach','consultancy','consultants','interim','recruit','payroll','staffing','uitzend','flexkracht','sourcing'];
+function isBureauOrg(orgL){
+  if(!orgL || orgL==='-' || /unknown|onbekend/.test(orgL)) return true;
+  return BUREAUS.some(b=>orgL.includes(b));
+}
+const VACATURE_BRONNEN = new Set(['ns','stedin']);
+function soortVan(bron){ return VACATURE_BRONNEN.has(bron) ? 'Vacature' : 'Tender/opdracht'; }
+
+const SKILLS = [
+  ['SAP','sap'],['Oracle','oracle|ebs|fusion|peoplesoft'],['ABAP','abap'],['S/4HANA','s/?4hana'],['SuccessFactors','successfactors'],
+  ['Azure','azure'],['AWS','aws'],['Cloud','cloud'],['Power BI','power ?bi'],['Python','python'],
+  ['Java','java'],['.NET','\\.net'],['DevOps','devops'],['Data','data'],['Security','security|informatiebeveiliging'],
+  ['Dynamics','dynamics'],['M365','m365|microsoft 365'],['Scrum','scrum|agile'],
+  ['SQL','sql'],['Linux','linux'],['ServiceNow','servicenow'],['Salesforce','salesforce'],['RPA','rpa'],['AI/ML','\\bai\\b|machine learning']
+];
+const SKILL_MAP = {};
+SKILLS.forEach(([label,pat])=>{ SKILL_MAP[label]=new RegExp('(^|[^a-z0-9])(?:'+pat+')($|[^a-z0-9])','i'); });
+
+const REGIO_STEDEN = {
+  'Randstad':['amsterdam','rotterdam','den haag','s-gravenhage','gravenhage','utrecht','haarlem','leiden','delft','zoetermeer','amstelveen','almere','hilversum','gouda','dordrecht','schiphol','diemen','capelle','rijswijk','heinenoord'],
+  'Noord':['groningen','leeuwarden','assen','drachten','heerenveen','emmen','hoogeveen'],
+  'Oost':['zwolle','deventer','enschede','apeldoorn','arnhem','nijmegen','hengelo','ede','doetinchem'],
+  'Zuid':['eindhoven','tilburg','breda','den bosch','s-hertogenbosch','hertogenbosch','maastricht','venlo','roermond','helmond','sittard','geleen','bergen op zoom'],
+  'Midden':['amersfoort','veenendaal','nieuwegein','houten','zeist','baarn','soest']
+};
+
+const CAT_COLORS = { 'SAP':'#199DD9','Oracle':'#E9167D','Security':'#83007D','Data & BI':'#11448D','Cloud & Infra':'#4ab8e6','Development':'#2f6fb5','Functioneel & Beheer':'#b0468f','Project & Agile':'#6b7f96','Overig IT':'#5f7488','Niet-IT':'#3a4a5c' };
+const CAT_ORDER = ['SAP','Oracle','Security','Data & BI','Cloud & Infra','Development','Functioneel & Beheer','Project & Agile','Overig IT','Niet-IT'];
+const SMART_VIEWS = [
+  {key:'hot', label:'Hot SAP & Oracle'},
+  {key:'urgent', label:'Sluit binnen 7 dagen'},
+  {key:'today', label:'Nieuw vandaag'},
+  {key:'groot', label:'Grote eindklanten'}
+];
+
+/* ===================== state ===================== */
+const state = {
+  rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
+  prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false,
+  verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
+};
+let orgChart=null, catChart=null;
+let orgTop=[];
+
+/* ===================== helpers ===================== */
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function wordMatch(text, kw){
+  const e = kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp('(^|[^a-z0-9])'+e+'($|[^a-z0-9])','i').test(text);
+}
+function anyMatch(text, list){ return list.some(k=>wordMatch(text,k)); }
+function fmtDate(iso){
+  if(!iso) return '-';
+  const d=new Date(iso); if(isNaN(d.getTime())) return String(iso).slice(0,10);
+  return d.toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+/* ===================== verrijking ===================== */
+function isSap(t){ return SAP_STRONG.some(k=>wordMatch(t,k)); }
+function isOracle(t){ return ORACLE_STRONG.some(k=>wordMatch(t,k)); }
+function isIt(t){
+  if(anyMatch(t, IT_STRONG)) return true;
+  if(anyMatch(t, EXCLUDE_KEYWORDS)) return false;
+  return anyMatch(t, IT_KEYWORDS);
+}
+function categorie(t, sap){
+  if(sap) return 'SAP';
+  if(isOracle(t)) return 'Oracle';
+  if(wordMatch(t,'security')||wordMatch(t,'informatiebeveiliging')||wordMatch(t,'cyber')||wordMatch(t,'soc')) return 'Security';
+  if(wordMatch(t,'data')||wordMatch(t,'bi')||wordMatch(t,'power bi')||wordMatch(t,'powerbi')||wordMatch(t,'analytics')||wordMatch(t,'analist')) return 'Data & BI';
+  if(wordMatch(t,'cloud')||wordMatch(t,'azure')||wordMatch(t,'aws')||wordMatch(t,'infra')||wordMatch(t,'netwerk')||wordMatch(t,'devops')||wordMatch(t,'systeembeheer')||wordMatch(t,'linux')) return 'Cloud & Infra';
+  if(wordMatch(t,'developer')||wordMatch(t,'ontwikkelaar')||wordMatch(t,'engineer')||wordMatch(t,'java')||wordMatch(t,'python')||wordMatch(t,'.net')||wordMatch(t,'software')||wordMatch(t,'front-end')||wordMatch(t,'back-end')||wordMatch(t,'fullstack')) return 'Development';
+  if(wordMatch(t,'functioneel')||wordMatch(t,'beheer')||wordMatch(t,'beheerder')||wordMatch(t,'support')||wordMatch(t,'servicedesk')||wordMatch(t,'applicatiebeheer')||wordMatch(t,'tester')||wordMatch(t,'test')) return 'Functioneel & Beheer';
+  if(wordMatch(t,'projectleider')||wordMatch(t,'projectmanager')||wordMatch(t,'programmamanager')||wordMatch(t,'scrum')||wordMatch(t,'agile')||wordMatch(t,'product owner')||wordMatch(t,'implementatie')||wordMatch(t,'transitie')) return 'Project & Agile';
+  return 'Overig IT';
+}
+function sapRol(t){
+  if(wordMatch(t,'abap')) return 'ABAP';
+  if(wordMatch(t,'basis')) return 'Basis';
+  if(wordMatch(t,'fico')||wordMatch(t,'finance')) return 'FICO / Finance';
+  if(wordMatch(t,'successfactors')||wordMatch(t,'hcm')) return 'SuccessFactors / HCM';
+  if(wordMatch(t,'s/4hana')||wordMatch(t,'s4hana')||wordMatch(t,'s/4')) return 'S/4HANA';
+  if(wordMatch(t,'sd')) return 'SD (Sales)';
+  if(wordMatch(t,'mm')) return 'MM (Materials)';
+  if(wordMatch(t,'pm')) return 'PM (Onderhoud)';
+  if(wordMatch(t,'pp')) return 'PP (Productie)';
+  if(wordMatch(t,'ewm')||wordMatch(t,'wm')) return 'EWM / Logistiek';
+  if(wordMatch(t,'bw')||wordMatch(t,'analytics')) return 'BW / Analytics';
+  if(wordMatch(t,'ariba')) return 'Ariba / Inkoop';
+  if(wordMatch(t,'functioneel')) return 'Functioneel beheer';
+  return 'SAP consultant / overig';
+}
+function oracleRol(t){
+  if(wordMatch(t,'ebs')||wordMatch(t,'e-business')) return 'EBS';
+  if(wordMatch(t,'fusion')) return 'Fusion';
+  if(wordMatch(t,'peoplesoft')) return 'PeopleSoft';
+  if(wordMatch(t,'jde')||wordMatch(t,'jd edwards')||wordMatch(t,'jd-edwards')) return 'JD Edwards';
+  if(wordMatch(t,'hyperion')||wordMatch(t,'epm')) return 'Hyperion / EPM';
+  if(wordMatch(t,'netsuite')) return 'NetSuite';
+  if(wordMatch(t,'oci')||wordMatch(t,'oracle cloud')) return 'OCI / Cloud';
+  if(wordMatch(t,'plsql')||wordMatch(t,'pl/sql')||wordMatch(t,'dba')) return 'DBA / PL-SQL';
+  return 'Oracle consultant / overig';
+}
+function grootOrg(o){ return GROOT_ORG.some(k=>o.includes(k)); }
+function regioVan(plaats, org){
+  const p=(plaats||'').toLowerCase();
+  if(/remote|thuis|hybride/.test(p)) return 'Remote';
+  for(const [regio, steden] of Object.entries(REGIO_STEDEN)){ if(steden.some(s=>p.includes(s))) return regio; }
+  const o=(org||'').toLowerCase();
+  for(const [regio, steden] of Object.entries(REGIO_STEDEN)){ if(steden.some(s=>o.includes(s))) return regio; }
+  return 'Overig / onbekend';
+}
+function recencyDagen(v){
+  const ref = v._eerst || v._pub;
+  if(!ref) return null;
+  return (Date.now()-ref)/86400000;
+}
+function tijdComponent(v){
+  if(v._deadline!=null){
+    const dg=v.dagenTotDeadline;
+    if(dg<0) return -40;
+    if(dg<=3) return 22;
+    if(dg<=7) return 18;
+    if(dg<=21) return 12;
+    return 8;
+  }
+  const d=(v.leeftijdDagen!=null)? v.leeftijdDagen : recencyDagen(v);
+  if(d===null) return 6;
+  const weken=d/7;
+  return Math.round(20 - 5*weken);
+}
+function salesScore(v){
+  let s=0;
+  if(v.isIt) s+=30;
+  if(v.isSap||v.isOracle) s+=35;
+  if(v.grootOrg) s+=15;
+  if(!v.isBureau) s+=8;
+  s+=tijdComponent(v);
+  if(/s\/?4hana|public cloud|\becc\b|\berp\b/i.test(v.titel)) s+=8;
+  if((v.status||'').toLowerCase()!=='open') s-=15;
+  return Math.max(0,Math.min(100,s));
+}
+function scoreKlasse(s){ return s>=80?'s-hot':s>=55?'s-warm':'s-cool'; }
+function rolVan(r){ return r.isSap?sapRol(r.titel):(r.isOracle?oracleRol(r.titel):null); }
+function focusDomein(){ return state.type==='Oracle'?'Oracle':'SAP'; }
+
+/* ===================== data laden ===================== */
+function loadData(){
+  return fetch('tenders.json?_=' + Date.now())
+    .then(r=>{
+      if(!r.ok) throw new Error('tenders.json kon niet geladen worden (HTTP '+r.status+').');
+      return r.json();
+    })
+    .then(res=>{
+      if(!res.rows || !res.rows.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
+      const rows = res.rows.map(r=>{
+        const titel=r.titel||'(geen titel)';
+        const organisatie=r.organisatie||'-';
+        const orgL=organisatie.toLowerCase();
+        const sap=isSap(titel);
+        const orc=isOracle(titel);
+        const it=sap||orc||isIt(titel);
+        const bron=r.bron||'onbekend';
+        const v={
+          bron, nummer:r.nummer||'', titel, organisatie,
+          status:r.status||'-', url:r.url||'', locatie:r.locatie||'', deadline:r.deadline||'',
+          publicatiedatum:r.publicatiedatum||'',
+          _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
+          _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
+          _deadline: r.deadline? new Date(r.deadline).getTime(): null,
+          isSap:sap, isOracle:orc, isIt:it,
+          isBureau: isBureauOrg(orgL), grootOrg:grootOrg(orgL),
+          soort: soortVan(bron),
+          categorie: it? categorie(titel,sap) : 'Niet-IT',
+          regio: regioVan(r.locatie, organisatie),
+        };
+        if(v._pub && isNaN(v._pub)) v._pub=null;
+        if(v._eerst && isNaN(v._eerst)) v._eerst=null;
+        if(v._deadline && isNaN(v._deadline)) v._deadline=null;
+        v.datum = v._pub;
+        const _now=Date.now();
+        v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - _now)/86400000) : null;
+        v.verlopen = v._deadline!=null && v._deadline < _now;
+        const _pubRef = v._pub || v._eerst;
+        v.leeftijdDagen = _pubRef!=null ? (_now-_pubRef)/86400000 : null;
+        const _heeftToekomstDeadline = v._deadline!=null && v._deadline >= _now;
+        v.verouderd = !_heeftToekomstDeadline && v.leeftijdDagen!=null && v.leeftijdDagen > 90;
+        v.score = salesScore(v);
+        const d=recencyDagen(v);
+        v.isVandaag = d!==null && d<1;
+        v.isWeek = d!==null && d<7;
+        return v;
+      });
+      return {rows, meta:res};
+    });
+}
+
+/* ===================== filteren ===================== */
+function baseRows(){
+  let r = state.rows;
+  if(state.verbergVerlopen) r = r.filter(x=>!x.verlopen && !x.verouderd);
+  if(state.verbergBureaus)  r = r.filter(x=>!x.isBureau);
+  return r;
+}
+function relevantRows(){
+  const b=baseRows();
+  return state.toonNietIt ? b : b.filter(r=>r.isIt);
+}
+function fieldValue(r, field){
+  if(field==='score') return r.score;
+  if(field==='datum') return r.datum||-Infinity;
+  if(field==='deadline') return r._deadline||Infinity;
+  return String(r[field]||'').toLowerCase();
+}
+function cmp(a,b,field,dir){
+  const av=fieldValue(a,field), bv=fieldValue(b,field);
+  if(av<bv) return dir==='asc'?-1:1;
+  if(av>bv) return dir==='asc'?1:-1;
+  return 0;
+}
+function applySmartView(rows){
+  switch(state.smartView){
+    case 'hot': return rows.filter(r=>r.isSap||r.isOracle);
+    case 'urgent': return rows.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7);
+    case 'today': return rows.filter(r=>r.isVandaag);
+    case 'groot': return rows.filter(r=>r.grootOrg);
+    default: return rows;
+  }
+}
+function getFiltered(rows){
+  rows=applySmartView(rows);
+  if(state.type) rows=rows.filter(r=>r.categorie===state.type);
+  if(state.soort) rows=rows.filter(r=>r.soort===state.soort);
+  if(state.bron) rows=rows.filter(r=>r.bron===state.bron);
+  if(state.regio) rows=rows.filter(r=>r.regio===state.regio);
+  if(state.skill && SKILL_MAP[state.skill]) rows=rows.filter(r=>SKILL_MAP[state.skill].test(r.titel));
+  if(state.rol) rows=rows.filter(r=>rolVan(r)===state.rol);
+  if(state.periode){
+    const max=parseInt(state.periode,10);
+    rows=rows.filter(r=>{ const d=recencyDagen(r); return d!==null && d<=max; });
+  }
+  if(state.search){
+    const q=state.search.toLowerCase();
+    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q));
+  }
+  const [field,dir]=state.sort.split('-');
+  const chain=[{field,dir}];
+  if(state.prevSort){ const [pf,pd]=state.prevSort.split('-'); if(pf!==field) chain.push({field:pf,dir:pd}); }
+  chain.push({field:'score',dir:'desc'});
+  rows=rows.slice().sort((a,b)=>{
+    for(const {field,dir} of chain){ const c=cmp(a,b,field,dir); if(c!==0) return c; }
+    return 0;
+  });
+  return rows;
+}
+
+/* ===================== sparklines ===================== */
+function sparkline(el, rows, color){
+  const buckets=new Array(14).fill(0);
+  rows.forEach(r=>{ if(r.leeftijdDagen==null) return; const d=Math.floor(r.leeftijdDagen); if(d>=0&&d<14) buckets[13-d]++; });
+  const max=Math.max(1,...buckets);
+  el.innerHTML=buckets.map(c=>`<i style="height:${Math.max(6,Math.round(c/max*100))}%;background:${color}"></i>`).join('');
+}
+
+/* ===================== chips ===================== */
+function renderChips(){
+  const chips=[];
+  const add=(label,clear)=>chips.push({label,clear});
+  if(state.smartView){ const sv=SMART_VIEWS.find(s=>s.key===state.smartView); add('Weergave: '+(sv?sv.label:state.smartView), ()=>{state.smartView='';}); }
+  if(state.type) add('Type: '+state.type, ()=>{state.type='';syncSelect('typeFilter','');});
+  if(state.soort) add('Soort: '+state.soort, ()=>{state.soort='';syncSelect('soortFilter','');});
+  if(state.bron) add('Bron: '+state.bron, ()=>{state.bron='';syncSelect('bronFilter','');});
+  if(state.regio) add('Regio: '+state.regio, ()=>{state.regio='';syncSelect('regioFilter','');});
+  if(state.periode){ const lbl={'1':'Vandaag','3':'Laatste 3 dagen','7':'Deze week','31':'Deze maand'}[state.periode]||state.periode; add('Periode: '+lbl, ()=>{state.periode='';syncSelect('periodeFilter','');}); }
+  if(state.skill) add('Skill: '+state.skill, ()=>{state.skill='';});
+  if(state.rol) add('Rol: '+state.rol, ()=>{state.rol='';});
+  if(state.search) add('Zoek: '+state.search, ()=>{state.search='';document.getElementById('searchBox').value='';});
+  const wrap=document.getElementById('activeChips');
+  if(!chips.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML='';
+  chips.forEach(c=>{
+    const el=document.createElement('span'); el.className='chip';
+    el.innerHTML=esc(c.label)+' <button title="verwijder">&times;</button>';
+    el.querySelector('button').onclick=()=>{ c.clear(); state.page=1; render(); };
+    wrap.appendChild(el);
+  });
+  const clr=document.createElement('span'); clr.className='chip clear'; clr.textContent='Alles wissen';
+  clr.onclick=wisAlles;
+  wrap.appendChild(clr);
+}
+function syncSelect(id,val){ const s=document.getElementById(id); if(s) s.value=val; }
+function wisAlles(){
+  Object.assign(state,{type:'',soort:'',bron:'',regio:'',periode:'',search:'',skill:'',rol:'',smartView:'',page:1});
+  ['typeFilter','soortFilter','bronFilter','regioFilter','periodeFilter'].forEach(id=>syncSelect(id,''));
+  document.getElementById('searchBox').value='';
+  render();
+}
+
+/* ===================== ticker ===================== */
+function renderTicker(){
+  const box=document.getElementById('ticker');
+  if(state.tickerDismissed){ box.style.display='none'; return; }
+  const items=relevantRows().filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=3)
+    .sort((a,b)=>a.dagenTotDeadline-b.dagenTotDeadline).slice(0,8);
+  if(!items.length){ box.style.display='none'; return; }
+  box.style.display='flex';
+  document.getElementById('tickerItems').innerHTML=items.map(r=>{
+    const dag=r.dagenTotDeadline===0?'vandaag':'nog '+r.dagenTotDeadline+'d';
+    const t=esc(r.organisatie+' — '+r.titel);
+    return r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener">${t} <b>· ${dag}</b></a>`:`<a>${t} <b>· ${dag}</b></a>`;
+  }).join('');
+}
+
+/* ===================== smart views ===================== */
+function renderSmartViews(){
+  const wrap=document.getElementById('smartViews');
+  wrap.innerHTML=SMART_VIEWS.map(sv=>`<button class="view-btn ${state.smartView===sv.key?'active':''}" data-sv="${sv.key}">${esc(sv.label)}</button>`).join('');
+  wrap.querySelectorAll('.view-btn').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.sv; state.smartView=(state.smartView===k)?'':k; state.page=1; render();
+  });
+}
+
+/* ===================== render ===================== */
+function renderKpis(){
+  const rel=relevantRows();
+  const vandaag=rel.filter(r=>r.isVandaag);
+  const week=rel.filter(r=>r.isWeek);
+  const open=rel.filter(r=>(r.status||'').toLowerCase()==='open');
+  const orgs=new Set(open.map(r=>r.organisatie)).size;
+  const sap=baseRows().filter(r=>r.isSap||r.isOracle);
+  const sapNieuw=sap.filter(r=>r.isWeek).length;
+  document.getElementById('kpiVandaag').textContent=vandaag.length;
+  document.getElementById('kpiWeek').textContent=week.length;
+  document.getElementById('kpiOrgs').textContent=orgs;
+  document.getElementById('kpiSap').textContent=sap.length;
+  document.getElementById('kpiSapNieuw').textContent=sapNieuw+' nieuw deze week';
+  sparkline(document.getElementById('sparkVandaag'), rel, '#199DD9');
+  sparkline(document.getElementById('sparkWeek'), rel, '#199DD9');
+  sparkline(document.getElementById('sparkOrgs'), open, '#199DD9');
+  sparkline(document.getElementById('sparkSap'), sap, '#199DD9');
+}
+function renderCharts(rows){
+  const oc={}; rows.forEach(r=>oc[r.organisatie]=(oc[r.organisatie]||0)+1);
+  orgTop=Object.entries(oc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const c1=document.getElementById('orgChart').getContext('2d');
+  if(orgChart) orgChart.destroy();
+  orgChart=new Chart(c1,{type:'bar',data:{labels:orgTop.map(e=>e[0]),datasets:[{data:orgTop.map(e=>e[1]),backgroundColor:'#199DD9',borderRadius:4,maxBarThickness:22}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{beginAtZero:true,ticks:{color:'#8ea2b8',precision:0},grid:{color:'rgba(255,255,255,0.06)'}},y:{ticks:{color:'#cfe0f0',font:{size:11}},grid:{display:false}}},
+      onClick:(evt,els)=>{ if(els.length){ const org=orgTop[els[0].index][0]; state.orgClick=org; state.search=org; document.getElementById('searchBox').value=org; state.page=1; render(); } }}});
+  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
+  const ce=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+  const c2=document.getElementById('catChart').getContext('2d');
+  if(catChart) catChart.destroy();
+  catChart=new Chart(c2,{type:'doughnut',data:{labels:ce.map(e=>e[0]),datasets:[{data:ce.map(e=>e[1]),
+    backgroundColor:ce.map(e=>CAT_COLORS[e[0]]||'#5f7488'),borderColor:'#1b2b3d',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#cfe0f0',boxWidth:10,font:{size:10}}}}}});
+}
+function renderRoles(){
+  const domein=focusDomein();
+  document.getElementById('rolesTitle').textContent='Meest gevraagde '+domein+'-rollen';
+  const rijen0=baseRows().filter(r=> domein==='Oracle'? r.isOracle : r.isSap);
+  const rc={}; rijen0.forEach(r=>{ const rol=domein==='Oracle'?oracleRol(r.titel):sapRol(r.titel); rc[rol]=(rc[rol]||0)+1; });
+  const rows=Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const ul=document.getElementById('sapRoles');
+  ul.innerHTML = rows.length
+    ? rows.map(([r,c])=>`<li class="clickable ${state.rol===r?'active':''}" data-rol="${esc(r)}"><span>${esc(r)}</span><span class="cnt">${c}</span></li>`).join('')
+    : `<li class="muted"><span>Nog geen ${esc(domein)}-opdrachten gevonden.</span></li>`;
+  ul.querySelectorAll('li[data-rol]').forEach(li=>li.onclick=()=>{
+    const rol=li.dataset.rol; state.rol=(state.rol===rol)?'':rol; state.page=1; render();
+  });
+}
+function renderSkills(){
+  const rows=relevantRows();
+  const sc=SKILLS.map(([label])=>[label, rows.filter(r=>SKILL_MAP[label].test(r.titel)).length])
+    .filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const ul=document.getElementById('topSkills');
+  ul.innerHTML = sc.length
+    ? sc.map(([s,c])=>`<li class="clickable ${state.skill===s?'active':''}" data-skill="${esc(s)}"><span>${esc(s)}</span><span class="cnt">${c}</span></li>`).join('')
+    : '<li class="muted"><span>Geen skills herkend.</span></li>';
+  ul.querySelectorAll('li[data-skill]').forEach(li=>li.onclick=()=>{
+    const sk=li.dataset.skill; state.skill=(state.skill===sk)?'':sk; state.page=1; render();
+  });
+}
+function renderQuickCats(){
+  const rows=relevantRows();
+  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
+  const wrap=document.getElementById('quickCats');
+  wrap.innerHTML=Object.entries(cc).sort((a,b)=>b[1]-a[1])
+    .map(([c,n])=>`<span class="pill ${state.type===c?'active':''}" data-cat="${esc(c)}"><span class="d" style="background:${CAT_COLORS[c]||'#5f7488'}"></span>${esc(c)} (${n})</span>`).join('');
+  wrap.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
+    const cat=p.dataset.cat; state.type=(state.type===cat)?'':cat;
+    const sel=document.getElementById('typeFilter');
+    sel.value=[...sel.options].some(o=>o.value===cat)?state.type:'';
+    state.page=1; render();
+  });
+}
+function soortBadge(s){ return s==='Vacature'?'<span class="badge-vac">Vacature</span>':'<span class="badge-tender">Tender</span>'; }
+function deadlineCell(r){
+  if(r._deadline==null) return '<span class="muted">—</span>';
+  const dg=r.dagenTotDeadline;
+  let cls,lbl;
+  if(dg<0){ cls='dl-verlopen'; lbl='verlopen'; }
+  else if(dg===0){ cls='dl-kort'; lbl='sluit vandaag'; }
+  else if(dg<=7){ cls='dl-kort'; lbl='nog '+dg+' d'; }
+  else if(dg<=21){ cls='dl-mid'; lbl='nog '+dg+' d'; }
+  else { cls='dl-ok'; lbl='nog '+dg+' d'; }
+  return `${esc(fmtDate(r.deadline))}<div class="dl ${cls}">${lbl}</div>`;
+}
+function renderTable(rows){
+  const totalPages=Math.max(1,Math.ceil(rows.length/state.pageSize));
+  if(state.page>totalPages) state.page=totalPages;
+  const start=(state.page-1)*state.pageSize;
+  const pageRows=rows.slice(start,start+state.pageSize);
+  document.getElementById('tableBody').innerHTML = pageRows.map(r=>`
+    <tr>
+      <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
+      <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
+      <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
+      <td style="color:#eef3f8">${esc(r.organisatie)}</td>
+      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
+      <td>${soortBadge(r.soort)}</td>
+      <td style="color:#8ea2b8">${esc(r.regio)}</td>
+      <td style="color:#8ea2b8">${esc(r.bron)}</td>
+    </tr>`).join('') || '<tr><td colspan="9" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+  document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
+  document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
+  document.getElementById('prevBtn').disabled=state.page<=1;
+  document.getElementById('nextBtn').disabled=state.page>=totalPages;
+}
+function render(){
+  const rows=getFiltered(relevantRows());
+  window._lastFiltered=rows;
+  renderTicker();
+  renderSmartViews();
+  renderKpis();
+  renderCharts(rows);
+  renderRoles();
+  renderSkills();
+  renderQuickCats();
+  renderChips();
+  renderTable(rows);
+}
+
+/* ===================== CSV export ===================== */
+function exportCsv(){
+  const rows=window._lastFiltered||getFiltered(relevantRows());
+  const header=['Score','Datum','Deadline','Organisatie','Titel','Categorie','Soort','Regio','Bron'];
+  const lines=[header.join(';')];
+  rows.forEach(r=>{
+    lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
+      String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron].join(';'));
+  });
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='marktmonitor-export.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ===================== filteropties ===================== */
+function buildFilterOptions(){
+  const rel=relevantRows();
+  const bronSel=document.getElementById('bronFilter');
+  const bc={}; baseRows().forEach(r=>bc[r.bron]=(bc[r.bron]||0)+1);
+  bronSel.innerHTML='<option value="">Alle bronnen</option>'+Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([b,c])=>`<option value="${esc(b)}">${esc(b)} (${c})</option>`).join('');
+  bronSel.value=state.bron;
+  const regioSel=document.getElementById('regioFilter');
+  const rc={}; rel.forEach(r=>rc[r.regio]=(rc[r.regio]||0)+1);
+  regioSel.innerHTML='<option value="">Alle regio\'s</option>'+Object.entries(rc).sort((a,b)=>b[1]-a[1]).map(([r,c])=>`<option value="${esc(r)}">${esc(r)} (${c})</option>`).join('');
+  regioSel.value=state.regio;
+}
+
+/* ===================== events ===================== */
+function bindEvents(){
+  document.getElementById('typeFilter').onchange=e=>{state.type=e.target.value;state.page=1;render();};
+  document.getElementById('soortFilter').onchange=e=>{state.soort=e.target.value;state.page=1;render();};
+  document.getElementById('bronFilter').onchange=e=>{state.bron=e.target.value;state.page=1;render();};
+  document.getElementById('regioFilter').onchange=e=>{state.regio=e.target.value;state.page=1;render();};
+  document.getElementById('periodeFilter').onchange=e=>{state.periode=e.target.value;state.page=1;render();};
+  document.getElementById('sortFilter').onchange=e=>{
+    const newSort=e.target.value; const [nf]=newSort.split('-'), [cf]=state.sort.split('-');
+    if(nf!==cf) state.prevSort=state.sort; state.sort=newSort; state.page=1; render();
+  };
+  document.getElementById('verbergVerlopen').onchange=e=>{state.verbergVerlopen=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('csvBtn').onclick=exportCsv;
+  document.getElementById('tickerClose').onclick=()=>{state.tickerDismissed=true;renderTicker();};
+  let t;
+  document.getElementById('searchBox').oninput=e=>{clearTimeout(t);t=setTimeout(()=>{state.search=e.target.value.trim();state.page=1;render();},200);};
+  document.getElementById('prevBtn').onclick=()=>{if(state.page>1){state.page--;render();}};
+  document.getElementById('nextBtn').onclick=()=>{state.page++;render();};
+  document.getElementById('refreshBtn').onclick=()=>init(true);
+  document.querySelectorAll('th[data-key]').forEach(th=>{
+    th.onclick=()=>{
+      const key=th.dataset.key; const [f,d]=state.sort.split('-');
+      const newSort=(f===key&&d==='desc')?key+'-asc':key+'-desc';
+      if(key!==f) state.prevSort=state.sort;
+      state.sort=newSort;
+      const sel=document.getElementById('sortFilter');
+      sel.value=[...sel.options].some(o=>o.value===state.sort)?state.sort:'';
+      state.page=1; render();
+    };
+  });
+}
+
+/* ===================== init ===================== */
+function showError(err){
+  document.getElementById('loading').style.display='none';
+  const box=document.getElementById('errorBox');
+  box.style.display='block';
+  box.innerHTML='<strong>Er ging iets mis bij het laden.</strong><code>'+esc(err&&err.message?err.message:String(err))+'</code>'+
+    '<div class="muted" style="margin-top:10px">Check: 1) is GitHub Pages ingeschakeld (Settings &gt; Pages, Source: GitHub Actions)? 2) is de workflow "Tender Scrapers" minstens één keer succesvol gedraaid, zodat tenders.json bestaat?</div>';
+  document.getElementById('liveText').textContent='Fout bij laden';
+}
+function init(isRefresh){
+  if(isRefresh){
+    document.getElementById('app').style.display='none';
+    document.getElementById('errorBox').style.display='none';
+    document.getElementById('loading').style.display='block';
+  }
+  loadData().then(({rows,meta})=>{
+    state.rows=rows;
+    const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-';
+    document.getElementById('subtitle').textContent=`SAP & Oracle · leadradar · ${meta.count||rows.length} regels`;
+    document.getElementById('liveText').textContent='Live · bijgewerkt '+upd;
+    buildFilterOptions();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('errorBox').style.display='none';
+    document.getElementById('app').style.display='block';
+    render();
+  }).catch(showError);
+}
+window.addEventListener('DOMContentLoaded',()=>{bindEvents();init(false);});
+</script>
+</body>
+</html>
