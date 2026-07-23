@@ -215,7 +215,16 @@ def _uit_gepubliceerd(t):
 
 def haal_op():
     """Wordt aangeroepen door run.py. Geeft een lijst dicts terug."""
-    token = _token()
+    # De browser-login is af en toe flakey; twee pogingen voordat we opgeven.
+    token = None
+    for poging in range(2):
+        try:
+            token = _token()
+            break
+        except Exception as e:
+            print(f"  login-poging {poging + 1} mislukt ({type(e).__name__})")
+    if not token:
+        raise RuntimeError("inloggen mislukt na 2 pogingen")
     print("  ingelogd")
 
     rijen = []

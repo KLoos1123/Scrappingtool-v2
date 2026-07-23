@@ -97,6 +97,13 @@
   .chip button{ border:none; background:none; cursor:pointer; color:#7a9bc4; font-size:14px; line-height:1; padding:0 2px; }
   .chip.clear{ background:rgba(233,22,125,0.14); color:var(--magenta); border-color:rgba(233,22,125,0.3); cursor:pointer; padding:4px 12px; }
 
+  tr.rij{ cursor:pointer; }
+  tr.rij:hover td{ background:rgba(25,157,217,0.06); }
+  tr.rij.open td{ background:rgba(25,157,217,0.10); }
+  .hasdesc{ margin-left:6px; opacity:.7; font-size:11px; }
+  tr.detail td{ background:var(--bg2); color:var(--sub); font-size:12.5px; line-height:1.55;
+    white-space:pre-wrap; padding:14px 18px; border-bottom:1px solid var(--border); }
+  tr.detail .det-leeg{ color:var(--dim); font-style:italic; }
   .table-wrap{ max-height:640px; overflow:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{ text-align:left; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:600; white-space:nowrap; position:sticky; top:0; background:var(--panel2); border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.04em; z-index:1; }
@@ -350,6 +357,7 @@ const state = {
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
 };
 let orgChart=null, catChart=null;
+let BESCHR={};   // { "bron|tender_id": omschrijving } uit beschrijvingen.json
 let orgTop=[];
 
 /* ===================== helpers ===================== */
@@ -456,12 +464,16 @@ function focusDomein(){ return state.type==='Oracle'?'Oracle':'SAP'; }
 
 /* ===================== data laden ===================== */
 function loadData(){
-  return fetch('tenders.json?_=' + Date.now())
-    .then(r=>{
+  return Promise.all([
+    fetch('tenders.json?_=' + Date.now()).then(r=>{
       if(!r.ok) throw new Error('tenders.json kon niet geladen worden (HTTP '+r.status+').');
       return r.json();
-    })
-    .then(res=>{
+    }),
+    // omschrijvingen zijn optioneel; ontbreken mag (leeg object)
+    fetch('beschrijvingen.json?_=' + Date.now()).then(r=> r.ok ? r.json() : {}).catch(()=>({})),
+  ])
+    .then(([res, beschr])=>{
+      BESCHR = beschr || {};
       if(!res.rows || !res.rows.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
       const rows = res.rows.map(r=>{
         const titel=r.titel||'(geen titel)';
@@ -472,7 +484,7 @@ function loadData(){
         const it=sap||orc||isIt(titel);
         const bron=r.bron||'onbekend';
         const v={
-          bron, nummer:r.nummer||'', titel, organisatie,
+          bron, tender_id:r.tender_id||r.nummer||'', nummer:r.nummer||'', titel, organisatie,
           status:r.status||'-', url:r.url||'', locatie:r.locatie||'', deadline:r.deadline||'',
           publicatiedatum:r.publicatiedatum||'',
           _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
@@ -722,18 +734,36 @@ function renderTable(rows){
   if(state.page>totalPages) state.page=totalPages;
   const start=(state.page-1)*state.pageSize;
   const pageRows=rows.slice(start,start+state.pageSize);
-  document.getElementById('tableBody').innerHTML = pageRows.map(r=>`
-    <tr>
+  document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
+    const oms = BESCHR[r.bron+'|'+r.tender_id];
+    const detail = oms
+      ? esc(oms)
+      : '<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
+    return `
+    <tr class="rij" data-i="${i}">
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
       <td style="color:#eef3f8">${esc(r.organisatie)}</td>
-      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
       <td style="color:#8ea2b8">${esc(r.regio)}</td>
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
-    </tr>`).join('') || '<tr><td colspan="9" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+    </tr>
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="9">${detail}</td></tr>`;
+  }).join('') || '<tr><td colspan="9" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+  // klik op een rij klapt de omschrijving open/dicht (links blijven werken)
+  document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
+    tr.onclick=(e)=>{
+      if(e.target.closest('a')) return;
+      const d=document.getElementById('det-'+tr.dataset.i);
+      if(!d) return;
+      const open = d.style.display!=='none';
+      d.style.display = open ? 'none' : 'table-row';
+      tr.classList.toggle('open', !open);
+    };
+  });
   document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
   document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
   document.getElementById('prevBtn').disabled=state.page<=1;
