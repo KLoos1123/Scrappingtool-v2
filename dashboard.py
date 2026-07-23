@@ -15,7 +15,7 @@ UITVOER_DIR = "web"
 
 # Velden die het dashboard nodig heeft (zie loadData in web/index.html).
 VELDEN = [
-    "bron", "nummer", "titel", "organisatie", "status",
+    "bron", "tender_id", "nummer", "titel", "organisatie", "status",
     "url", "locatie", "deadline", "publicatiedatum", "eerst_gezien",
 ]
 
@@ -41,6 +41,24 @@ def main():
     with open(pad, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
     print(f"{pad} geschreven ({len(rijen)} rijen)")
+
+    # Omschrijvingen apart voor het dashboard: { "bron|tender_id": tekst }.
+    # Losse file zodat tenders.json licht blijft en het dashboard 'm lazy laadt.
+    conn2 = sqlite3.connect(DB)
+    beschr = {}
+    try:
+        rows2 = conn2.execute(
+            "SELECT bron, tender_id, omschrijving FROM beschrijvingen").fetchall()
+        for bron, tid, oms in rows2:
+            if oms:
+                beschr[f"{bron}|{tid}"] = oms
+    except sqlite3.OperationalError:
+        pass  # tabel bestaat nog niet
+    conn2.close()
+    pad2 = os.path.join(UITVOER_DIR, "beschrijvingen.json")
+    with open(pad2, "w", encoding="utf-8") as f:
+        json.dump(beschr, f, ensure_ascii=False)
+    print(f"{pad2} geschreven ({len(beschr)} omschrijvingen)")
 
 
 if __name__ == "__main__":
