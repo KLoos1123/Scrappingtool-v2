@@ -6,6 +6,8 @@
 <base target="_top">
 <title>Profource · SAP & Marktmonitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -155,6 +157,7 @@
 <body>
 
 <div class="topbar">
+  
   <div class="brand">
     <img id="logoImg" src="logo.png" alt="Profource"
          onerror="this.remove();var s=document.getElementById('logoSvg');if(s)s.style.display='inline-flex';">
@@ -173,7 +176,9 @@
   </div>
   <div class="topmeta">
     <div class="live"><span class="dot"></span><span id="liveText">Live · data laden…</span></div>
+    <a id="adminLink" href="admin.html" class="refresh-btn" style="display:none;text-decoration:none">Beheer</a>
     <button class="refresh-btn" id="refreshBtn">Vernieuwen</button>
+    <button class="refresh-btn" id="logoutBtn">Uitloggen</button>
   </div>
 </div>
 
@@ -873,6 +878,18 @@ function init(isRefresh){
   }).catch(showError);
 }
 window.addEventListener('DOMContentLoaded',()=>{bindEvents();init(false);});
+window.addEventListener('DOMContentLoaded', async () => {
+  const profile = await requireUser();   // redirects to login.html if not signed in / blocked
+  if (!profile) return;
+
+  if (profile.role === 'admin') {
+    document.getElementById('adminLink').style.display = 'inline-block';
+  }
+  document.getElementById('logoutBtn').onclick = logout;
+
+  bindEvents();
+  init(false);
+});
 </script>
 </body>
 </html>

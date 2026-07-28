@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registreren · Profource Marktmonitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
+    --panel:#1b2b3d; --border:#2a3a4d;
+    --blauw:#199DD9; --magenta:#E9167D;
+    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Sans',sans-serif; color:var(--text);
+    background:
+      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
+      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
+      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
+    background-attachment:fixed;
+  }
+  .card{ width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border);
+    border-radius:14px; padding:32px 28px; margin:20px; }
+  h1{ font-family:'Archivo',sans-serif; font-size:18px; margin:0 0 4px; }
+  .sub{ font-size:12px; color:var(--dim); margin-bottom:24px; text-transform:uppercase; letter-spacing:.05em; }
+  label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  input{ width:100%; font-family:inherit; font-size:14px; padding:10px 12px; margin-bottom:16px;
+    border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+  input:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
+  button{ width:100%; font-family:inherit; font-size:14px; font-weight:600; padding:11px;
+    border-radius:8px; border:none; background:var(--blauw); color:#08151f; cursor:pointer; }
+  button:hover{ background:#4ab8e6; }
+  button:disabled{ opacity:.6; cursor:default; }
+  .msg{ font-size:12.5px; margin-bottom:16px; padding:10px 12px; border-radius:8px; display:none; }
+  .msg.error{ display:block; background:rgba(233,22,125,0.10); border:1px solid rgba(233,22,125,0.35); color:#f0b6cf; }
+  .msg.ok{ display:block; background:rgba(25,157,217,0.10); border:1px solid rgba(25,157,217,0.35); color:#9fc4ec; }
+  .hint{ font-size:11px; color:var(--dim); margin:-10px 0 16px; }
+  .foot{ margin-top:18px; font-size:12.5px; color:var(--muted); text-align:center; }
+  .foot a{ color:var(--blauw); text-decoration:none; }
+  .foot a:hover{ color:var(--magenta); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Profource Marktmonitor</h1>
+    <div class="sub">Account aanmaken</div>
+    <div id="msg" class="msg"></div>
+    <form id="registerForm">
+      <label for="regkey">Registratiesleutel</label>
+      <input type="text" id="regkey" required autocomplete="off">
+      <div class="hint">Gekregen van een beheerder. Zonder geldige sleutel kan geen account worden aangemaakt.</div>
+      <label for="email">E-mailadres</label>
+      <input type="email" id="email" required autocomplete="username">
+      <label for="password">Wachtwoord</label>
+      <input type="password" id="password" required minlength="6" autocomplete="new-password">
+      <button type="submit" id="submitBtn">Account aanmaken</button>
+    </form>
+    <div class="foot">Al een account? <a href="login.html">Inloggen</a></div>
+  </div>
+
+<script src="auth.js"></script>
+<script>
+  const form = document.getElementById('registerForm');
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('submitBtn');
+
+  function showMsg(text, kind){
+    msg.textContent = text;
+    msg.className = 'msg ' + kind;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    msg.className = 'msg';
+
+    const regkey = document.getElementById('regkey').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    // 1. Check the key exists and is unused BEFORE creating an account
+    const { data: keyRow, error: keyErr } = await supabase
+      .from('registration_keys')
+      .select('key, used')
+      .eq('key', regkey)
+      .maybeSingle();
+
+    if (keyErr || !keyRow || keyRow.used) {
+      showMsg('Ongeldige of al gebruikte registratiesleutel.', 'error');
+      btn.disabled = false;
+      return;
+    }
+
+    // 2. Create the account
+    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
+    if (signUpErr) {
+      showMsg('Registreren mislukt: ' + signUpErr.message, 'error');
+      btn.disabled = false;
+      return;
+    }
+
+    // 3. Atomically claim the key now that we're signed in
+    const { data: claimed, error: claimErr } = await supabase.rpc('claim_registration_key', { key_input: regkey });
+    if (claimErr || !claimed) {
+      // Account was still created; the key just couldn't be marked used (e.g. race condition).
+      // Not fatal, but worth knowing about.
+      console.warn('Kon sleutel niet markeren als gebruikt:', claimErr);
+    }
+
+    showMsg('Account aangemaakt! Je wordt doorgestuurd...', 'ok');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+  });
+</script>
+</body>
+</html>
