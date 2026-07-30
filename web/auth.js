@@ -11,8 +11,8 @@ if (!window.__pfAuthLoaded) {
 
   // --- 1. Fill these in with your Supabase project's values ---
   // Project Settings > API > Project URL / anon public key
-  const SUPABASE_URL = 'https://YOUR-PROJECT-REF.supabase.co';
-  const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+const SUPABASE_URL = 'https://lzbzwfxdcszirbnpexij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6Ynp3ZnhkY3N6aXJibnBleGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMjcwNzAsImV4cCI6MjEwMDgwMzA3MH0.DX31BPrjI1vjOIgwWJfCbxnbmrZBJBO7ilftbzWD6Yw';
 
   window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
