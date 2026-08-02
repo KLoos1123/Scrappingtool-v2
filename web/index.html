@@ -367,6 +367,33 @@ let orgTop=[];
 
 /* ===================== helpers ===================== */
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Omschrijvingen komen ongefilterd van externe bronnen (job-board HTML). We renderen
+// alleen een veilige subset van opmaak-tags; alle attributen (onerror, href, style, ...)
+// worden gestript. <template> parseert inert, dus er wordt niets geladen/uitgevoerd.
+function sanitizeDescription(html){
+  const BEHOUD = new Set(['P','BR','UL','OL','LI','STRONG','B','EM','I']);
+  const VERWIJDER = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','SVG','LINK','META']);
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  (function opschonen(node){
+    [...node.childNodes].forEach(kind=>{
+      if(kind.nodeType===1){
+        if(VERWIJDER.has(kind.tagName)){ kind.remove(); return; }
+        opschonen(kind);
+        if(BEHOUD.has(kind.tagName)){
+          [...kind.attributes].forEach(a=>kind.removeAttribute(a.name));
+        } else {
+          kind.replaceWith(...kind.childNodes);
+        }
+      } else if(kind.nodeType!==3){
+        kind.remove();
+      }
+    });
+  })(tpl.content);
+  const uit = document.createElement('div');
+  uit.appendChild(tpl.content.cloneNode(true));
+  return uit.innerHTML;
+}
 function wordMatch(text, kw){
   const e = kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   return new RegExp('(^|[^a-z0-9])'+e+'($|[^a-z0-9])','i').test(text);
@@ -742,7 +769,7 @@ function renderTable(rows){
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
     const oms = BESCHR[r.bron+'|'+r.tender_id];
     const detail = oms
-      ? esc(oms)
+      ? sanitizeDescription(oms)
       : '<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
     return `
     <tr class="rij" data-i="${i}">
