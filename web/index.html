@@ -131,6 +131,12 @@
   .dl-ok{ color:var(--blauw-l); }
   .dl-verlopen{ color:var(--muted); }
 
+  .statuscell{ min-width:150px; }
+  .statusSelect{ font-family:inherit; font-size:11.5px; padding:5px 8px; border-radius:7px;
+    border:1px solid var(--border); background:var(--bg2); color:var(--text); width:100%; cursor:pointer; }
+  .statusSelect:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
+  .statuswho{ font-size:10px; color:var(--dim); margin-top:4px; line-height:1.3; }
+
   .ranklist{ list-style:none; margin:0; padding:0; }
   .ranklist li{ display:flex; justify-content:space-between; gap:8px; padding:7px 8px; font-size:13px; border-radius:8px; margin-bottom:3px; }
   .ranklist li span:first-child{ color:var(--sub); }
@@ -254,6 +260,7 @@
     </div>
     <div><label>Bron</label><select id="bronFilter"></select></div>
     <div><label>Regio</label><select id="regioFilter"></select></div>
+    <div><label>Status</label><select id="statusFilterSel"></select></div>
     <div><label>Periode</label>
       <select id="periodeFilter">
         <option value="">Alle</option>
@@ -295,6 +302,7 @@
           <th data-key="soort">Soort</th>
           <th data-key="regio">Regio</th>
           <th data-key="bron">Bron</th>
+          <th data-key="status">Status</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -355,15 +363,36 @@ const SMART_VIEWS = [
   {key:'groot', label:'Grote eindklanten'}
 ];
 
+// Interne workflow-status per tender. Puur tekstueel in de database (geen
+// vaste enum), dus deze lijst is vrij aan te passen zonder migratie: gewoon
+// labels toevoegen/verwijderen/hernoemen. Bestaande waarden die niet meer in
+// de lijst staan blijven gewoon zichtbaar in het dropdown van die rij.
+const STATUS_OPTIONS = [
+  'Nog te bekijken', 'Interessant', 'Contact gelegd', 'Aanbieding verstuurd',
+  'In onderhandeling', 'Gewonnen', 'Verloren', 'Niet interessant',
+];
+const STATUS_COLORS = {
+  'Nog te bekijken':   '#5f7488',
+  'Interessant':       '#199DD9',
+  'Contact gelegd':    '#4ab8e6',
+  'Aanbieding verstuurd':'#11448D',
+  'In onderhandeling': '#83007D',
+  'Gewonnen':          '#1fae6a',
+  'Verloren':          '#8ea2b8',
+  'Niet interessant':  '#5f7690',
+};
+
 /* ===================== state ===================== */
 const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
-  prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false,
+  prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
 };
 let orgChart=null, catChart=null;
-let BESCHR={};   // { "bron|tender_id": omschrijving } uit beschrijvingen.json
+let BESCHR={};   // { "bron|tender_id": omschrijving } uit de beschrijvingen-tabel
 let orgTop=[];
+let currentUserEmail=null;
+let realtimeChannel=null;
 
 /* ===================== helpers ===================== */
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -460,66 +489,137 @@ function salesScore(v){
   if(!v.isBureau) s+=8;
   s+=tijdComponent(v);
   if(/s\/?4hana|public cloud|\becc\b|\berp\b/i.test(v.titel)) s+=8;
-  if((v.status||'').toLowerCase()!=='open') s-=15;
+  if((v.bron_status||'').toLowerCase()!=='open') s-=15;
   return Math.max(0,Math.min(100,s));
 }
 function scoreKlasse(s){ return s>=80?'s-hot':s>=55?'s-warm':'s-cool'; }
 function rolVan(r){ return r.isSap?sapRol(r.titel):(r.isOracle?oracleRol(r.titel):null); }
 function focusDomein(){ return state.type==='Oracle'?'Oracle':'SAP'; }
 
-/* ===================== data laden ===================== */
-function loadData(){
-  return Promise.all([
-    fetch('tenders.json?_=' + Date.now()).then(r=>{
-      if(!r.ok) throw new Error('tenders.json kon niet geladen worden (HTTP '+r.status+').');
-      return r.json();
-    }),
-    // omschrijvingen zijn optioneel; ontbreken mag (leeg object)
-    fetch('beschrijvingen.json?_=' + Date.now()).then(r=> r.ok ? r.json() : {}).catch(()=>({})),
-  ])
-    .then(([res, beschr])=>{
-      BESCHR = beschr || {};
-      if(!res.rows || !res.rows.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
-      const rows = res.rows.map(r=>{
-        const titel=r.titel||'(geen titel)';
-        const organisatie=r.organisatie||'-';
-        const orgL=organisatie.toLowerCase();
-        const sap=isSap(titel);
-        const orc=isOracle(titel);
-        const it=sap||orc||isIt(titel);
-        const bron=r.bron||'onbekend';
-        const v={
-          bron, tender_id:r.tender_id||r.nummer||'', nummer:r.nummer||'', titel, organisatie,
-          status:r.status||'-', url:r.url||'', locatie:r.locatie||'', deadline:r.deadline||'',
-          publicatiedatum:r.publicatiedatum||'',
-          _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
-          _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
-          _deadline: r.deadline? new Date(r.deadline).getTime(): null,
-          isSap:sap, isOracle:orc, isIt:it,
-          isBureau: isBureauOrg(orgL), grootOrg:grootOrg(orgL),
-          soort: soortVan(bron),
-          categorie: it? categorie(titel,sap) : 'Niet-IT',
-          regio: regioVan(r.locatie, organisatie),
-        };
-        if(v._pub && isNaN(v._pub)) v._pub=null;
-        if(v._eerst && isNaN(v._eerst)) v._eerst=null;
-        if(v._deadline && isNaN(v._deadline)) v._deadline=null;
-        v.datum = v._pub;
-        const _now=Date.now();
-        v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - _now)/86400000) : null;
-        v.verlopen = v._deadline!=null && v._deadline < _now;
-        const _pubRef = v._pub || v._eerst;
-        v.leeftijdDagen = _pubRef!=null ? (_now-_pubRef)/86400000 : null;
-        const _heeftToekomstDeadline = v._deadline!=null && v._deadline >= _now;
-        v.verouderd = !_heeftToekomstDeadline && v.leeftijdDagen!=null && v.leeftijdDagen > 90;
-        v.score = salesScore(v);
-        const d=recencyDagen(v);
-        v.isVandaag = d!==null && d<1;
-        v.isWeek = d!==null && d<7;
-        return v;
-      });
-      return {rows, meta:res};
-    });
+/* ===================== data laden (Supabase) ===================== */
+// Eén rij uit de 'tenders'-tabel omzetten naar het verrijkte rij-object dat
+// de rest van het dashboard gebruikt. Losse functie zodat zowel het eerste
+// laden als een live realtime-update (zie applyRealtimeChange) 'm kunnen
+// gebruiken.
+function enrichRow(r){
+  const titel=r.titel||'(geen titel)';
+  const organisatie=r.organisatie||'-';
+  const orgL=organisatie.toLowerCase();
+  const sap=isSap(titel);
+  const orc=isOracle(titel);
+  const it=sap||orc||isIt(titel);
+  const bron=r.bron||'onbekend';
+  const v={
+    bron, tender_id:String(r.tender_id||r.nummer||''), nummer:r.nummer||'', titel, organisatie,
+    bron_status:r.bron_status||'-', url:r.url||'', locatie:r.locatie||'', deadline:r.deadline||'',
+    publicatiedatum:r.publicatiedatum||'',
+    status: r.status||'', status_gewijzigd_door: r.status_gewijzigd_door||'',
+    status_gewijzigd_op: r.status_gewijzigd_op||'',
+    _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
+    _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
+    _deadline: r.deadline? new Date(r.deadline).getTime(): null,
+    isSap:sap, isOracle:orc, isIt:it,
+    isBureau: isBureauOrg(orgL), grootOrg:grootOrg(orgL),
+    soort: soortVan(bron),
+    categorie: it? categorie(titel,sap) : 'Niet-IT',
+    regio: regioVan(r.locatie, organisatie),
+  };
+  if(v._pub && isNaN(v._pub)) v._pub=null;
+  if(v._eerst && isNaN(v._eerst)) v._eerst=null;
+  if(v._deadline && isNaN(v._deadline)) v._deadline=null;
+  v.datum = v._pub;
+  const _now=Date.now();
+  v.dagenTotDeadline = v._deadline!=null ? Math.floor((v._deadline - _now)/86400000) : null;
+  v.verlopen = v._deadline!=null && v._deadline < _now;
+  const _pubRef = v._pub || v._eerst;
+  v.leeftijdDagen = _pubRef!=null ? (_now-_pubRef)/86400000 : null;
+  const _heeftToekomstDeadline = v._deadline!=null && v._deadline >= _now;
+  v.verouderd = !_heeftToekomstDeadline && v.leeftijdDagen!=null && v.leeftijdDagen > 90;
+  v.score = salesScore(v);
+  const d=recencyDagen(v);
+  v.isVandaag = d!==null && d<1;
+  v.isWeek = d!==null && d<7;
+  return v;
+}
+
+// Supabase's REST-laag (PostgREST) geeft standaard maximaal 1000 rijen per
+// call terug; hier tot en met de laatste pagina doorhalen zodat echt alle
+// rijen binnenkomen, ongeacht hoe groot de tabel groeit.
+async function fetchAll(table, select){
+  const PAGE=1000;
+  let from=0, out=[];
+  for(;;){
+    const {data, error} = await supabase.from(table).select(select)
+      .order('bron', {ascending:true}).order('tender_id', {ascending:true})
+      .range(from, from+PAGE-1);
+    if(error) throw new Error(`Kon '${table}' niet laden: ${error.message}`);
+    out = out.concat(data||[]);
+    if(!data || data.length<PAGE) break;
+    from += PAGE;
+  }
+  return out;
+}
+
+async function loadData(){
+  const [tenderRijen, beschrRijen] = await Promise.all([
+    fetchAll('tenders', '*'),
+    fetchAll('beschrijvingen', 'bron, tender_id, omschrijving').catch(()=>[]),
+  ]);
+  BESCHR = {};
+  beschrRijen.forEach(b=>{ if(b.omschrijving) BESCHR[`${b.bron}|${b.tender_id}`] = b.omschrijving; });
+  if(!tenderRijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
+  let laatst=null;
+  tenderRijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
+  const rows = tenderRijen.map(enrichRow);
+  return {rows, meta:{lastUpdated:laatst, count:rows.length}};
+}
+
+/* ===================== live status-updates ===================== */
+function setupRealtime(){
+  if(realtimeChannel) return;
+  realtimeChannel = supabase.channel('tenders-live')
+    .on('postgres_changes', {event:'*', schema:'public', table:'tenders'}, payload=>{
+      try{ applyRealtimeChange(payload); }
+      catch(e){ console.error('kon live-update niet toepassen', e); }
+    })
+    .subscribe();
+}
+function applyRealtimeChange(payload){
+  const rec = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+  if(!rec) return;
+  const bron=rec.bron, tid=String(rec.tender_id);
+  const idx = state.rows.findIndex(r=>r.bron===bron && r.tender_id===tid);
+  if(payload.eventType==='DELETE'){
+    if(idx>=0) state.rows.splice(idx,1);
+  } else {
+    const enriched = enrichRow(payload.new);
+    if(idx>=0) state.rows[idx]=enriched; else state.rows.unshift(enriched);
+  }
+  const app=document.getElementById('app');
+  if(app && app.style.display!=='none') render();
+}
+
+async function updateStatus(bron, tenderId, nieuweStatus){
+  const nu = new Date().toISOString();
+  const { error } = await supabase.from('tenders')
+    .update({
+      status: nieuweStatus || null,
+      status_gewijzigd_door: currentUserEmail,
+      status_gewijzigd_op: nu,
+    })
+    .eq('bron', bron).eq('tender_id', tenderId);
+  if(error){
+    alert('Status bijwerken mislukt: ' + error.message);
+    render(); // dropdown terugzetten naar de laatst bekende waarde
+    return;
+  }
+  const idx = state.rows.findIndex(r=>r.bron===bron && r.tender_id===tenderId);
+  if(idx>=0){
+    state.rows[idx].status = nieuweStatus||'';
+    state.rows[idx].status_gewijzigd_door = currentUserEmail;
+    state.rows[idx].status_gewijzigd_op = nu;
+    render();
+  }
 }
 
 /* ===================== filteren ===================== */
@@ -560,6 +660,7 @@ function getFiltered(rows){
   if(state.soort) rows=rows.filter(r=>r.soort===state.soort);
   if(state.bron) rows=rows.filter(r=>r.bron===state.bron);
   if(state.regio) rows=rows.filter(r=>r.regio===state.regio);
+  if(state.statusFilter) rows=rows.filter(r=> state.statusFilter==='__leeg__' ? !r.status : r.status===state.statusFilter);
   if(state.skill && SKILL_MAP[state.skill]) rows=rows.filter(r=>SKILL_MAP[state.skill].test(r.titel));
   if(state.rol) rows=rows.filter(r=>rolVan(r)===state.rol);
   if(state.periode){
@@ -598,6 +699,7 @@ function renderChips(){
   if(state.soort) add('Soort: '+state.soort, ()=>{state.soort='';syncSelect('soortFilter','');});
   if(state.bron) add('Bron: '+state.bron, ()=>{state.bron='';syncSelect('bronFilter','');});
   if(state.regio) add('Regio: '+state.regio, ()=>{state.regio='';syncSelect('regioFilter','');});
+  if(state.statusFilter){ const lbl=state.statusFilter==='__leeg__'?'Geen status':state.statusFilter; add('Status: '+lbl, ()=>{state.statusFilter='';syncSelect('statusFilterSel','');}); }
   if(state.periode){ const lbl={'1':'Vandaag','3':'Laatste 3 dagen','7':'Deze week','31':'Deze maand'}[state.periode]||state.periode; add('Periode: '+lbl, ()=>{state.periode='';syncSelect('periodeFilter','');}); }
   if(state.skill) add('Skill: '+state.skill, ()=>{state.skill='';});
   if(state.rol) add('Rol: '+state.rol, ()=>{state.rol='';});
@@ -617,8 +719,8 @@ function renderChips(){
 }
 function syncSelect(id,val){ const s=document.getElementById(id); if(s) s.value=val; }
 function wisAlles(){
-  Object.assign(state,{type:'',soort:'',bron:'',regio:'',periode:'',search:'',skill:'',rol:'',smartView:'',page:1});
-  ['typeFilter','soortFilter','bronFilter','regioFilter','periodeFilter'].forEach(id=>syncSelect(id,''));
+  Object.assign(state,{type:'',soort:'',bron:'',regio:'',periode:'',search:'',skill:'',rol:'',smartView:'',statusFilter:'',page:1});
+  ['typeFilter','soortFilter','bronFilter','regioFilter','periodeFilter','statusFilterSel'].forEach(id=>syncSelect(id,''));
   document.getElementById('searchBox').value='';
   render();
 }
@@ -652,7 +754,7 @@ function renderKpis(){
   const rel=relevantRows();
   const vandaag=rel.filter(r=>r.isVandaag);
   const week=rel.filter(r=>r.isWeek);
-  const open=rel.filter(r=>(r.status||'').toLowerCase()==='open');
+  const open=rel.filter(r=>(r.bron_status||'').toLowerCase()==='open');
   const orgs=new Set(open.map(r=>r.organisatie)).size;
   const sap=baseRows().filter(r=>r.isSap||r.isOracle);
   const sapNieuw=sap.filter(r=>r.isWeek).length;
@@ -723,6 +825,28 @@ function renderQuickCats(){
   });
 }
 function soortBadge(s){ return s==='Vacature'?'<span class="badge-vac">Vacature</span>':'<span class="badge-tender">Tender</span>'; }
+function fmtDateTime(iso){
+  if(!iso) return '';
+  const d=new Date(iso); if(isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+}
+function statusCell(r){
+  const gekozen = r.status || '';
+  const legeOptie = `<option value="" ${!gekozen?'selected':''}>&mdash; geen status &mdash;</option>`;
+  const opties = STATUS_OPTIONS.map(o=>`<option value="${esc(o)}" ${gekozen===o?'selected':''}>${esc(o)}</option>`).join('');
+  // val een status op die niet (meer) in STATUS_OPTIONS staat toch tonen, zodat 'm niet stilzwijgend verdwijnt
+  const extra = (gekozen && !STATUS_OPTIONS.includes(gekozen)) ? `<option value="${esc(gekozen)}" selected>${esc(gekozen)}</option>` : '';
+  const kleur = STATUS_COLORS[gekozen] || '#5f7488';
+  const wie = gekozen && r.status_gewijzigd_door
+    ? `<div class="statuswho">door ${esc(r.status_gewijzigd_door)}${r.status_gewijzigd_op?' · '+fmtDateTime(r.status_gewijzigd_op):''}</div>`
+    : '';
+  return `<div class="statuscell">
+    <select class="statusSelect" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}" style="border-left:3px solid ${kleur}">
+      ${legeOptie}${opties}${extra}
+    </select>
+    ${wie}
+  </div>`;
+}
 function deadlineCell(r){
   if(r._deadline==null) return '<span class="muted">—</span>';
   const dg=r.dagenTotDeadline;
@@ -755,18 +879,26 @@ function renderTable(rows){
       <td>${soortBadge(r.soort)}</td>
       <td style="color:#8ea2b8">${esc(r.regio)}</td>
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
+      <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="9">${detail}</td></tr>`;
-  }).join('') || '<tr><td colspan="9" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
-  // klik op een rij klapt de omschrijving open/dicht (links blijven werken)
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detail}</td></tr>`;
+  }).join('') || '<tr><td colspan="10" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+  // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
     tr.onclick=(e)=>{
-      if(e.target.closest('a')) return;
+      if(e.target.closest('a') || e.target.closest('select') || e.target.closest('.statuscell')) return;
       const d=document.getElementById('det-'+tr.dataset.i);
       if(!d) return;
       const open = d.style.display!=='none';
       d.style.display = open ? 'none' : 'table-row';
       tr.classList.toggle('open', !open);
+    };
+  });
+  document.querySelectorAll('#tableBody select.statusSelect').forEach(sel=>{
+    sel.onclick = e=>e.stopPropagation();
+    sel.onchange = e=>{
+      e.stopPropagation();
+      updateStatus(sel.dataset.bron, sel.dataset.tid, sel.value);
     };
   });
   document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
@@ -791,11 +923,12 @@ function render(){
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Organisatie','Titel','Categorie','Soort','Regio','Bron'];
+  const header=['Score','Datum','Deadline','Organisatie','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
   const lines=[header.join(';')];
   rows.forEach(r=>{
     lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
-      String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron].join(';'));
+      String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
+      r.status||'', r.status_gewijzigd_door||''].join(';'));
   });
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
@@ -814,6 +947,13 @@ function buildFilterOptions(){
   const rc={}; rel.forEach(r=>rc[r.regio]=(rc[r.regio]||0)+1);
   regioSel.innerHTML='<option value="">Alle regio\'s</option>'+Object.entries(rc).sort((a,b)=>b[1]-a[1]).map(([r,c])=>`<option value="${esc(r)}">${esc(r)} (${c})</option>`).join('');
   regioSel.value=state.regio;
+
+  const statusSel=document.getElementById('statusFilterSel');
+  const sc={}; let leeg=0;
+  rel.forEach(r=>{ if(r.status) sc[r.status]=(sc[r.status]||0)+1; else leeg++; });
+  const statusOpts=Object.entries(sc).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<option value="${esc(s)}">${esc(s)} (${c})</option>`).join('');
+  statusSel.innerHTML='<option value="">Alle statussen</option>'+statusOpts+`<option value="__leeg__">Geen status (${leeg})</option>`;
+  statusSel.value=state.statusFilter;
 }
 
 /* ===================== events ===================== */
@@ -822,6 +962,7 @@ function bindEvents(){
   document.getElementById('soortFilter').onchange=e=>{state.soort=e.target.value;state.page=1;render();};
   document.getElementById('bronFilter').onchange=e=>{state.bron=e.target.value;state.page=1;render();};
   document.getElementById('regioFilter').onchange=e=>{state.regio=e.target.value;state.page=1;render();};
+  document.getElementById('statusFilterSel').onchange=e=>{state.statusFilter=e.target.value;state.page=1;render();};
   document.getElementById('periodeFilter').onchange=e=>{state.periode=e.target.value;state.page=1;render();};
   document.getElementById('sortFilter').onchange=e=>{
     const newSort=e.target.value; const [nf]=newSort.split('-'), [cf]=state.sort.split('-');
@@ -856,7 +997,7 @@ function showError(err){
   const box=document.getElementById('errorBox');
   box.style.display='block';
   box.innerHTML='<strong>Er ging iets mis bij het laden.</strong><code>'+esc(err&&err.message?err.message:String(err))+'</code>'+
-    '<div class="muted" style="margin-top:10px">Check: 1) is GitHub Pages ingeschakeld (Settings &gt; Pages, Source: GitHub Actions)? 2) is de workflow "Tender Scrapers" minstens één keer succesvol gedraaid, zodat tenders.json bestaat?</div>';
+    '<div class="muted" style="margin-top:10px">Check: 1) is GitHub Pages ingeschakeld (Settings &gt; Pages, Source: GitHub Actions)? 2) is de workflow "Tender Scrapers" minstens één keer succesvol gedraaid, zodat de Supabase-tabel \'tenders\' gevuld is? 3) staan SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY als secrets op de repo?</div>';
   document.getElementById('liveText').textContent='Fout bij laden';
 }
 function init(isRefresh){
@@ -881,6 +1022,7 @@ function init(isRefresh){
 window.addEventListener('DOMContentLoaded', async () => {
   const profile = await requireUser();   // redirects to login.html if not signed in / blocked
   if (!profile) return;
+  currentUserEmail = profile.email;
 
   if (profile.role === 'admin') {
     document.getElementById('adminLink').style.display = 'inline-block';
@@ -888,6 +1030,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('logoutBtn').onclick = logout;
 
   bindEvents();
+  setupRealtime();
   init(false);
 });
 </script>
