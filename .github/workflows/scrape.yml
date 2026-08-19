@@ -51,6 +51,8 @@ jobs:
           SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
           SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
           SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python run.py
 
       - name: CSV en debug uploaden
