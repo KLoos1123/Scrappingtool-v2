@@ -121,7 +121,12 @@ def haal_op():
                     print(f"  login-poging {poging + 1} mislukt ({type(e).__name__})")
                     page.wait_for_timeout(4000)
             if not ingelogd:
-                print("  inloggen niet gelukt; bron overgeslagen (geen data)")
+                try:
+                    page.screenshot(path="debug_staffingms_login.png", full_page=True)
+                except Exception:
+                    pass
+                print("  inloggen niet gelukt; bron overgeslagen (geen data), "
+                      "zie debug_staffingms_login.png")
                 return []
 
             page.goto(AANVRAGEN, timeout=60000, wait_until="domcontentloaded")
