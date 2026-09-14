@@ -20,10 +20,11 @@ import sheets_writer
 import supabase_sync
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
                       stedin, tenderned, inhuurdesk_regio, gelderland,
-                      flexwestbrabant, magnit, stedin_vms, opdrachtoverheid)
+                      flexwestbrabant, magnit, stedin_vms, opdrachtoverheid,
+                      harveynash)
 # import sharepoint_writer
- 
- 
+
+
 SCRAPERS = [
     mercell,
     flextender,
@@ -39,6 +40,7 @@ SCRAPERS = [
     magnit,
     stedin_vms,
     opdrachtoverheid,
+    harveynash,
 ]
  
 CSV_ALLES = "tenders.csv"
