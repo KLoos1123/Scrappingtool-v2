@@ -10,8 +10,8 @@ import traceback
 from datetime import datetime, timezone, timedelta
  
 # Zoveel bronnen mogen falen zonder de hele run rood te maken. Login-scrapers
-# (mercell, striive, magnit, stedin-vms) zijn af en toe flakey; pas bij brede
-# uitval is er echt iets structureel mis.
+# (mercell, striive, magnit, stedin-vms, portofrotterdam, staffingms, heart)
+# zijn af en toe flakey; pas bij brede uitval is er echt iets structureel mis.
 MAX_MISLUKT = 3
  
 import db
@@ -21,7 +21,7 @@ import supabase_sync
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
                       stedin, tenderned, inhuurdesk_regio, gelderland,
                       flexwestbrabant, magnit, stedin_vms, opdrachtoverheid,
-                      harveynash)
+                      harveynash, portofrotterdam, staffingms, heart)
 # import sharepoint_writer
 
 
@@ -41,6 +41,9 @@ SCRAPERS = [
     stedin_vms,
     opdrachtoverheid,
     harveynash,
+    portofrotterdam,
+    staffingms,
+    heart,
 ]
  
 CSV_ALLES = "tenders.csv"
