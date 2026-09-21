@@ -4,6 +4,11 @@ Login via Auth0 (auth.striive.com); de app wisselt dit in voor een
 sessie-cookie (SESSION) op supplier.striive.com. Die cookie hergebruiken we
 voor gewone requests-calls naar de API, in plaats van de hele (virtueel
 gescrollde) lijst via Playwright te scrapen.
+
+De inlogpagina toont een OneTrust-cookiebanner (niet aanwezig toen deze
+scraper voor het eerst werkte) die we eerst wegklikken: als striive.com de
+SESSION-cookie zelf als "niet-strikt-noodzakelijk" classificeert, kan
+OneTrust hem anders blokkeren totdat er toestemming is gegeven.
 """
 
 import os
@@ -19,6 +24,18 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 # ---------------------------------------------------------------- login
 
+def _accept_cookies(page):
+    for txt in ["Alle cookies accepteren", "Alles accepteren", "Accepteren"]:
+        try:
+            b = page.query_selector(f"button:has-text('{txt}')")
+            if b and b.is_visible():
+                b.click()
+                page.wait_for_timeout(600)
+                return
+        except Exception:
+            pass
+
+
 def _sessie_cookies():
     email = os.environ.get("STRIIVE_EMAIL")
     wachtwoord = os.environ.get("STRIIVE_WACHTWOORD")
@@ -32,12 +49,16 @@ def _sessie_cookies():
 
         page.goto(f"{APP}/dashboard", timeout=60000)
         page.wait_for_selector("#username", timeout=30000)
+        _accept_cookies(page)
         page.fill("#username", email)
         page.fill("#password", wachtwoord)
         page.click("button[type='submit']")
 
-        page.wait_for_url(f"{APP}/**", timeout=30000)
-        page.wait_for_timeout(3000)
+        try:
+            page.wait_for_url(f"{APP}/**", timeout=30000)
+        except Exception:
+            pass
+        page.wait_for_timeout(5000)
 
         cookies = {
             c["name"]: c["value"]
