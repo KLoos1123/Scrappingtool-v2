@@ -1,9 +1,17 @@
 """Magnit (voorheen Brainnet) - supplier job requests achter de login.
 
 Logt in op portal.magnitglobal.com met e-mail/wachtwoord (secrets
-MAGNIT_EMAIL / MAGNIT_WACHTWOORD) en onderschept de retrievejobrequests-
-response die de aanvragenpagina zelf ophaalt. Er worden geen tokens
-geprint of opgeslagen.
+MAGNIT_EMAIL / MAGNIT_WACHTWOORD) en probeert eerst de retrievejobrequests-
+response te onderscheppen die de aanvragenpagina zelf ophaalt (rijkste
+data: klantnaam, deadline, uren). Er worden geen tokens geprint of
+opgeslagen.
+
+Die onderschepping is inmiddels niet meer betrouwbaar (het interne
+verzoek heet kennelijk anders of laadt anders dan toen dit geschreven
+is), terwijl de "Aanvragen"-lijst zelf gewoon gerenderd wordt. Daarom
+valt deze scraper terug op het generiek uitlezen van de zichtbare
+<table> (zelfde aanpak als heart.py/stedin_vms.py) als de onderschepping
+niks oplevert.
 """
 
 import os
@@ -34,6 +42,64 @@ def _login(page, email, wachtwoord):
     except Exception:
         pass
 
+
+# ---------------------------------------------------------------- val terug: tabel
+
+def _tekst(el):
+    return (el.inner_text() or "").strip().replace("\n", " ") if el else None
+
+
+def _lees_tabel(page):
+    """Generieke <table>: koppen uit thead/eerste rij, waarden per td."""
+    rijen = []
+    tabel = page.query_selector("table")
+    if not tabel:
+        return rijen
+
+    koppen = [_tekst(th) or f"kol{i}" for i, th in enumerate(tabel.query_selector_all("thead th"))]
+    body_rijen = tabel.query_selector_all("tbody tr") or tabel.query_selector_all("tr")
+
+    for tr in body_rijen:
+        cellen = tr.query_selector_all("td")
+        if not cellen:
+            continue
+        waarden = [_tekst(c) for c in cellen]
+        if not any(waarden):
+            continue
+        link = tr.query_selector("a[href]")
+        href = link.get_attribute("href") if link else None
+        if href and href.startswith("/"):
+            href = PORTAL + href
+        rij = {(koppen[i] if i < len(koppen) else f"kol{i}"): w for i, w in enumerate(waarden)}
+        rij["_url"] = href
+        rijen.append(rij)
+    return rijen
+
+
+def _uit_tabelrij(rij):
+    def pak(*namen):
+        for n in namen:
+            for k, v in rij.items():
+                if n.lower() in k.lower() and v:
+                    return v
+        return None
+
+    nummer = pak("Aanvraagnummer", "Nummer")
+    titel = pak("Functie", "Titel") or nummer
+    return {
+        "tender_id": nummer or rij.get("_url") or titel,
+        "nummer": nummer,
+        "titel": titel,
+        "organisatie": "Magnit",
+        "status": "Open",
+        "deadline": pak("Deadline"),
+        "publicatiedatum": None,
+        "locatie": pak("start & locatie", "locatie"),
+        "url": rij.get("_url") or START,
+    }
+
+
+# ---------------------------------------------------------------- normaliseren
 
 def _uit_jobrequest(j):
     jid = j.get("jobRequestId")
@@ -91,15 +157,30 @@ def haal_op():
                 pass
             page.wait_for_timeout(4000)
 
+        rijen = None
         if not body:
+            # onderschepping mislukt; de lijst staat er desondanks vaak gewoon,
+            # dus eerst de zichtbare tabel proberen voor we opgeven.
             try:
-                page.screenshot(path="debug_magnit.png", full_page=True)
+                ruw = _lees_tabel(page)
             except Exception:
-                pass
+                ruw = []
+            if ruw:
+                rijen = [_uit_tabelrij(r) for r in ruw]
+                print(f"  retrievejobrequests niet onderschept; {len(rijen)} rijen uit zichtbare tabel")
+            else:
+                try:
+                    page.screenshot(path="debug_magnit.png", full_page=True)
+                except Exception:
+                    pass
         browser.close()
 
+    if rijen is not None:
+        print(f"  {len(rijen)} aanvragen opgehaald")
+        return rijen
+
     if not body:
-        raise RuntimeError("retrievejobrequests niet onderschept na login")
+        raise RuntimeError("retrievejobrequests niet onderschept na login, geen tabel gevonden")
 
     data = json.loads(body)
     jobs = ((data or {}).get("value") or {}).get("jobRequests") or []
