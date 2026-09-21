@@ -1,14 +1,20 @@
 """Striive Supplier - job requests.
 
-Login via Auth0 (auth.striive.com); de app wisselt dit in voor een
-sessie-cookie (SESSION) op supplier.striive.com. Die cookie hergebruiken we
-voor gewone requests-calls naar de API, in plaats van de hele (virtueel
-gescrollde) lijst via Playwright te scrapen.
+Login via Auth0 (auth.striive.com); de app wisselt dit in voor sessiecookies
+op supplier.striive.com. Die cookies hergebruiken we voor gewone
+requests-calls naar de API, in plaats van de hele (virtueel gescrollde)
+lijst via Playwright te scrapen.
 
 De inlogpagina toont een OneTrust-cookiebanner (niet aanwezig toen deze
-scraper voor het eerst werkte) die we eerst wegklikken: als striive.com de
-SESSION-cookie zelf als "niet-strikt-noodzakelijk" classificeert, kan
-OneTrust hem anders blokkeren totdat er toestemming is gegeven.
+scraper voor het eerst werkte) die we eerst wegklikken voor de zekerheid.
+
+We controleren niet meer op een specifieke cookie-naam ("SESSION"): een
+debug-screenshot liet zien dat de login gewoon slaagt (volledig
+gerenderd, ingelogd dashboard) terwijl striive.com de sessiecookie
+kennelijk niet meer zo noemt. De API-call hieronder gebruikt toch alle
+cookies van het domein, dus een harde naam-check was overbodig en gaf
+een vals-negatieve fout; een echte auth-fout komt nu naar boven via de
+HTTP-statuscode van de job-requests-call zelf.
 """
 
 import os
@@ -66,7 +72,7 @@ def _sessie_cookies():
             if "striive.com" in c["domain"]
         }
 
-        if "SESSION" not in cookies:
+        if not cookies:
             try:
                 page.screenshot(path="debug_striive_login.png", full_page=True)
             except Exception:
@@ -74,8 +80,8 @@ def _sessie_cookies():
 
         browser.close()
 
-    if "SESSION" not in cookies:
-        raise RuntimeError("Geen SESSION-cookie ontvangen, zie debug_striive_login.png")
+    if not cookies:
+        raise RuntimeError("Geen cookies ontvangen na login, zie debug_striive_login.png")
 
     return cookies
 
