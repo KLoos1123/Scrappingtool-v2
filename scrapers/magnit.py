@@ -8,13 +8,18 @@ opgeslagen.
 
 Die onderschepping is inmiddels niet meer betrouwbaar (het interne
 verzoek heet kennelijk anders of laadt anders dan toen dit geschreven
-is), terwijl de "Aanvragen"-lijst zelf gewoon gerenderd wordt. Daarom
-valt deze scraper terug op het generiek uitlezen van de zichtbare
-<table> (zelfde aanpak als heart.py/stedin_vms.py) als de onderschepping
-niks oplevert.
+is), terwijl de "Aanvragen"-lijst zelf gewoon gerenderd wordt (een
+custom lijst-component, geen <table>). Daarom valt deze scraper terug op
+het uitlezen van de platte, zichtbare tekst van de pagina als de
+onderschepping niks oplevert: elke rij begint met een aanvraagnummer
+("260928-MSB-001"), gevolgd door de functietitel, dan een startdatum
+(of "Z.S.M.") en locatie, en tot slot de deadline (+ tijd). Door op die
+twee datum/"Z.S.M."-markers te ankeren blijft dit werken ongeacht welke
+HTML-tags/classes eronder zitten.
 """
 
 import os
+import re
 import json
 from playwright.sync_api import sync_playwright
 
@@ -43,59 +48,61 @@ def _login(page, email, wachtwoord):
         pass
 
 
-# ---------------------------------------------------------------- val terug: tabel
+# ---------------------------------------------------------------- val terug: platte tekst
 
-def _tekst(el):
-    return (el.inner_text() or "").strip().replace("\n", " ") if el else None
+NUMMER_RE = re.compile(r"^\d{6}-[A-Za-z]+-\d+$")
+MARKER_RE = re.compile(r"^(\d{1,2}\s+[A-Za-z]+\s+\d{4}|Z\.S\.M\.)$", re.I)
+TIJD_RE = re.compile(r"^\d{1,2}:\d{2}\s*uur$", re.I)
 
 
-def _lees_tabel(page):
-    """Generieke <table>: koppen uit thead/eerste rij, waarden per td."""
+def _lees_lijst(page):
+    """Leest de Aanvragen-lijst uit de platte, zichtbare tekst van de pagina.
+
+    Elke rij begint met een aanvraagnummer, gevolgd door: functietitel,
+    startdatum (of "Z.S.M."), locatie, deadline(datum), deadline(tijd).
+    We ankeren op het aanvraagnummer en de twee datum/"Z.S.M."-markers in
+    plaats van op specifieke HTML-tags of classes.
+    """
+    tekst = page.inner_text("body")
+    regels = [l.strip() for l in tekst.split("\n") if l.strip()]
+
+    posities = [i for i, l in enumerate(regels) if NUMMER_RE.match(l)]
     rijen = []
-    tabel = page.query_selector("table")
-    if not tabel:
-        return rijen
+    for pos, i in enumerate(posities):
+        einde = posities[pos + 1] if pos + 1 < len(posities) else len(regels)
+        blok = regels[i + 1:einde]
 
-    koppen = [_tekst(th) or f"kol{i}" for i, th in enumerate(tabel.query_selector_all("thead th"))]
-    body_rijen = tabel.query_selector_all("tbody tr") or tabel.query_selector_all("tr")
+        markers = [j for j, l in enumerate(blok) if MARKER_RE.match(l)]
+        if len(markers) < 2:
+            continue
+        m1, m2 = markers[0], markers[1]
 
-    for tr in body_rijen:
-        cellen = tr.query_selector_all("td")
-        if not cellen:
-            continue
-        waarden = [_tekst(c) for c in cellen]
-        if not any(waarden):
-            continue
-        link = tr.query_selector("a[href]")
-        href = link.get_attribute("href") if link else None
-        if href and href.startswith("/"):
-            href = PORTAL + href
-        rij = {(koppen[i] if i < len(koppen) else f"kol{i}"): w for i, w in enumerate(waarden)}
-        rij["_url"] = href
-        rijen.append(rij)
+        titel = " ".join(blok[:m1]).strip()
+        locatie = " ".join(blok[m1 + 1:m2]).strip() or None
+        deadline = blok[m2]
+        if m2 + 1 < len(blok) and TIJD_RE.match(blok[m2 + 1]):
+            deadline = f"{deadline} {blok[m2 + 1]}"
+
+        rijen.append({
+            "nummer": regels[i],
+            "titel": titel or regels[i],
+            "locatie": locatie,
+            "deadline": deadline,
+        })
     return rijen
 
 
-def _uit_tabelrij(rij):
-    def pak(*namen):
-        for n in namen:
-            for k, v in rij.items():
-                if n.lower() in k.lower() and v:
-                    return v
-        return None
-
-    nummer = pak("Aanvraagnummer", "Nummer")
-    titel = pak("Functie", "Titel") or nummer
+def _uit_rij(rij):
     return {
-        "tender_id": nummer or rij.get("_url") or titel,
-        "nummer": nummer,
-        "titel": titel,
+        "tender_id": rij["nummer"],
+        "nummer": rij["nummer"],
+        "titel": rij["titel"],
         "organisatie": "Magnit",
         "status": "Open",
-        "deadline": pak("Deadline"),
+        "deadline": rij.get("deadline"),
         "publicatiedatum": None,
-        "locatie": pak("start & locatie", "locatie"),
-        "url": rij.get("_url") or START,
+        "locatie": rij.get("locatie"),
+        "url": START,
     }
 
 
@@ -160,14 +167,14 @@ def haal_op():
         rijen = None
         if not body:
             # onderschepping mislukt; de lijst staat er desondanks vaak gewoon,
-            # dus eerst de zichtbare tabel proberen voor we opgeven.
+            # dus eerst de zichtbare tekst proberen voor we opgeven.
             try:
-                ruw = _lees_tabel(page)
+                ruw = _lees_lijst(page)
             except Exception:
                 ruw = []
             if ruw:
-                rijen = [_uit_tabelrij(r) for r in ruw]
-                print(f"  retrievejobrequests niet onderschept; {len(rijen)} rijen uit zichtbare tabel")
+                rijen = [_uit_rij(r) for r in ruw]
+                print(f"  retrievejobrequests niet onderschept; {len(rijen)} rijen uit zichtbare lijst")
             else:
                 try:
                     page.screenshot(path="debug_magnit.png", full_page=True)
@@ -180,7 +187,7 @@ def haal_op():
         return rijen
 
     if not body:
-        raise RuntimeError("retrievejobrequests niet onderschept na login, geen tabel gevonden")
+        raise RuntimeError("retrievejobrequests niet onderschept na login, geen lijst gevonden")
 
     data = json.loads(body)
     jobs = ((data or {}).get("value") or {}).get("jobRequests") or []
