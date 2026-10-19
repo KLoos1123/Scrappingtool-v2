@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 MAX_MISLUKT = 3
  
 import db
+import datums
 import beschrijvingen
 import sheets_writer
 import supabase_sync
@@ -74,6 +75,7 @@ def main():
             rijen = scraper.haal_op()
             for r in rijen:
                 r["bron"] = naam
+                datums.normaliseer_rij(r)
             print(f"  {len(rijen)} rijen opgehaald")
             alles.extend(rijen)
         except Exception as e:
@@ -88,6 +90,9 @@ def main():
     print(f"\n=== database ===")
     nieuw, totaal = db.opslaan(alles)
     print(f"  {nieuw} nieuw, {totaal} totaal")
+    gecorrigeerd = db.normaliseer_bestaande_datums()
+    if gecorrigeerd:
+        print(f"  {len(gecorrigeerd)} oudere tekstdatums omgezet naar ISO")
     for r in db.per_bron():
         print(f"  {r['bron']}: {r['aantal']}")
  
@@ -109,7 +114,9 @@ def main():
     # status/status_gewijzigd_door/status_gewijzigd_op kolommen aan.
     print(f"\n=== supabase ===")
     try:
-        n_tenders = supabase_sync.sync_tenders(alles)
+        al_in_run = {(r["bron"], str(r.get("tender_id"))) for r in alles}
+        extra = [r for r in gecorrigeerd if (r["bron"], str(r["tender_id"])) not in al_in_run]
+        n_tenders = supabase_sync.sync_tenders(alles + extra)
         print(f"  {n_tenders} tenders gesynct")
         n_oms = supabase_sync.sync_beschrijvingen(met_oms)
         print(f"  {n_oms} omschrijvingen gesynct")

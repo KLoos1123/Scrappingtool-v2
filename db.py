@@ -7,6 +7,8 @@ Deduplicatie gebeurt op (bron, tender_id).
 import sqlite3
 from datetime import datetime, timezone
 
+import datums
+
 DB = "tenders.db"
 
 # Het contract: dit zijn de velden die elke scraper moet aanleveren.
@@ -95,6 +97,31 @@ def opslaan(rijen):
     conn.close()
 
     return na - voor, na
+
+
+def normaliseer_bestaande_datums():
+    """Zet tekstdatums van eerder opgeslagen tenders om naar ISO (zie datums.py).
+
+    Idempotent: alleen rijen die echt veranderen worden bijgewerkt en
+    teruggegeven, zodat run.py ze ook naar Supabase kan sturen.
+    """
+    conn = verbind()
+    kandidaten = conn.execute(
+        "SELECT * FROM tenders WHERE deadline NOT GLOB '[0-9][0-9][0-9][0-9]-*' "
+        "OR publicatiedatum NOT GLOB '[0-9][0-9][0-9][0-9]-*'"
+    ).fetchall()
+    gewijzigd = []
+    for r in kandidaten:
+        rij = datums.normaliseer_rij(dict(r))
+        if rij["deadline"] != r["deadline"] or rij["publicatiedatum"] != r["publicatiedatum"]:
+            conn.execute(
+                "UPDATE tenders SET deadline = ?, publicatiedatum = ? WHERE bron = ? AND tender_id = ?",
+                (rij["deadline"], rij["publicatiedatum"], rij["bron"], rij["tender_id"]),
+            )
+            gewijzigd.append(rij)
+    conn.commit()
+    conn.close()
+    return gewijzigd
 
 
 def alle_rijen():
