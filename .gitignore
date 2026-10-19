@@ -3,7 +3,4 @@ __pycache__/
 debug_*.png
 tenders.csv
 tenders_nieuw.csv
-web/tenders.json
-web/beschrijvingen.json
 dashboard.html
- 

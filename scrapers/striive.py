@@ -1,9 +1,22 @@
 """Striive Supplier - job requests.
 
-Login via Auth0 (auth.striive.com); de app wisselt dit in voor een
-sessie-cookie (SESSION) op supplier.striive.com. Die cookie hergebruiken we
-voor gewone requests-calls naar de API, in plaats van de hele (virtueel
+Striive is herbrand naar "Vertage": supplier.striive.com/auth.striive.com
+redirecten inmiddels naar partner.vertage.com/auth.vertage.com (zelfde
+Auth0-app, zelfde inlogformulier, alleen de domeinnamen zijn gewijzigd).
+We gaan daarom direct naar het nieuwe domein in plaats van op de oude
+redirect te vertrouwen.
+
+Login via Auth0 (auth.vertage.com); de app wisselt dit in voor
+sessiecookies op partner.vertage.com. Die cookies hergebruiken we voor
+gewone requests-calls naar de API, in plaats van de hele (virtueel
 gescrollde) lijst via Playwright te scrapen.
+
+De inlogpagina toont soms een cookiebanner die we eerst wegklikken voor
+de zekerheid. We controleren niet op een specifieke cookie-naam: de
+API-call hieronder gebruikt toch alle cookies van het domein, dus een
+harde naam-check zou een vals-negatieve fout kunnen geven; een echte
+auth-fout komt naar boven via de HTTP-statuscode van de job-requests-call
+zelf.
 """
 
 import os
@@ -12,12 +25,24 @@ from playwright.sync_api import sync_playwright
 
 BRON = "striive"
 
-APP = "https://supplier.striive.com"
+APP = "https://partner.vertage.com"
 API = f"{APP}/api/v2/job-requests"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 
 # ---------------------------------------------------------------- login
+
+def _accept_cookies(page):
+    for txt in ["Alle cookies accepteren", "Alles accepteren", "Accepteren"]:
+        try:
+            b = page.query_selector(f"button:has-text('{txt}')")
+            if b and b.is_visible():
+                b.click()
+                page.wait_for_timeout(600)
+                return
+        except Exception:
+            pass
+
 
 def _sessie_cookies():
     email = os.environ.get("STRIIVE_EMAIL")
@@ -32,20 +57,24 @@ def _sessie_cookies():
 
         page.goto(f"{APP}/dashboard", timeout=60000)
         page.wait_for_selector("#username", timeout=30000)
+        _accept_cookies(page)
         page.fill("#username", email)
         page.fill("#password", wachtwoord)
         page.click("button[type='submit']")
 
-        page.wait_for_url(f"{APP}/**", timeout=30000)
-        page.wait_for_timeout(3000)
+        try:
+            page.wait_for_url(f"{APP}/**", timeout=30000)
+        except Exception:
+            pass
+        page.wait_for_timeout(5000)
 
         cookies = {
             c["name"]: c["value"]
             for c in context.cookies()
-            if "striive.com" in c["domain"]
+            if "vertage.com" in c["domain"]
         }
 
-        if "SESSION" not in cookies:
+        if not cookies:
             try:
                 page.screenshot(path="debug_striive_login.png", full_page=True)
             except Exception:
@@ -53,8 +82,8 @@ def _sessie_cookies():
 
         browser.close()
 
-    if "SESSION" not in cookies:
-        raise RuntimeError("Geen SESSION-cookie ontvangen, zie debug_striive_login.png")
+    if not cookies:
+        raise RuntimeError("Geen cookies ontvangen na login, zie debug_striive_login.png")
 
     return cookies
 

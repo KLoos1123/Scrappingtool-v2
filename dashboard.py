@@ -8,6 +8,7 @@ browser. GitHub Pages host web/ zodat het dashboard op een vaste URL staat.
 import os
 import json
 import sqlite3
+from collections import Counter
 from datetime import datetime, timezone
 
 DB = "tenders.db"
@@ -59,6 +60,25 @@ def main():
     with open(pad2, "w", encoding="utf-8") as f:
         json.dump(beschr, f, ensure_ascii=False)
     print(f"{pad2} geschreven ({len(beschr)} omschrijvingen)")
+
+    # Klein samenvattingsbestand voor API-analyse (leesbaar via GitHub API).
+    alle_rijen = data["rows"]
+    org_teller = Counter(r["organisatie"] for r in alle_rijen if r.get("organisatie"))
+    bron_teller = Counter(r["bron"] for r in alle_rijen if r.get("bron"))
+    actief = [r for r in alle_rijen if (r.get("status") or "").lower() in ("open", "actief", "gepubliceerd", "nieuw", "")]
+
+    samenvatting = {
+        "lastUpdated": data["lastUpdated"],
+        "totaal": len(alle_rijen),
+        "per_bron": dict(bron_teller.most_common()),
+        "organisaties": dict(org_teller.most_common(200)),
+        "nieuwste_100": alle_rijen[:100],
+        "actief": actief[:200],
+    }
+    pad3 = os.path.join(UITVOER_DIR, "samenvatting.json")
+    with open(pad3, "w", encoding="utf-8") as f:
+        json.dump(samenvatting, f, ensure_ascii=False)
+    print(f"{pad3} geschreven ({len(alle_rijen)} totaal, {len(actief)} actief)")
 
 
 if __name__ == "__main__":

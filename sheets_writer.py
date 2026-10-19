@@ -38,7 +38,6 @@ def sync(rijen, tab="tenders"):
         print(f"  {tab}: niets te syncen")
         return 0
 
-    print(os.environ)
     sheet_id = os.environ.get("SHEET_ID")
     if not sheet_id:
         raise RuntimeError("Secret SHEET_ID ontbreekt.")
@@ -71,7 +70,6 @@ def sync(rijen, tab="tenders"):
 
 def schrijf_meta(aantal, tab="meta"):
     """Zet het tijdstip van de laatste run in een aparte tab."""
-    print(os.environ)
     sheet_id = os.environ["SHEET_ID"]
     gc = _client()
     sh = gc.open_by_key(sheet_id)

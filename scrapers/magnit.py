@@ -1,12 +1,25 @@
 """Magnit (voorheen Brainnet) - supplier job requests achter de login.
 
 Logt in op portal.magnitglobal.com met e-mail/wachtwoord (secrets
-MAGNIT_EMAIL / MAGNIT_WACHTWOORD) en onderschept de retrievejobrequests-
-response die de aanvragenpagina zelf ophaalt. Er worden geen tokens
-geprint of opgeslagen.
+MAGNIT_EMAIL / MAGNIT_WACHTWOORD) en probeert eerst de retrievejobrequests-
+response te onderscheppen die de aanvragenpagina zelf ophaalt (rijkste
+data: klantnaam, deadline, uren). Er worden geen tokens geprint of
+opgeslagen.
+
+Die onderschepping is inmiddels niet meer betrouwbaar (het interne
+verzoek heet kennelijk anders of laadt anders dan toen dit geschreven
+is), terwijl de "Aanvragen"-lijst zelf gewoon gerenderd wordt (een
+custom lijst-component, geen <table>). Daarom valt deze scraper terug op
+het uitlezen van de platte, zichtbare tekst van de pagina als de
+onderschepping niks oplevert: elke rij begint met een aanvraagnummer
+("260928-MSB-001"), gevolgd door de functietitel, dan een startdatum
+(of "Z.S.M.") en locatie, en tot slot de deadline (+ tijd). Door op die
+twee datum/"Z.S.M."-markers te ankeren blijft dit werken ongeacht welke
+HTML-tags/classes eronder zitten.
 """
 
 import os
+import re
 import json
 from playwright.sync_api import sync_playwright
 
@@ -34,6 +47,66 @@ def _login(page, email, wachtwoord):
     except Exception:
         pass
 
+
+# ---------------------------------------------------------------- val terug: platte tekst
+
+NUMMER_RE = re.compile(r"^\d{6}-[A-Za-z]+-\d+$")
+MARKER_RE = re.compile(r"^(\d{1,2}\s+[A-Za-z]+\s+\d{4}|Z\.S\.M\.)$", re.I)
+TIJD_RE = re.compile(r"^\d{1,2}:\d{2}\s*uur$", re.I)
+
+
+def _lees_lijst(page):
+    """Leest de Aanvragen-lijst uit de platte, zichtbare tekst van de pagina.
+
+    Elke rij begint met een aanvraagnummer, gevolgd door: functietitel,
+    startdatum (of "Z.S.M."), locatie, deadline(datum), deadline(tijd).
+    We ankeren op het aanvraagnummer en de twee datum/"Z.S.M."-markers in
+    plaats van op specifieke HTML-tags of classes.
+    """
+    tekst = page.inner_text("body")
+    regels = [l.strip() for l in tekst.split("\n") if l.strip()]
+
+    posities = [i for i, l in enumerate(regels) if NUMMER_RE.match(l)]
+    rijen = []
+    for pos, i in enumerate(posities):
+        einde = posities[pos + 1] if pos + 1 < len(posities) else len(regels)
+        blok = regels[i + 1:einde]
+
+        markers = [j for j, l in enumerate(blok) if MARKER_RE.match(l)]
+        if len(markers) < 2:
+            continue
+        m1, m2 = markers[0], markers[1]
+
+        titel = " ".join(blok[:m1]).strip()
+        locatie = " ".join(blok[m1 + 1:m2]).strip() or None
+        deadline = blok[m2]
+        if m2 + 1 < len(blok) and TIJD_RE.match(blok[m2 + 1]):
+            deadline = f"{deadline} {blok[m2 + 1]}"
+
+        rijen.append({
+            "nummer": regels[i],
+            "titel": titel or regels[i],
+            "locatie": locatie,
+            "deadline": deadline,
+        })
+    return rijen
+
+
+def _uit_rij(rij):
+    return {
+        "tender_id": rij["nummer"],
+        "nummer": rij["nummer"],
+        "titel": rij["titel"],
+        "organisatie": "Magnit",
+        "status": "Open",
+        "deadline": rij.get("deadline"),
+        "publicatiedatum": None,
+        "locatie": rij.get("locatie"),
+        "url": START,
+    }
+
+
+# ---------------------------------------------------------------- normaliseren
 
 def _uit_jobrequest(j):
     jid = j.get("jobRequestId")
@@ -91,15 +164,30 @@ def haal_op():
                 pass
             page.wait_for_timeout(4000)
 
+        rijen = None
         if not body:
+            # onderschepping mislukt; de lijst staat er desondanks vaak gewoon,
+            # dus eerst de zichtbare tekst proberen voor we opgeven.
             try:
-                page.screenshot(path="debug_magnit.png", full_page=True)
+                ruw = _lees_lijst(page)
             except Exception:
-                pass
+                ruw = []
+            if ruw:
+                rijen = [_uit_rij(r) for r in ruw]
+                print(f"  retrievejobrequests niet onderschept; {len(rijen)} rijen uit zichtbare lijst")
+            else:
+                try:
+                    page.screenshot(path="debug_magnit.png", full_page=True)
+                except Exception:
+                    pass
         browser.close()
 
+    if rijen is not None:
+        print(f"  {len(rijen)} aanvragen opgehaald")
+        return rijen
+
     if not body:
-        raise RuntimeError("retrievejobrequests niet onderschept na login")
+        raise RuntimeError("retrievejobrequests niet onderschept na login, geen lijst gevonden")
 
     data = json.loads(body)
     jobs = ((data or {}).get("value") or {}).get("jobRequests") or []
