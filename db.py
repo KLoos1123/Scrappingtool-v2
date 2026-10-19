@@ -4,6 +4,7 @@ Elke scraper levert rijen aan met de velden uit VELDEN.
 Deduplicatie gebeurt op (bron, tender_id).
 """
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 
@@ -45,6 +46,17 @@ CREATE TABLE IF NOT EXISTS tenders (
 CREATE INDEX IF NOT EXISTS idx_publicatie ON tenders(publicatiedatum DESC);
 CREATE INDEX IF NOT EXISTS idx_bron       ON tenders(bron);
 CREATE INDEX IF NOT EXISTS idx_deadline   ON tenders(deadline);
+
+CREATE TABLE IF NOT EXISTS verrijkingen (
+    bron         TEXT NOT NULL,
+    tender_id    TEXT NOT NULL,
+    oms_hash     TEXT NOT NULL,
+    model        TEXT,
+    verrijkt_op  TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    gesynct      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (bron, tender_id)
+);
 """
 
 
@@ -122,6 +134,74 @@ def normaliseer_bestaande_datums():
     conn.commit()
     conn.close()
     return gewijzigd
+
+
+def te_verrijken(maak_hash, limiet):
+    """Niet-verlopen tenders met een omschrijving die nog niet (of met een oudere
+    titel/omschrijving) verrijkt zijn, nieuwste eerst."""
+    conn = verbind()
+    vandaag = datetime.now(timezone.utc).date().isoformat()
+    try:
+        rijen = conn.execute(
+            """
+            SELECT t.bron, t.tender_id, t.titel, t.organisatie, t.locatie,
+                   b.omschrijving, v.oms_hash AS oude_hash
+            FROM tenders t
+            JOIN beschrijvingen b ON b.bron = t.bron AND b.tender_id = t.tender_id
+            LEFT JOIN verrijkingen v ON v.bron = t.bron AND v.tender_id = t.tender_id
+            WHERE b.omschrijving <> '' AND (t.deadline IS NULL OR t.deadline >= ?)
+            ORDER BY t.eerst_gezien DESC
+            """,
+            (vandaag,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rijen = []  # beschrijvingen-tabel bestaat nog niet
+    conn.close()
+    uit = []
+    for r in rijen:
+        h = maak_hash(r["titel"], r["omschrijving"])
+        if h != r["oude_hash"]:
+            uit.append({**dict(r), "oms_hash": h})
+            if len(uit) >= limiet:
+                break
+    return uit
+
+
+def verrijkingen_opslaan(rijen):
+    conn = verbind()
+    nu = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for r in rijen:
+        conn.execute(
+            """
+            INSERT INTO verrijkingen (bron, tender_id, oms_hash, model, verrijkt_op, data, gesynct)
+            VALUES (?,?,?,?,?,?,0)
+            ON CONFLICT (bron, tender_id) DO UPDATE SET
+                oms_hash = excluded.oms_hash, model = excluded.model,
+                verrijkt_op = excluded.verrijkt_op, data = excluded.data, gesynct = 0
+            """,
+            (r["bron"], str(r["tender_id"]), r["oms_hash"], r["model"], nu,
+             json.dumps(r["data"], ensure_ascii=False)),
+        )
+    conn.commit()
+    conn.close()
+
+
+def verrijkingen(alleen_ongesynct=False):
+    conn = verbind()
+    sql = "SELECT * FROM verrijkingen" + (" WHERE gesynct = 0" if alleen_ongesynct else "")
+    rijen = [{**dict(r), "data": json.loads(r["data"])} for r in conn.execute(sql)]
+    conn.close()
+    return rijen
+
+
+def markeer_gesynct(rijen):
+    conn = verbind()
+    conn.executemany(
+        "UPDATE verrijkingen SET gesynct = 1 WHERE bron = ? AND tender_id = ?",
+        [(r["bron"], r["tender_id"]) for r in rijen],
+    )
+    conn.commit()
+    conn.close()
 
 
 def alle_rijen():

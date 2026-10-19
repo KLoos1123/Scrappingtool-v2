@@ -59,6 +59,9 @@ jobs:
           SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VERRIJKING_MODEL: ${{ vars.VERRIJKING_MODEL }}
+          VERRIJKING_MAX_PER_RUN: ${{ vars.VERRIJKING_MAX_PER_RUN }}
         run: python run.py
 
       - name: CSV en debug uploaden

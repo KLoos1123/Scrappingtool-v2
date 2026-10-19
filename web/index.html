@@ -103,6 +103,14 @@
   tr.rij:hover td{ background:rgba(25,157,217,0.06); }
   tr.rij.open td{ background:rgba(25,157,217,0.10); }
   .hasdesc{ margin-left:6px; opacity:.7; font-size:11px; }
+  .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
+  .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
+  .ai-paneel{ white-space:normal; background:rgba(25,157,217,0.06); border:1px solid rgba(25,157,217,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+  .ai-paneel .ai-sam{ color:var(--text); margin-bottom:8px; }
+  .ai-paneel dl{ display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; margin:0; font-size:12px; }
+  .ai-paneel dt{ color:var(--muted); }
+  .ai-paneel dd{ margin:0; color:var(--sub); }
+  .ai-paneel .ai-voet{ margin-top:8px; font-size:10.5px; color:var(--dim); }
   tr.detail td{ background:var(--bg2); color:var(--sub); font-size:12.5px; line-height:1.55;
     white-space:pre-wrap; padding:14px 18px; border-bottom:1px solid var(--border); }
   tr.detail .det-leeg{ color:var(--dim); font-style:italic; }
@@ -395,6 +403,9 @@ let orgChart=null, catChart=null;
 // we alleen welke opdrachten er één hebben (voor het 📄-icoon).
 let BESCHR_HEEFT=new Set();   // "bron|tender_id"
 let BESCHR_TEKST=new Map();   // "bron|tender_id" -> omschrijving ('' = geen)
+// AI-verrijking (verrijking.py): de korte velden laden we vooraf, de rest bij openklappen.
+let VERRIJKING=new Map();     // "bron|tender_id" -> {eindklant, eindklant_zekerheid, senioriteit, modules}
+let AI_DETAIL=new Map();      // "bron|tender_id" -> volledige verrijking (of null)
 let orgTop=[];
 let currentUserEmail=null;
 let realtimeChannel=null;
@@ -537,8 +548,10 @@ function enrichRow(r){
   const titel=r.titel||'(geen titel)';
   const organisatie=r.organisatie||'-';
   const orgL=organisatie.toLowerCase();
-  const sap=isSap(titel);
-  const orc=isOracle(titel);
+  const ai=VERRIJKING.get(`${r.bron}|${r.tender_id}`)||null;
+  const aiModules=(ai && ai.modules || []).join(' ');
+  const sap=isSap(titel) || /\bSAP\b/i.test(aiModules);
+  const orc=isOracle(titel) || /oracle|jd edwards|peoplesoft|netsuite|hyperion/i.test(aiModules);
   const it=sap||orc||isIt(titel);
   const bron=r.bron||'onbekend';
   const v={
@@ -550,7 +563,7 @@ function enrichRow(r){
     _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
     _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
     _deadline: r.deadline? new Date(r.deadline).getTime(): null,
-    isSap:sap, isOracle:orc, isIt:it,
+    isSap:sap, isOracle:orc, isIt:it, ai,
     isBureau: isBureauOrg(orgL), grootOrg:grootOrg(orgL),
     soort: soortVan(bron),
     categorie: it? categorie(titel,sap) : 'Niet-IT',
@@ -626,12 +639,15 @@ async function laadTenders(volledig){
 }
 
 async function loadData(volledig){
-  const [tenders, sleutels] = await Promise.all([
+  const [tenders, sleutels, ai] = await Promise.all([
     laadTenders(volledig),
     fetchAll('beschrijvingen', 'bron, tender_id').catch(()=>[]),
+    fetchAll('verrijkingen', 'bron, tender_id, eindklant, eindklant_zekerheid, senioriteit, modules').catch(()=>[]),
   ]);
   BESCHR_HEEFT = new Set(sleutels.map(b=>`${b.bron}|${b.tender_id}`));
   BESCHR_TEKST = new Map();
+  VERRIJKING = new Map(ai.map(a=>[`${a.bron}|${a.tender_id}`, a]));
+  AI_DETAIL = new Map();
   if(!tenders.rijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
   let laatst=null;
   tenders.rijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
@@ -670,10 +686,57 @@ async function laadOmschrijving(bron, tid){
   BESCHR_TEKST.set(key, tekst);
   return tekst;
 }
+async function laadAiDetail(bron, tid){
+  const key=`${bron}|${tid}`;
+  if(!VERRIJKING.has(key) || AI_DETAIL.has(key)) return;
+  const {data, error}=await supabase.from('verrijkingen').select('data')
+    .eq('bron', bron).eq('tender_id', tid).maybeSingle();
+  if(error){ console.warn('AI-verrijking laden mislukt', error); return; }
+  AI_DETAIL.set(key, (data && data.data) || null);
+}
+function bereik(min, max){
+  if(min==null && max==null) return '';
+  if(min==null || max==null || min===max) return String(min ?? max);
+  return `${min}–${max}`;
+}
+// Geen regeleinden in de opbouw: de detailcel staat op white-space:pre-wrap.
+function aiPaneel(d){
+  if(!d) return '';
+  const rij=(label, waarde)=> waarde ? `<dt>${label}</dt><dd>${esc(waarde)}</dd>` : '';
+  const klant = d.eindklant ? d.eindklant + (d.eindklant_zekerheid==='afgeleid' ? ' (afgeleid)' : '') : d.eindklant_omschrijving;
+  const senioriteit = d.senioriteit && d.senioriteit!=='onbekend'
+    ? d.senioriteit + (d.ervaring_jaren_min!=null ? `, ${d.ervaring_jaren_min}+ jaar ervaring` : '') : '';
+  const uren=bereik(d.uren_per_week_min, d.uren_per_week_max);
+  const tarief=bereik(d.tarief_min, d.tarief_max);
+  const werkvorm={op_locatie:'op locatie', hybride:'hybride', remote:'remote'}[d.werkvorm];
+  return '<div class="ai-paneel">'+
+    (d.samenvatting ? `<div class="ai-sam">${esc(d.samenvatting)}</div>` : '')+
+    '<dl>'+
+    rij('Rol', d.rol)+
+    rij('Eindklant', klant)+
+    rij('Sector', d.sector)+
+    rij('Modules', (d.modules||[]).join(', '))+
+    rij('Vaardigheden', (d.vaardigheden||[]).join(', '))+
+    rij('Senioriteit', senioriteit)+
+    rij('Uren', uren && `${uren} per week`)+
+    rij('Tarief', tarief && `€ ${tarief} per uur`)+
+    rij('Start', d.startdatum && fmtDate(d.startdatum))+
+    rij('Looptijd', d.looptijd_maanden!=null && `${d.looptijd_maanden} maanden`)+
+    rij('Werkvorm', werkvorm)+
+    rij('Talen', (d.talen||[]).join(', '))+
+    '</dl><div class="ai-voet">Automatisch uit de omschrijving gehaald (AI). Controleer bij twijfel de bron.</div></div>';
+}
+function aiKlant(r){
+  const k = r.ai && r.ai.eindklant;
+  if(!k || k.toLowerCase()===r.organisatie.toLowerCase()) return '';
+  const hoe = r.ai.eindklant_zekerheid==='genoemd' ? 'genoemd in' : 'afgeleid uit';
+  return `<div class="ai-klant" title="Eindklant ${hoe} de omschrijving (AI)">→ ${esc(k)}<span class="ai-tag">AI</span></div>`;
+}
 function detailHtml(key){
   const leeg='<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
-  if(BESCHR_TEKST.has(key)){ const t=BESCHR_TEKST.get(key); return t ? sanitizeDescription(t) : leeg; }
-  return BESCHR_HEEFT.has(key) ? '<span class="det-leeg">Omschrijving laden…</span>' : leeg;
+  const ai=aiPaneel(AI_DETAIL.get(key));
+  if(BESCHR_TEKST.has(key)){ const t=BESCHR_TEKST.get(key); return ai + (t ? sanitizeDescription(t) : leeg); }
+  return ai + (BESCHR_HEEFT.has(key) ? '<span class="det-leeg">Omschrijving laden…</span>' : leeg);
 }
 
 /* ===================== live status-updates ===================== */
@@ -771,7 +834,8 @@ function getFiltered(rows){
   }
   if(state.search){
     const q=state.search.toLowerCase();
-    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q));
+    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q)
+      ||(r.ai && [r.ai.eindklant||'', ...(r.ai.modules||[])].join(' ').toLowerCase().includes(q)));
   }
   const [field,dir]=state.sort.split('-');
   const chain=[{field,dir}];
@@ -973,7 +1037,7 @@ function renderTable(rows){
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
-      <td style="color:#eef3f8">${esc(r.organisatie)}</td>
+      <td style="color:#eef3f8">${esc(r.organisatie)}${aiKlant(r)}</td>
       <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
@@ -993,10 +1057,10 @@ function renderTable(rows){
       d.style.display = open ? 'none' : 'table-row';
       tr.classList.toggle('open', !open);
       const bron=tr.dataset.bron, tid=tr.dataset.tid, key=bron+'|'+tid;
-      if(!open && !BESCHR_TEKST.has(key)){
+      if(!open && (!BESCHR_TEKST.has(key) || (VERRIJKING.has(key) && !AI_DETAIL.has(key)))){
         const cel=d.firstElementChild;
         cel.innerHTML='<span class="det-leeg">Omschrijving laden…</span>';
-        laadOmschrijving(bron, tid)
+        Promise.all([laadOmschrijving(bron, tid), laadAiDetail(bron, tid)])
           .then(()=>{ if(cel.isConnected) cel.innerHTML=detailHtml(key); })
           .catch(err=>{ if(cel.isConnected) cel.innerHTML='<span class="det-leeg">Omschrijving kon niet geladen worden: '+esc(err.message||err)+'</span>'; });
       }
@@ -1031,10 +1095,11 @@ function render(){
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Organisatie','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
+  const header=['Score','Datum','Deadline','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
   const lines=[header.join(';')];
   rows.forEach(r=>{
     lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
+      String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
       String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
       r.status||'', r.status_gewijzigd_door||''].join(';'));
   });

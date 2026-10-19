@@ -119,3 +119,34 @@ def sync_beschrijvingen(rijen):
             raise RuntimeError(f"beschrijvingen-sync mislukt ({resp.status_code}): {resp.text[:500]}")
         n += len(chunk)
     return n
+
+
+def sync_verrijkingen(rijen):
+    """rijen: zoals db.verrijkingen() ze teruggeeft. Overschrijft bestaande
+    verrijkingen. Geeft het aantal gesyncte rijen terug."""
+    payload = [
+        {
+            "bron": r["bron"],
+            "tender_id": str(r["tender_id"]),
+            "eindklant": r["data"].get("eindklant"),
+            "eindklant_zekerheid": r["data"].get("eindklant_zekerheid"),
+            "senioriteit": r["data"].get("senioriteit"),
+            "modules": r["data"].get("modules") or [],
+            "data": r["data"],
+            "model": r.get("model"),
+            "verrijkt_op": r["verrijkt_op"],
+        }
+        for r in rijen
+    ]
+    if not payload:
+        return 0
+
+    url = f"{SUPABASE_URL}/rest/v1/verrijkingen"
+    headers = _headers({"Prefer": "resolution=merge-duplicates"})
+    n = 0
+    for chunk in _chunks(payload, BATCH):
+        resp = requests.post(url, headers=headers, json=chunk, timeout=60)
+        if not resp.ok:
+            raise RuntimeError(f"verrijkingen-sync mislukt ({resp.status_code}): {resp.text[:500]}")
+        n += len(chunk)
+    return n

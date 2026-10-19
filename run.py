@@ -16,6 +16,7 @@ MAX_MISLUKT = 3
  
 import db
 import datums
+import verrijking
 import beschrijvingen
 import sheets_writer
 import supabase_sync
@@ -108,6 +109,22 @@ def main():
             print(f"  {r[0]}: {r[1]}")
     except Exception as e:
         print(f"  omschrijvingen MISLUKT: {e}")
+
+    print(f"\n=== AI-verrijking ===")
+    if not verrijking.beschikbaar():
+        print("  ANTHROPIC_API_KEY ontbreekt; overgeslagen")
+    else:
+        try:
+            kandidaten = db.te_verrijken(verrijking.maak_hash, verrijking.MAX_PER_RUN)
+            resultaten, fouten = verrijking.verrijk_alle(kandidaten)
+            db.verrijkingen_opslaan(resultaten)
+            print(f"  {len(resultaten)} verrijkt, {fouten} mislukt "
+                  f"(max {verrijking.MAX_PER_RUN} per run, model {verrijking.MODEL})")
+            if kandidaten and not resultaten:
+                mislukt.append("AI-verrijking")
+        except Exception as e:
+            print(f"  AI-verrijking MISLUKT: {type(e).__name__}: {e}")
+            mislukt.append("AI-verrijking")
  
     # Supabase is de databron voor het live dashboard (real-time, met een
     # per-tender status die gebruikers zelf zetten). Raakt nooit de
@@ -120,6 +137,11 @@ def main():
         print(f"  {n_tenders} tenders gesynct")
         n_oms = supabase_sync.sync_beschrijvingen(met_oms)
         print(f"  {n_oms} omschrijvingen gesynct")
+        nog_te_syncen = db.verrijkingen(alleen_ongesynct=True)
+        if nog_te_syncen:
+            n_ai = supabase_sync.sync_verrijkingen(nog_te_syncen)
+            db.markeer_gesynct(nog_te_syncen)
+            print(f"  {n_ai} verrijkingen gesynct")
     except Exception as e:
         print(f"  Supabase-sync MISLUKT: {e}")
         traceback.print_exc()

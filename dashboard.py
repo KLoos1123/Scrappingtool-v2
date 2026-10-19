@@ -82,7 +82,15 @@ def main():
     print(f"{pad3} geschreven ({len(alle_rijen)} totaal, {len(actief)} actief)")
 
     grens = (datetime.now(timezone.utc) - timedelta(days=RECENT_DAGEN)).isoformat(timespec="seconds")
-    recent = [{**{k: r[k] for k in VELDEN}, "laatst_gezien": r["laatst_gezien"]}
+    conn3 = sqlite3.connect(DB)
+    try:
+        ai = {(b, t): json.loads(d) for b, t, d in conn3.execute(
+            "SELECT bron, tender_id, data FROM verrijkingen")}
+    except sqlite3.OperationalError:
+        ai = {}  # tabel bestaat nog niet
+    conn3.close()
+    recent = [{**{k: r[k] for k in VELDEN}, "laatst_gezien": r["laatst_gezien"],
+               "ai": ai.get((r["bron"], r["tender_id"]))}
               for r in rijen if (r["eerst_gezien"] or "") >= grens]
     recent_data = {
         "fileName": "tenders_7d",
