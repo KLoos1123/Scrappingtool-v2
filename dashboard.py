@@ -1,18 +1,19 @@
-"""Genereert de databron voor het HTML-dashboard.
+"""Schrijft JSON-exports van de tenders-database naar web/.
 
-Schrijft web/tenders.json uit de tenders-database. Het dashboard (web/index.html)
-laadt dat bestand via fetch() en doet zelf alle verrijking/scoring/filtering in de
-browser. GitHub Pages host web/ zodat het dashboard op een vaste URL staat.
+Het dashboard (web/index.html) leest zelf uit Supabase. Deze exports zijn voor
+GitHub Pages (tenders.json, beschrijvingen.json; niet in git) en voor agents die
+via GitHub lezen (samenvatting.json, tenders_7d.json; wel in git, want klein).
 """
 
 import os
 import json
 import sqlite3
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 DB = "tenders.db"
 UITVOER_DIR = "web"
+RECENT_DAGEN = 7
 
 # Velden die het dashboard nodig heeft (zie loadData in web/index.html).
 VELDEN = [
@@ -79,6 +80,29 @@ def main():
     with open(pad3, "w", encoding="utf-8") as f:
         json.dump(samenvatting, f, ensure_ascii=False)
     print(f"{pad3} geschreven ({len(alle_rijen)} totaal, {len(actief)} actief)")
+
+    grens = (datetime.now(timezone.utc) - timedelta(days=RECENT_DAGEN)).isoformat(timespec="seconds")
+    conn3 = sqlite3.connect(DB)
+    try:
+        ai = {(b, t): json.loads(d) for b, t, d in conn3.execute(
+            "SELECT bron, tender_id, data FROM verrijkingen")}
+    except sqlite3.OperationalError:
+        ai = {}  # tabel bestaat nog niet
+    conn3.close()
+    recent = [{**{k: r[k] for k in VELDEN}, "laatst_gezien": r["laatst_gezien"],
+               "ai": ai.get((r["bron"], r["tender_id"]))}
+              for r in rijen if (r["eerst_gezien"] or "") >= grens]
+    recent_data = {
+        "fileName": "tenders_7d",
+        "lastUpdated": data["lastUpdated"],
+        "vanaf": grens,
+        "count": len(recent),
+        "rows": recent,
+    }
+    pad4 = os.path.join(UITVOER_DIR, "tenders_7d.json")
+    with open(pad4, "w", encoding="utf-8") as f:
+        json.dump(recent_data, f, ensure_ascii=False)
+    print(f"{pad4} geschreven ({len(recent)} rijen sinds {grens})")
 
 
 if __name__ == "__main__":

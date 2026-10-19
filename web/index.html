@@ -103,6 +103,14 @@
   tr.rij:hover td{ background:rgba(25,157,217,0.06); }
   tr.rij.open td{ background:rgba(25,157,217,0.10); }
   .hasdesc{ margin-left:6px; opacity:.7; font-size:11px; }
+  .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
+  .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
+  .ai-paneel{ white-space:normal; background:rgba(25,157,217,0.06); border:1px solid rgba(25,157,217,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+  .ai-paneel .ai-sam{ color:var(--text); margin-bottom:8px; }
+  .ai-paneel dl{ display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; margin:0; font-size:12px; }
+  .ai-paneel dt{ color:var(--muted); }
+  .ai-paneel dd{ margin:0; color:var(--sub); }
+  .ai-paneel .ai-voet{ margin-top:8px; font-size:10.5px; color:var(--dim); }
   tr.detail td{ background:var(--bg2); color:var(--sub); font-size:12.5px; line-height:1.55;
     white-space:pre-wrap; padding:14px 18px; border-bottom:1px solid var(--border); }
   tr.detail .det-leeg{ color:var(--dim); font-style:italic; }
@@ -388,15 +396,49 @@ const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
   prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
+  volledigeHistorie:false,
 };
 let orgChart=null, catChart=null;
-let BESCHR={};   // { "bron|tender_id": omschrijving } uit de beschrijvingen-tabel
+// Omschrijvingen worden pas opgehaald als je een regel openklapt; vooraf laden
+// we alleen welke opdrachten er één hebben (voor het 📄-icoon).
+let BESCHR_HEEFT=new Set();   // "bron|tender_id"
+let BESCHR_TEKST=new Map();   // "bron|tender_id" -> omschrijving ('' = geen)
+// AI-verrijking (verrijking.py): de korte velden laden we vooraf, de rest bij openklappen.
+let VERRIJKING=new Map();     // "bron|tender_id" -> {eindklant, eindklant_zekerheid, senioriteit, modules}
+let AI_DETAIL=new Map();      // "bron|tender_id" -> volledige verrijking (of null)
 let orgTop=[];
 let currentUserEmail=null;
 let realtimeChannel=null;
 
 /* ===================== helpers ===================== */
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Omschrijvingen komen ongefilterd van externe bronnen (job-board HTML). We renderen
+// alleen een veilige subset van opmaak-tags; alle attributen (onerror, href, style, ...)
+// worden gestript. <template> parseert inert, dus er wordt niets geladen/uitgevoerd.
+function sanitizeDescription(html){
+  const BEHOUD = new Set(['P','BR','UL','OL','LI','STRONG','B','EM','I']);
+  const VERWIJDER = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','SVG','LINK','META']);
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  (function opschonen(node){
+    [...node.childNodes].forEach(kind=>{
+      if(kind.nodeType===1){
+        if(VERWIJDER.has(kind.tagName)){ kind.remove(); return; }
+        opschonen(kind);
+        if(BEHOUD.has(kind.tagName)){
+          [...kind.attributes].forEach(a=>kind.removeAttribute(a.name));
+        } else {
+          kind.replaceWith(...kind.childNodes);
+        }
+      } else if(kind.nodeType!==3){
+        kind.remove();
+      }
+    });
+  })(tpl.content);
+  const uit = document.createElement('div');
+  uit.appendChild(tpl.content.cloneNode(true));
+  return uit.innerHTML;
+}
 function wordMatch(text, kw){
   const e = kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   return new RegExp('(^|[^a-z0-9])'+e+'($|[^a-z0-9])','i').test(text);
@@ -506,8 +548,10 @@ function enrichRow(r){
   const titel=r.titel||'(geen titel)';
   const organisatie=r.organisatie||'-';
   const orgL=organisatie.toLowerCase();
-  const sap=isSap(titel);
-  const orc=isOracle(titel);
+  const ai=VERRIJKING.get(`${r.bron}|${r.tender_id}`)||null;
+  const aiModules=(ai && ai.modules || []).join(' ');
+  const sap=isSap(titel) || /\bSAP\b/i.test(aiModules);
+  const orc=isOracle(titel) || /oracle|jd edwards|peoplesoft|netsuite|hyperion/i.test(aiModules);
   const it=sap||orc||isIt(titel);
   const bron=r.bron||'onbekend';
   const v={
@@ -519,7 +563,7 @@ function enrichRow(r){
     _pub: r.publicatiedatum? new Date(r.publicatiedatum).getTime(): (r.eerst_gezien? new Date(r.eerst_gezien).getTime():null),
     _eerst: r.eerst_gezien? new Date(r.eerst_gezien).getTime(): null,
     _deadline: r.deadline? new Date(r.deadline).getTime(): null,
-    isSap:sap, isOracle:orc, isIt:it,
+    isSap:sap, isOracle:orc, isIt:it, ai,
     isBureau: isBureauOrg(orgL), grootOrg:grootOrg(orgL),
     soort: soortVan(bron),
     categorie: it? categorie(titel,sap) : 'Niet-IT',
@@ -543,36 +587,156 @@ function enrichRow(r){
   return v;
 }
 
-// Supabase's REST-laag (PostgREST) geeft standaard maximaal 1000 rijen per
-// call terug; hier tot en met de laatste pagina doorhalen zodat echt alle
-// rijen binnenkomen, ongeacht hoe groot de tabel groeit.
-async function fetchAll(table, select){
+// PostgREST geeft maximaal 1000 rijen per call. De eerste pagina vraagt ook het
+// totaal op; de overige pagina's worden daarna parallel opgehaald.
+async function fetchAll(table, select, filter){
   const PAGE=1000;
-  let from=0, out=[];
-  for(;;){
-    const {data, error} = await supabase.from(table).select(select)
-      .order('bron', {ascending:true}).order('tender_id', {ascending:true})
-      .range(from, from+PAGE-1);
-    if(error) throw new Error(`Kon '${table}' niet laden: ${error.message}`);
-    out = out.concat(data||[]);
-    if(!data || data.length<PAGE) break;
-    from += PAGE;
+  const pagina=(from, metTelling)=>{
+    let q=supabase.from(table).select(select, metTelling?{count:'exact'}:undefined);
+    if(filter) q=filter(q);
+    return q.order('bron',{ascending:true}).order('tender_id',{ascending:true}).range(from, from+PAGE-1);
+  };
+  const rijenVan=res=>{
+    if(res.error) throw new Error(`Kon '${table}' niet laden: ${res.error.message}`);
+    return res.data||[];
+  };
+  const eerste=await pagina(0, true);
+  let out=rijenVan(eerste), laatste=out, from=PAGE;
+  if(laatste.length===PAGE && eerste.count!=null){
+    const verzoeken=[];
+    for(; from<eerste.count; from+=PAGE) verzoeken.push(pagina(from));
+    for(const deel of (await Promise.all(verzoeken)).map(rijenVan)){ out=out.concat(deel); laatste=deel; }
   }
-  return out;
+  // de tabel kan tijdens het laden gegroeid zijn: doorgaan zolang de laatste pagina vol was
+  while(laatste.length===PAGE){
+    laatste=rijenVan(await pagina(from));
+    out=out.concat(laatste);
+    from+=PAGE;
+  }
+  const uniek=new Map();
+  out.forEach(r=>uniek.set(`${r.bron}|${r.tender_id}`, r));
+  return [...uniek.values()];
 }
 
-async function loadData(){
-  const [tenderRijen, beschrRijen] = await Promise.all([
-    fetchAll('tenders', '*'),
-    fetchAll('beschrijvingen', 'bron, tender_id, omschrijving').catch(()=>[]),
+// Standaard verbergt het dashboard verlopen opdrachten en opdrachten zonder
+// toekomstige deadline die ouder zijn dan 90 dagen (zie enrichRow). Die halen
+// we dus ook niet op; dit filter is bewust ruimer dan wat er getoond wordt.
+// Niet-ISO deadlines (bv. "13 augustus 2026agenda") kan Postgres niet als datum
+// vergelijken, dus die komen altijd mee.
+const HISTORIE_DAGEN=91;
+function actueelFilter(q){
+  const vandaag=new Date().toISOString().slice(0,10);
+  const grens=new Date(Date.now()-HISTORIE_DAGEN*86400000).toISOString().slice(0,10);
+  return q.or(`deadline.gte.${vandaag},deadline.not.like.20__-*,`+
+    `and(deadline.is.null,or(eerst_gezien.is.null,eerst_gezien.gte.${grens},publicatiedatum.gte.${grens}))`);
+}
+async function laadTenders(volledig){
+  if(!volledig){
+    try{ return {rijen: await fetchAll('tenders','*',actueelFilter), volledig:false}; }
+    catch(e){ console.warn('Gefilterd laden mislukt, alles wordt geladen:', e); }
+  }
+  return {rijen: await fetchAll('tenders','*'), volledig:true};
+}
+
+async function loadData(volledig){
+  const [tenders, sleutels, ai] = await Promise.all([
+    laadTenders(volledig),
+    fetchAll('beschrijvingen', 'bron, tender_id').catch(()=>[]),
+    fetchAll('verrijkingen', 'bron, tender_id, eindklant, eindklant_zekerheid, senioriteit, modules').catch(()=>[]),
   ]);
-  BESCHR = {};
-  beschrRijen.forEach(b=>{ if(b.omschrijving) BESCHR[`${b.bron}|${b.tender_id}`] = b.omschrijving; });
-  if(!tenderRijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
+  BESCHR_HEEFT = new Set(sleutels.map(b=>`${b.bron}|${b.tender_id}`));
+  BESCHR_TEKST = new Map();
+  VERRIJKING = new Map(ai.map(a=>[`${a.bron}|${a.tender_id}`, a]));
+  AI_DETAIL = new Map();
+  if(!tenders.rijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
   let laatst=null;
-  tenderRijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
-  const rows = tenderRijen.map(enrichRow);
-  return {rows, meta:{lastUpdated:laatst, count:rows.length}};
+  tenders.rijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
+  const rows = tenders.rijen.map(enrichRow);
+  return {rows, meta:{lastUpdated:laatst, count:rows.length, volledig:tenders.volledig}};
+}
+
+async function laadVolledigeHistorie(){
+  const live=document.getElementById('liveText');
+  const vorige=live.textContent;
+  live.textContent='Volledige historie laden…';
+  try{
+    const {rijen}=await laadTenders(true);
+    state.rows=rijen.map(enrichRow);
+    state.volledigeHistorie=true;
+    zetSubtitel();
+  }catch(err){
+    alert('Volledige historie laden mislukt: '+err.message);
+  }finally{
+    live.textContent=vorige;
+  }
+}
+function zetSubtitel(){
+  const n=state.rows.length;
+  document.getElementById('subtitle').textContent=
+    `SAP & Oracle · leadradar · ${n} ${state.volledigeHistorie?'':'actuele '}regels`;
+}
+
+async function laadOmschrijving(bron, tid){
+  const key=`${bron}|${tid}`;
+  if(BESCHR_TEKST.has(key)) return BESCHR_TEKST.get(key);
+  const {data, error}=await supabase.from('beschrijvingen').select('omschrijving')
+    .eq('bron', bron).eq('tender_id', tid).maybeSingle();
+  if(error) throw error;
+  const tekst=(data && data.omschrijving) || '';
+  BESCHR_TEKST.set(key, tekst);
+  return tekst;
+}
+async function laadAiDetail(bron, tid){
+  const key=`${bron}|${tid}`;
+  if(!VERRIJKING.has(key) || AI_DETAIL.has(key)) return;
+  const {data, error}=await supabase.from('verrijkingen').select('data')
+    .eq('bron', bron).eq('tender_id', tid).maybeSingle();
+  if(error){ console.warn('AI-verrijking laden mislukt', error); return; }
+  AI_DETAIL.set(key, (data && data.data) || null);
+}
+function bereik(min, max){
+  if(min==null && max==null) return '';
+  if(min==null || max==null || min===max) return String(min ?? max);
+  return `${min}–${max}`;
+}
+// Geen regeleinden in de opbouw: de detailcel staat op white-space:pre-wrap.
+function aiPaneel(d){
+  if(!d) return '';
+  const rij=(label, waarde)=> waarde ? `<dt>${label}</dt><dd>${esc(waarde)}</dd>` : '';
+  const klant = d.eindklant ? d.eindklant + (d.eindklant_zekerheid==='afgeleid' ? ' (afgeleid)' : '') : d.eindklant_omschrijving;
+  const senioriteit = d.senioriteit && d.senioriteit!=='onbekend'
+    ? d.senioriteit + (d.ervaring_jaren_min!=null ? `, ${d.ervaring_jaren_min}+ jaar ervaring` : '') : '';
+  const uren=bereik(d.uren_per_week_min, d.uren_per_week_max);
+  const tarief=bereik(d.tarief_min, d.tarief_max);
+  const werkvorm={op_locatie:'op locatie', hybride:'hybride', remote:'remote'}[d.werkvorm];
+  return '<div class="ai-paneel">'+
+    (d.samenvatting ? `<div class="ai-sam">${esc(d.samenvatting)}</div>` : '')+
+    '<dl>'+
+    rij('Rol', d.rol)+
+    rij('Eindklant', klant)+
+    rij('Sector', d.sector)+
+    rij('Modules', (d.modules||[]).join(', '))+
+    rij('Vaardigheden', (d.vaardigheden||[]).join(', '))+
+    rij('Senioriteit', senioriteit)+
+    rij('Uren', uren && `${uren} per week`)+
+    rij('Tarief', tarief && `€ ${tarief} per uur`)+
+    rij('Start', d.startdatum && fmtDate(d.startdatum))+
+    rij('Looptijd', d.looptijd_maanden!=null && `${d.looptijd_maanden} maanden`)+
+    rij('Werkvorm', werkvorm)+
+    rij('Talen', (d.talen||[]).join(', '))+
+    '</dl><div class="ai-voet">Automatisch uit de omschrijving gehaald (AI). Controleer bij twijfel de bron.</div></div>';
+}
+function aiKlant(r){
+  const k = r.ai && r.ai.eindklant;
+  if(!k || k.toLowerCase()===r.organisatie.toLowerCase()) return '';
+  const hoe = r.ai.eindklant_zekerheid==='genoemd' ? 'genoemd in' : 'afgeleid uit';
+  return `<div class="ai-klant" title="Eindklant ${hoe} de omschrijving (AI)">→ ${esc(k)}<span class="ai-tag">AI</span></div>`;
+}
+function detailHtml(key){
+  const leeg='<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
+  const ai=aiPaneel(AI_DETAIL.get(key));
+  if(BESCHR_TEKST.has(key)){ const t=BESCHR_TEKST.get(key); return ai + (t ? sanitizeDescription(t) : leeg); }
+  return ai + (BESCHR_HEEFT.has(key) ? '<span class="det-leeg">Omschrijving laden…</span>' : leeg);
 }
 
 /* ===================== live status-updates ===================== */
@@ -670,7 +834,8 @@ function getFiltered(rows){
   }
   if(state.search){
     const q=state.search.toLowerCase();
-    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q));
+    rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)||String(r.nummer).toLowerCase().includes(q)
+      ||(r.ai && [r.ai.eindklant||'', ...(r.ai.modules||[])].join(' ').toLowerCase().includes(q)));
   }
   const [field,dir]=state.sort.split('-');
   const chain=[{field,dir}];
@@ -865,16 +1030,14 @@ function renderTable(rows){
   const start=(state.page-1)*state.pageSize;
   const pageRows=rows.slice(start,start+state.pageSize);
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
-    const oms = BESCHR[r.bron+'|'+r.tender_id];
-    const detail = oms
-      ? esc(oms)
-      : '<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
+    const key = r.bron+'|'+r.tender_id;
+    const oms = BESCHR_HEEFT.has(key) || !!BESCHR_TEKST.get(key);
     return `
-    <tr class="rij" data-i="${i}">
+    <tr class="rij" data-i="${i}" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}">
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
-      <td style="color:#eef3f8">${esc(r.organisatie)}</td>
+      <td style="color:#eef3f8">${esc(r.organisatie)}${aiKlant(r)}</td>
       <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
@@ -882,7 +1045,7 @@ function renderTable(rows){
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
       <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detail}</td></tr>`;
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detailHtml(key)}</td></tr>`;
   }).join('') || '<tr><td colspan="10" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
   // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
@@ -893,6 +1056,14 @@ function renderTable(rows){
       const open = d.style.display!=='none';
       d.style.display = open ? 'none' : 'table-row';
       tr.classList.toggle('open', !open);
+      const bron=tr.dataset.bron, tid=tr.dataset.tid, key=bron+'|'+tid;
+      if(!open && (!BESCHR_TEKST.has(key) || (VERRIJKING.has(key) && !AI_DETAIL.has(key)))){
+        const cel=d.firstElementChild;
+        cel.innerHTML='<span class="det-leeg">Omschrijving laden…</span>';
+        Promise.all([laadOmschrijving(bron, tid), laadAiDetail(bron, tid)])
+          .then(()=>{ if(cel.isConnected) cel.innerHTML=detailHtml(key); })
+          .catch(err=>{ if(cel.isConnected) cel.innerHTML='<span class="det-leeg">Omschrijving kon niet geladen worden: '+esc(err.message||err)+'</span>'; });
+      }
     };
   });
   document.querySelectorAll('#tableBody select.statusSelect').forEach(sel=>{
@@ -924,10 +1095,11 @@ function render(){
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Organisatie','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
+  const header=['Score','Datum','Deadline','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
   const lines=[header.join(';')];
   rows.forEach(r=>{
     lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
+      String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
       String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
       r.status||'', r.status_gewijzigd_door||''].join(';'));
   });
@@ -969,7 +1141,11 @@ function bindEvents(){
     const newSort=e.target.value; const [nf]=newSort.split('-'), [cf]=state.sort.split('-');
     if(nf!==cf) state.prevSort=state.sort; state.sort=newSort; state.page=1; render();
   };
-  document.getElementById('verbergVerlopen').onchange=e=>{state.verbergVerlopen=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('verbergVerlopen').onchange=async e=>{
+    state.verbergVerlopen=e.target.checked; state.page=1;
+    if(!state.verbergVerlopen && !state.volledigeHistorie) await laadVolledigeHistorie();
+    buildFilterOptions(); render();
+  };
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('csvBtn').onclick=exportCsv;
@@ -1007,10 +1183,11 @@ function init(isRefresh){
     document.getElementById('errorBox').style.display='none';
     document.getElementById('loading').style.display='block';
   }
-  loadData().then(({rows,meta})=>{
+  loadData(!state.verbergVerlopen).then(({rows,meta})=>{
     state.rows=rows;
+    state.volledigeHistorie=meta.volledig;
     const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-';
-    document.getElementById('subtitle').textContent=`SAP & Oracle · leadradar · ${meta.count||rows.length} regels`;
+    zetSubtitel();
     document.getElementById('liveText').textContent='Live · bijgewerkt '+upd;
     buildFilterOptions();
     document.getElementById('loading').style.display='none';

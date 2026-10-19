@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 MAX_MISLUKT = 3
  
 import db
+import datums
+import verrijking
 import beschrijvingen
 import sheets_writer
 import supabase_sync
@@ -74,6 +76,7 @@ def main():
             rijen = scraper.haal_op()
             for r in rijen:
                 r["bron"] = naam
+                datums.normaliseer_rij(r)
             print(f"  {len(rijen)} rijen opgehaald")
             alles.extend(rijen)
         except Exception as e:
@@ -88,6 +91,9 @@ def main():
     print(f"\n=== database ===")
     nieuw, totaal = db.opslaan(alles)
     print(f"  {nieuw} nieuw, {totaal} totaal")
+    gecorrigeerd = db.normaliseer_bestaande_datums()
+    if gecorrigeerd:
+        print(f"  {len(gecorrigeerd)} oudere tekstdatums omgezet naar ISO")
     for r in db.per_bron():
         print(f"  {r['bron']}: {r['aantal']}")
  
@@ -103,16 +109,39 @@ def main():
             print(f"  {r[0]}: {r[1]}")
     except Exception as e:
         print(f"  omschrijvingen MISLUKT: {e}")
+
+    print(f"\n=== AI-verrijking ===")
+    if not verrijking.beschikbaar():
+        print("  ANTHROPIC_API_KEY ontbreekt; overgeslagen")
+    else:
+        try:
+            kandidaten = db.te_verrijken(verrijking.maak_hash, verrijking.MAX_PER_RUN)
+            resultaten, fouten = verrijking.verrijk_alle(kandidaten)
+            db.verrijkingen_opslaan(resultaten)
+            print(f"  {len(resultaten)} verrijkt, {fouten} mislukt "
+                  f"(max {verrijking.MAX_PER_RUN} per run, model {verrijking.MODEL})")
+            if kandidaten and not resultaten:
+                mislukt.append("AI-verrijking")
+        except Exception as e:
+            print(f"  AI-verrijking MISLUKT: {type(e).__name__}: {e}")
+            mislukt.append("AI-verrijking")
  
     # Supabase is de databron voor het live dashboard (real-time, met een
     # per-tender status die gebruikers zelf zetten). Raakt nooit de
     # status/status_gewijzigd_door/status_gewijzigd_op kolommen aan.
     print(f"\n=== supabase ===")
     try:
-        n_tenders = supabase_sync.sync_tenders(alles)
+        al_in_run = {(r["bron"], str(r.get("tender_id"))) for r in alles}
+        extra = [r for r in gecorrigeerd if (r["bron"], str(r["tender_id"])) not in al_in_run]
+        n_tenders = supabase_sync.sync_tenders(alles + extra)
         print(f"  {n_tenders} tenders gesynct")
         n_oms = supabase_sync.sync_beschrijvingen(met_oms)
         print(f"  {n_oms} omschrijvingen gesynct")
+        nog_te_syncen = db.verrijkingen(alleen_ongesynct=True)
+        if nog_te_syncen:
+            n_ai = supabase_sync.sync_verrijkingen(nog_te_syncen)
+            db.markeer_gesynct(nog_te_syncen)
+            print(f"  {n_ai} verrijkingen gesynct")
     except Exception as e:
         print(f"  Supabase-sync MISLUKT: {e}")
         traceback.print_exc()
