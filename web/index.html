@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
+<script src="dubbelen.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -103,6 +104,8 @@
   tr.rij:hover td{ background:rgba(25,157,217,0.06); }
   tr.rij.open td{ background:rgba(25,157,217,0.10); }
   .hasdesc{ margin-left:6px; opacity:.7; font-size:11px; }
+  .via{ font-size:9px; background:rgba(25,157,217,0.14); color:#9fc4ec; border:1px solid rgba(25,157,217,0.3); padding:1px 7px; border-radius:999px; margin-left:6px; white-space:nowrap; }
+  .via-lijst{ white-space:normal; font-size:12px; color:var(--muted); margin-bottom:10px; }
   .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
   .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
   .ai-paneel{ white-space:normal; background:rgba(25,157,217,0.06); border:1px solid rgba(25,157,217,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
@@ -291,6 +294,7 @@
     <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude</label>
     <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
     <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
+    <label class="toggle"><input type="checkbox" id="toonDubbel"> Toon dubbelingen</label>
     <div style="flex:1"></div>
     <button class="csv-btn" id="csvBtn">Exporteer CSV</button>
     <input type="text" id="searchBox" placeholder="Zoek op titel of organisatie...">
@@ -396,7 +400,7 @@ const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
   prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
-  volledigeHistorie:false,
+  volledigeHistorie:false, toonDubbel:false,
 };
 let orgChart=null, catChart=null;
 // Omschrijvingen worden pas opgehaald als je een regel openklapt; vooraf laden
@@ -663,6 +667,7 @@ async function laadVolledigeHistorie(){
     const {rijen}=await laadTenders(true);
     state.rows=rijen.map(enrichRow);
     state.volledigeHistorie=true;
+    markeerDubbelen(state.rows);
     zetSubtitel();
   }catch(err){
     alert('Volledige historie laden mislukt: '+err.message);
@@ -672,8 +677,53 @@ async function laadVolledigeHistorie(){
 }
 function zetSubtitel(){
   const n=state.rows.length;
+  const uniek=state.rows.filter(r=>r.isPrimair!==false).length;
   document.getElementById('subtitle').textContent=
-    `SAP & Oracle · leadradar · ${n} ${state.volledigeHistorie?'':'actuele '}regels`;
+    `SAP & Oracle · leadradar · ${uniek} unieke ${state.volledigeHistorie?'':'actuele '}opdrachten (${n} regels)`;
+}
+
+/* ===================== dubbelingen ===================== */
+// Per groep (zie dubbelen.js) wordt één regel getoond: bij voorkeur die met een
+// door een gebruiker gezette status, dan met omschrijving, dan met deadline,
+// en liever de oorspronkelijke bron dan het doorplaatsportaal.
+function rangorde(r){
+  return (r.status?8:0) + (BESCHR_HEEFT.has(r.bron+'|'+r.tender_id)?4:0) + (r._deadline!=null?2:0) + (r.bron!=='opdrachtoverheid'?1:0);
+}
+function markeerDubbelen(rows){
+  for(const groep of Dubbelen.groepeer(rows)){
+    const primair = groep.length===1 ? groep[0]
+      : groep.slice().sort((a,b)=>rangorde(b)-rangorde(a) || (a._eerst??0)-(b._eerst??0))[0];
+    for(const r of groep){
+      r.isPrimair = r===primair;
+      r.leden = r===primair && groep.length>1 ? groep.filter(x=>x!==r) : null;
+      r.bronnen = r.leden ? [...new Set(groep.map(x=>x.bron))] : null;
+    }
+  }
+}
+function bronnenVan(r){ return (!state.toonDubbel && r.bronnen) || [r.bron]; }
+function viaBadge(r){
+  if(state.toonDubbel || !r.leden) return '';
+  return `<span class="via" title="Ook via: ${esc(r.leden.map(x=>x.bron).join(', '))}">via ${r.bronnen.length} bronnen</span>`;
+}
+function ledenHtml(r){
+  if(state.toonDubbel || !r.leden) return '';
+  const items=r.leden.map(x=>{
+    const naam = x.url ? `<a class="title-link" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.bron)}</a>` : esc(x.bron);
+    return naam + (x._deadline!=null ? ` · deadline ${esc(fmtDate(x.deadline))}` : '') + (x.status ? ` · status ${esc(x.status)}` : '');
+  }).join('; ');
+  return `<div class="via-lijst">Ook gepubliceerd via: ${items}</div>`;
+}
+// Tijdens een scraper-run komen er duizenden live-updates binnen; groeperen en
+// hertekenen gebeurt dan hoogstens eens per halve seconde.
+let herberekenTimer=null;
+function planHerberekening(){
+  if(herberekenTimer) return;
+  herberekenTimer=setTimeout(()=>{
+    herberekenTimer=null;
+    markeerDubbelen(state.rows);
+    const app=document.getElementById('app');
+    if(app && app.style.display!=='none') render();
+  }, 500);
 }
 
 async function laadOmschrijving(bron, tid){
@@ -760,8 +810,7 @@ function applyRealtimeChange(payload){
     const enriched = enrichRow(payload.new);
     if(idx>=0) state.rows[idx]=enriched; else state.rows.unshift(enriched);
   }
-  const app=document.getElementById('app');
-  if(app && app.style.display!=='none') render();
+  planHerberekening();
 }
 
 async function updateStatus(bron, tenderId, nieuweStatus){
@@ -783,6 +832,7 @@ async function updateStatus(bron, tenderId, nieuweStatus){
     state.rows[idx].status = nieuweStatus||'';
     state.rows[idx].status_gewijzigd_door = currentUserEmail;
     state.rows[idx].status_gewijzigd_op = nu;
+    markeerDubbelen(state.rows);   // een regel met status wordt de zichtbare van zijn groep
     render();
   }
 }
@@ -792,6 +842,7 @@ function baseRows(){
   let r = state.rows;
   if(state.verbergVerlopen) r = r.filter(x=>!x.verlopen && !x.verouderd);
   if(state.verbergBureaus)  r = r.filter(x=>!x.isBureau);
+  if(!state.toonDubbel)     r = r.filter(x=>x.isPrimair!==false);
   return r;
 }
 function relevantRows(){
@@ -823,7 +874,7 @@ function getFiltered(rows){
   rows=applySmartView(rows);
   if(state.type) rows=rows.filter(r=>r.categorie===state.type);
   if(state.soort) rows=rows.filter(r=>r.soort===state.soort);
-  if(state.bron) rows=rows.filter(r=>r.bron===state.bron);
+  if(state.bron) rows=rows.filter(r=>bronnenVan(r).includes(state.bron));
   if(state.regio) rows=rows.filter(r=>r.regio===state.regio);
   if(state.statusFilter) rows=rows.filter(r=> state.statusFilter==='__leeg__' ? !r.status : r.status===state.statusFilter);
   if(state.skill && SKILL_MAP[state.skill]) rows=rows.filter(r=>SKILL_MAP[state.skill].test(r.titel));
@@ -1038,14 +1089,14 @@ function renderTable(rows){
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
       <td style="color:#eef3f8">${esc(r.organisatie)}${aiKlant(r)}</td>
-      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${viaBadge(r)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
       <td style="color:#8ea2b8">${esc(r.regio)}</td>
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
       <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detailHtml(key)}</td></tr>`;
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${ledenHtml(r)}<div class="det-inhoud">${detailHtml(key)}</div></td></tr>`;
   }).join('') || '<tr><td colspan="10" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
   // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
@@ -1058,7 +1109,7 @@ function renderTable(rows){
       tr.classList.toggle('open', !open);
       const bron=tr.dataset.bron, tid=tr.dataset.tid, key=bron+'|'+tid;
       if(!open && (!BESCHR_TEKST.has(key) || (VERRIJKING.has(key) && !AI_DETAIL.has(key)))){
-        const cel=d.firstElementChild;
+        const cel=d.querySelector('.det-inhoud');
         cel.innerHTML='<span class="det-leeg">Omschrijving laden…</span>';
         Promise.all([laadOmschrijving(bron, tid), laadAiDetail(bron, tid)])
           .then(()=>{ if(cel.isConnected) cel.innerHTML=detailHtml(key); })
@@ -1100,7 +1151,7 @@ function exportCsv(){
   rows.forEach(r=>{
     lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
       String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
-      String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
+      String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, bronnenVan(r).join(' + '),
       r.status||'', r.status_gewijzigd_door||''].join(';'));
   });
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
@@ -1113,7 +1164,7 @@ function exportCsv(){
 function buildFilterOptions(){
   const rel=relevantRows();
   const bronSel=document.getElementById('bronFilter');
-  const bc={}; baseRows().forEach(r=>bc[r.bron]=(bc[r.bron]||0)+1);
+  const bc={}; baseRows().forEach(r=>bronnenVan(r).forEach(b=>bc[b]=(bc[b]||0)+1));
   bronSel.innerHTML='<option value="">Alle bronnen</option>'+Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([b,c])=>`<option value="${esc(b)}">${esc(b)} (${c})</option>`).join('');
   bronSel.value=state.bron;
   const regioSel=document.getElementById('regioFilter');
@@ -1148,6 +1199,7 @@ function bindEvents(){
   };
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('toonDubbel').onchange=e=>{state.toonDubbel=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('csvBtn').onclick=exportCsv;
   document.getElementById('tickerClose').onclick=()=>{state.tickerDismissed=true;renderTicker();};
   let t;
@@ -1186,6 +1238,7 @@ function init(isRefresh){
   loadData(!state.verbergVerlopen).then(({rows,meta})=>{
     state.rows=rows;
     state.volledigeHistorie=meta.volledig;
+    markeerDubbelen(state.rows);
     const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-';
     zetSubtitel();
     document.getElementById('liveText').textContent='Live · bijgewerkt '+upd;
