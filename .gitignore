@@ -4,3 +4,5 @@ debug_*.png
 tenders.csv
 tenders_nieuw.csv
 dashboard.html
+web/tenders.json
+web/beschrijvingen.json

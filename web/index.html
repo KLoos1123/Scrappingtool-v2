@@ -388,9 +388,13 @@ const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
   prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
+  volledigeHistorie:false,
 };
 let orgChart=null, catChart=null;
-let BESCHR={};   // { "bron|tender_id": omschrijving } uit de beschrijvingen-tabel
+// Omschrijvingen worden pas opgehaald als je een regel openklapt; vooraf laden
+// we alleen welke opdrachten er één hebben (voor het 📄-icoon).
+let BESCHR_HEEFT=new Set();   // "bron|tender_id"
+let BESCHR_TEKST=new Map();   // "bron|tender_id" -> omschrijving ('' = geen)
 let orgTop=[];
 let currentUserEmail=null;
 let realtimeChannel=null;
@@ -570,36 +574,106 @@ function enrichRow(r){
   return v;
 }
 
-// Supabase's REST-laag (PostgREST) geeft standaard maximaal 1000 rijen per
-// call terug; hier tot en met de laatste pagina doorhalen zodat echt alle
-// rijen binnenkomen, ongeacht hoe groot de tabel groeit.
-async function fetchAll(table, select){
+// PostgREST geeft maximaal 1000 rijen per call. De eerste pagina vraagt ook het
+// totaal op; de overige pagina's worden daarna parallel opgehaald.
+async function fetchAll(table, select, filter){
   const PAGE=1000;
-  let from=0, out=[];
-  for(;;){
-    const {data, error} = await supabase.from(table).select(select)
-      .order('bron', {ascending:true}).order('tender_id', {ascending:true})
-      .range(from, from+PAGE-1);
-    if(error) throw new Error(`Kon '${table}' niet laden: ${error.message}`);
-    out = out.concat(data||[]);
-    if(!data || data.length<PAGE) break;
-    from += PAGE;
+  const pagina=(from, metTelling)=>{
+    let q=supabase.from(table).select(select, metTelling?{count:'exact'}:undefined);
+    if(filter) q=filter(q);
+    return q.order('bron',{ascending:true}).order('tender_id',{ascending:true}).range(from, from+PAGE-1);
+  };
+  const rijenVan=res=>{
+    if(res.error) throw new Error(`Kon '${table}' niet laden: ${res.error.message}`);
+    return res.data||[];
+  };
+  const eerste=await pagina(0, true);
+  let out=rijenVan(eerste), laatste=out, from=PAGE;
+  if(laatste.length===PAGE && eerste.count!=null){
+    const verzoeken=[];
+    for(; from<eerste.count; from+=PAGE) verzoeken.push(pagina(from));
+    for(const deel of (await Promise.all(verzoeken)).map(rijenVan)){ out=out.concat(deel); laatste=deel; }
   }
-  return out;
+  // de tabel kan tijdens het laden gegroeid zijn: doorgaan zolang de laatste pagina vol was
+  while(laatste.length===PAGE){
+    laatste=rijenVan(await pagina(from));
+    out=out.concat(laatste);
+    from+=PAGE;
+  }
+  const uniek=new Map();
+  out.forEach(r=>uniek.set(`${r.bron}|${r.tender_id}`, r));
+  return [...uniek.values()];
 }
 
-async function loadData(){
-  const [tenderRijen, beschrRijen] = await Promise.all([
-    fetchAll('tenders', '*'),
-    fetchAll('beschrijvingen', 'bron, tender_id, omschrijving').catch(()=>[]),
+// Standaard verbergt het dashboard verlopen opdrachten en opdrachten zonder
+// toekomstige deadline die ouder zijn dan 90 dagen (zie enrichRow). Die halen
+// we dus ook niet op; dit filter is bewust ruimer dan wat er getoond wordt.
+// Niet-ISO deadlines (bv. "13 augustus 2026agenda") kan Postgres niet als datum
+// vergelijken, dus die komen altijd mee.
+const HISTORIE_DAGEN=91;
+function actueelFilter(q){
+  const vandaag=new Date().toISOString().slice(0,10);
+  const grens=new Date(Date.now()-HISTORIE_DAGEN*86400000).toISOString().slice(0,10);
+  return q.or(`deadline.gte.${vandaag},deadline.not.like.20__-*,`+
+    `and(deadline.is.null,or(eerst_gezien.is.null,eerst_gezien.gte.${grens},publicatiedatum.gte.${grens}))`);
+}
+async function laadTenders(volledig){
+  if(!volledig){
+    try{ return {rijen: await fetchAll('tenders','*',actueelFilter), volledig:false}; }
+    catch(e){ console.warn('Gefilterd laden mislukt, alles wordt geladen:', e); }
+  }
+  return {rijen: await fetchAll('tenders','*'), volledig:true};
+}
+
+async function loadData(volledig){
+  const [tenders, sleutels] = await Promise.all([
+    laadTenders(volledig),
+    fetchAll('beschrijvingen', 'bron, tender_id').catch(()=>[]),
   ]);
-  BESCHR = {};
-  beschrRijen.forEach(b=>{ if(b.omschrijving) BESCHR[`${b.bron}|${b.tender_id}`] = b.omschrijving; });
-  if(!tenderRijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
+  BESCHR_HEEFT = new Set(sleutels.map(b=>`${b.bron}|${b.tender_id}`));
+  BESCHR_TEKST = new Map();
+  if(!tenders.rijen.length) throw new Error('De dataset bevat nog geen rijen. Draai de GitHub Action via Actions > Tender Scrapers > Run workflow.');
   let laatst=null;
-  tenderRijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
-  const rows = tenderRijen.map(enrichRow);
-  return {rows, meta:{lastUpdated:laatst, count:rows.length}};
+  tenders.rijen.forEach(r=>{ if(r.laatst_gezien && (!laatst || r.laatst_gezien>laatst)) laatst=r.laatst_gezien; });
+  const rows = tenders.rijen.map(enrichRow);
+  return {rows, meta:{lastUpdated:laatst, count:rows.length, volledig:tenders.volledig}};
+}
+
+async function laadVolledigeHistorie(){
+  const live=document.getElementById('liveText');
+  const vorige=live.textContent;
+  live.textContent='Volledige historie laden…';
+  try{
+    const {rijen}=await laadTenders(true);
+    state.rows=rijen.map(enrichRow);
+    state.volledigeHistorie=true;
+    zetSubtitel();
+  }catch(err){
+    alert('Volledige historie laden mislukt: '+err.message);
+  }finally{
+    live.textContent=vorige;
+  }
+}
+function zetSubtitel(){
+  const n=state.rows.length;
+  document.getElementById('subtitle').textContent=
+    `SAP & Oracle · leadradar · ${n} ${state.volledigeHistorie?'':'actuele '}regels`;
+}
+
+async function laadOmschrijving(bron, tid){
+  const key=`${bron}|${tid}`;
+  if(BESCHR_TEKST.has(key)) return BESCHR_TEKST.get(key);
+  const {data, error}=await supabase.from('beschrijvingen').select('omschrijving')
+    .eq('bron', bron).eq('tender_id', tid).maybeSingle();
+  if(error) throw error;
+  const tekst=(data && data.omschrijving) || '';
+  BESCHR_TEKST.set(key, tekst);
+  return tekst;
+}
+function detailHtml(key){
+  const leeg='<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
+  if(BESCHR_TEKST.has(key)){ const t=BESCHR_TEKST.get(key); return t ? sanitizeDescription(t) : leeg; }
+  return BESCHR_HEEFT.has(key) ? '<span class="det-leeg">Omschrijving laden…</span>' : leeg;
 }
 
 /* ===================== live status-updates ===================== */
@@ -892,12 +966,10 @@ function renderTable(rows){
   const start=(state.page-1)*state.pageSize;
   const pageRows=rows.slice(start,start+state.pageSize);
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
-    const oms = BESCHR[r.bron+'|'+r.tender_id];
-    const detail = oms
-      ? sanitizeDescription(oms)
-      : '<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
+    const key = r.bron+'|'+r.tender_id;
+    const oms = BESCHR_HEEFT.has(key) || !!BESCHR_TEKST.get(key);
     return `
-    <tr class="rij" data-i="${i}">
+    <tr class="rij" data-i="${i}" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}">
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
@@ -909,7 +981,7 @@ function renderTable(rows){
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
       <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detail}</td></tr>`;
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detailHtml(key)}</td></tr>`;
   }).join('') || '<tr><td colspan="10" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
   // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
@@ -920,6 +992,14 @@ function renderTable(rows){
       const open = d.style.display!=='none';
       d.style.display = open ? 'none' : 'table-row';
       tr.classList.toggle('open', !open);
+      const bron=tr.dataset.bron, tid=tr.dataset.tid, key=bron+'|'+tid;
+      if(!open && !BESCHR_TEKST.has(key)){
+        const cel=d.firstElementChild;
+        cel.innerHTML='<span class="det-leeg">Omschrijving laden…</span>';
+        laadOmschrijving(bron, tid)
+          .then(()=>{ if(cel.isConnected) cel.innerHTML=detailHtml(key); })
+          .catch(err=>{ if(cel.isConnected) cel.innerHTML='<span class="det-leeg">Omschrijving kon niet geladen worden: '+esc(err.message||err)+'</span>'; });
+      }
     };
   });
   document.querySelectorAll('#tableBody select.statusSelect').forEach(sel=>{
@@ -996,7 +1076,11 @@ function bindEvents(){
     const newSort=e.target.value; const [nf]=newSort.split('-'), [cf]=state.sort.split('-');
     if(nf!==cf) state.prevSort=state.sort; state.sort=newSort; state.page=1; render();
   };
-  document.getElementById('verbergVerlopen').onchange=e=>{state.verbergVerlopen=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('verbergVerlopen').onchange=async e=>{
+    state.verbergVerlopen=e.target.checked; state.page=1;
+    if(!state.verbergVerlopen && !state.volledigeHistorie) await laadVolledigeHistorie();
+    buildFilterOptions(); render();
+  };
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('csvBtn').onclick=exportCsv;
@@ -1034,10 +1118,11 @@ function init(isRefresh){
     document.getElementById('errorBox').style.display='none';
     document.getElementById('loading').style.display='block';
   }
-  loadData().then(({rows,meta})=>{
+  loadData(!state.verbergVerlopen).then(({rows,meta})=>{
     state.rows=rows;
+    state.volledigeHistorie=meta.volledig;
     const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-';
-    document.getElementById('subtitle').textContent=`SAP & Oracle · leadradar · ${meta.count||rows.length} regels`;
+    zetSubtitel();
     document.getElementById('liveText').textContent='Live · bijgewerkt '+upd;
     buildFilterOptions();
     document.getElementById('loading').style.display='none';
