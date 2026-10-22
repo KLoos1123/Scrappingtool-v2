@@ -117,6 +117,8 @@
   .badge-oracle{ background:#fde8e6; color:var(--neer); }
   .nieuw{ font-size:10.5px; font-weight:600; color:#fff; background:var(--primair); border-radius:999px; padding:0 6px; margin-left:6px; vertical-align:1px; }
   .hasdesc{ margin-left:6px; font-size:11px; opacity:.6; }
+  .ookop{ color:var(--waarschuw); }
+  .ookop a{ color:inherit; text-decoration:underline; text-decoration-color:rgba(138,106,42,.4); }
   .ai-klant{ display:inline; color:var(--primair-donker); }
   .ai-tag{ font-size:9.5px; font-weight:600; background:#efe7f6; color:#6b3fa0; border-radius:999px; padding:0 5px; margin-left:4px; }
   .dl{ font-size:11.5px; font-weight:500; }
@@ -257,6 +259,7 @@
       <label class="schakel"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude</label>
       <label class="schakel"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
       <label class="schakel"><input type="checkbox" id="toonNietIt"> Ook niet-IT</label>
+      <label class="schakel" title="Dezelfde opdracht bij meerdere bronnen als één regel tonen"><input type="checkbox" id="samenvoegen" checked> Dubbelen samenvoegen</label>
     </div>
   </section>
 
@@ -309,7 +312,7 @@
 const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'deadline-asc',
   prevSort: null, skill:'', rol:'', smartView:'', statusFilter:'',
-  verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
+  verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, samenvoegen:true, page:1, pageSize:50,
   volledigeHistorie:false,
 };
 // Omschrijvingen worden pas opgehaald als je een regel openklapt; vooraf laden
@@ -454,7 +457,7 @@ async function laadVolledigeHistorie(){
   }
 }
 function zetSubtitel(){
-  const n=relevantRows().length;
+  const n=uniek(relevantRows()).length;
   document.getElementById('subtitle').textContent=
     `${n.toLocaleString('nl-NL')} ${state.toonNietIt?'':'IT-'}opdrachten${state.volledigeHistorie?' (volledige historie)':''} · gesorteerd op wat het eerst sluit`;
 }
@@ -696,12 +699,12 @@ function renderWeergaven(){
 
 /* ===================== kerncijfers ===================== */
 function renderKpis(){
-  const rel=relevantRows();
+  const rel=uniek(relevantRows());
   const urgent=rel.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7);
   const vandaagSluit=urgent.filter(r=>r.dagenTotDeadline===0).length;
   const vandaag=rel.filter(r=>r.isVandaag);
   const week=rel.filter(r=>r.isWeek).length;
-  const sap=baseRows().filter(r=>r.isSap||r.isOracle);
+  const sap=uniek(baseRows().filter(r=>r.isSap||r.isOracle));
   const sapNieuw=sap.filter(r=>r.isWeek).length;
   const pipe=state.rows.filter(r=>IN_BEHANDELING.has(r.status));
   const pipeUrgent=pipe.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7).length;
@@ -783,7 +786,9 @@ function renderTable(rows){
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
     const key = r.bron+'|'+r.tender_id;
     const oms = BESCHR_HEEFT.has(key) || !!BESCHR_TEKST.get(key);
-    const sub=[esc(r.organisatie)+aiKlant(r), r.regio && r.regio!=='Overig / onbekend' ? esc(r.regio) : '', esc(r.bron), wanneer(r)].filter(Boolean).join(' · ');
+    const ook=state.samenvoegen && r.ookOp && r.ookOp.length
+      ? ' · <span class="ookop">ook op '+r.ookOp.map(o=>o.url?`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="${esc(o.organisatie||'')}">${esc(o.bron)}</a>`:esc(o.bron)).join(', ')+'</span>' : '';
+    const sub=[esc(r.organisatie)+aiKlant(r), r.regio && r.regio!=='Overig / onbekend' ? esc(r.regio) : '', esc(r.bron), wanneer(r)].filter(Boolean).join(' · ')+ook;
     return `
     <tr class="rij" data-i="${i}" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}">
       <td><span class="score ${scoreKlasse(r.score)}" title="sales-score">${r.score}</span></td>
@@ -821,13 +826,17 @@ function renderTable(rows){
     };
   });
   document.getElementById('resultCount').textContent=`Opdrachten (${rows.length.toLocaleString('nl-NL')})`;
+  const dubbel=state.samenvoegen ? rows.reduce((a,r)=>a+(r.ookOp?r.ookOp.length:0),0) : 0;
+  document.getElementById('resultCount').title=dubbel?`${dubbel} dubbele vermeldingen samengevoegd`:'';
   document.getElementById('pageCount').textContent=rows.length?`${(start+1).toLocaleString('nl-NL')}–${Math.min(start+state.pageSize, rows.length).toLocaleString('nl-NL')} van ${rows.length.toLocaleString('nl-NL')}`:'';
   document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
   document.getElementById('prevBtn').disabled=state.page<=1;
   document.getElementById('nextBtn').disabled=state.page>=totalPages;
 }
+// Dezelfde opdracht bij meerdere bronnen als één regel (zie groepeerDubbel in marktlogica.js).
+function uniek(rows){ return state.samenvoegen ? groepeerDubbel(rows) : rows; }
 function render(){
-  const rows=getFiltered(relevantRows());
+  const rows=uniek(getFiltered(relevantRows()));
   window._lastFiltered=rows;
   renderWeergaven();
   renderKpis();
@@ -851,7 +860,7 @@ function werkNotitieIcoonBij(bron, tid){
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door','Geschikt voor','Tarief (notitie)','Opmerking'];
+  const header=['Score','Datum','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door','Geschikt voor','Tarief (notitie)','Opmerking','Ook op'];
   const schoon=v=>String(v||'').replace(/[;\n\r]/g,',');
   const lines=[header.join(';')];
   rows.forEach(r=>{
@@ -859,7 +868,7 @@ function exportCsv(){
     lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', schoon(n.tarief||(t&&t.tarief)), r.organisatie,
       String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
       String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
-      r.status||'', r.status_gewijzigd_door||'', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking)].join(';'));
+      r.status||'', r.status_gewijzigd_door||'', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking), schoon(state.samenvoegen && r.ookOp ? r.ookOp.map(o=>o.bron).join(', ') : '')].join(';'));
   });
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
@@ -905,6 +914,7 @@ function bindEvents(){
     buildFilterOptions(); render();
   };
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
+  document.getElementById('samenvoegen').onchange=e=>{state.samenvoegen=e.target.checked;state.page=1;zetSubtitel();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('csvBtn').onclick=exportCsv;
   document.querySelectorAll('.cijfer[data-weergave]').forEach(c=>c.onclick=()=>kiesWeergave(state.smartView===c.dataset.weergave?'':c.dataset.weergave));
