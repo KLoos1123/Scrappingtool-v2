@@ -21,6 +21,8 @@ _SLEUTEL = re.compile(
     r"|\breageren\s+(?:kan\s+)?(?:tot(?:\s+en\s+met)?|t/m|vóór|voor|uiterlijk)"
     r"|\buiterlijk\s+(?:reageren|aanbieden|inschrijven|indienen)\b"
     r"|\breactietermijn\b"
+    r"|\bsollicit\w*\s+(?:kan\s+)?(?:tot(?:\s+en\s+met)?|t/m|vóór|voor|uiterlijk)"
+    r"|\b(?:solliciteer|reageer)\s+(?:uiterlijk\s+)?(?:vóór|voor|tot)\b"
     r"|\b(?:aanbieden|inschrijven|indienen)\s+(?:tot(?:\s+en\s+met)?|t/m|vóór|voor|uiterlijk)",
     re.I)
 VENSTER = 70  # zoveel tekens na het sleutelwoord zoeken we naar een datum

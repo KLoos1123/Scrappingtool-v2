@@ -18,6 +18,10 @@ class HaalDeadline(unittest.TestCase):
             "Aanbieden tot 03/09/2026 Maximum uurtarief": "2026-09-03",
             "Deadline indienen van cv en motivatie : maandag 10 augustus": "2026-08-10",
             "Deadline aanleveren cv's: donderdag 22 oktober": "2026-10-22",
+            # stedin
+            "Je kan solliciteren tot dinsdag 27 oktober om 09:00, dan sluit de vacature.": "2026-10-27",
+            "Sollicitatie t/m woensdag 28 oktober - 09.00 uur": "2026-10-28",
+            "De sluitingsdatum van deze vacature is 1 november": "2026-11-01",
         }
         for tekst, verwacht in gevallen.items():
             with self.subTest(tekst=tekst):
