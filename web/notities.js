@@ -51,11 +51,28 @@ function notitieIcoon(bron, tid){
     .filter(Boolean).join('\n');
   return `<span class="notitie-icoon" title="${notitieEsc(tip)}">💬</span>`;
 }
-function tariefCel(bron, tid){
+// Een tarief uit de notitie (zelf ingevuld) gaat voor het gescrapete tarief.
+function tariefInhoud(bron, tid){
+  const n=NOTITIES.get(notitieSleutel(bron, tid));
+  if(n && n.tarief){
+    const t=TARIEVEN.get(notitieSleutel(bron, tid));
+    const tip='Tarief uit de notitie'+(n.gewijzigd_door?` van ${n.gewijzigd_door}`:'')+(t?` (gescrapet: ${t.tarief})`:'');
+    return `<span class="tarief tarief-notitie" title="${notitieEsc(tip)}">${notitieEsc(n.tarief)}</span>`;
+  }
   const t=TARIEVEN.get(notitieSleutel(bron, tid));
   if(!t) return '<span class="muted">—</span>';
   const titel={ai:'uit de AI-verrijking van de omschrijving', bron:'zoals de bron het opgeeft'}[t.herkomst] || 'uit de omschrijving';
   return `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>`;
+}
+function tariefCel(bron, tid){
+  return `<span class="tariefcel" data-sleutel="${notitieEsc(notitieSleutel(bron, tid))}">${tariefInhoud(bron, tid)}</span>`;
+}
+// Werk de tariefkolom bij van alle regels van deze opdracht (na opslaan of een live wijziging).
+function werkTariefCellenBij(bron, tid){
+  const sleutel=notitieSleutel(bron, tid);
+  document.querySelectorAll('.tariefcel').forEach(el=>{
+    if(el.dataset.sleutel===sleutel) el.innerHTML=tariefInhoud(bron, tid);
+  });
 }
 
 function fmtNotitieTijd(iso){
@@ -115,6 +132,7 @@ function koppelNotities(container, naOpslaan){
       const rij=await slaNotitieOp(blok.dataset.bron, blok.dataset.tid, velden);
       melding.textContent='Opgeslagen';
       blok.querySelector('.notitie-wie').textContent=`Laatst bijgewerkt door ${rij.gewijzigd_door||'jou'} · ${fmtNotitieTijd(rij.gewijzigd_op)}`;
+      werkTariefCellenBij(blok.dataset.bron, blok.dataset.tid);
       if(naOpslaan) naOpslaan(blok.dataset.bron, blok.dataset.tid);
     }catch(err){
       melding.textContent='Opslaan mislukt: '+(err.message||err);
@@ -139,6 +157,7 @@ function volgNotities(naWijziging){
       if(!rec) return;
       const key=notitieSleutel(rec.bron, rec.tender_id);
       if(payload.eventType==='DELETE') NOTITIES.delete(key); else NOTITIES.set(key, payload.new);
+      werkTariefCellenBij(rec.bron, rec.tender_id);
       if(naWijziging && !bezigMetNotitie()) naWijziging();
     })
     .subscribe();
@@ -165,6 +184,7 @@ function volgNotities(naWijziging){
   .notitie-melding{ font-size:11px; color:var(--muted); }
   .notitie-icoon{ margin-left:6px; font-size:11px; cursor:help; }
   .tarief{ white-space:nowrap; color:var(--sub); font-size:12px; }
+  .tarief-notitie{ color:var(--text); font-weight:600; }
   @media (max-width:700px){ .notitie-velden{ grid-template-columns:1fr; } }`;
   const st=document.createElement('style');
   st.textContent=css;
