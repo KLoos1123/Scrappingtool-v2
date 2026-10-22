@@ -32,7 +32,15 @@ const REGIO_STEDEN = {
   'Noord':['groningen','leeuwarden','assen','drachten','heerenveen','emmen','hoogeveen'],
   'Oost':['zwolle','deventer','enschede','apeldoorn','arnhem','nijmegen','hengelo','ede','doetinchem'],
   'Zuid':['eindhoven','tilburg','breda','den bosch','s-hertogenbosch','hertogenbosch','maastricht','venlo','roermond','helmond','sittard','geleen','bergen op zoom'],
-  'Midden':['amersfoort','veenendaal','nieuwegein','houten','zeist','baarn','soest']
+  'Midden':['amersfoort','veenendaal','nieuwegein','houten','zeist','baarn','soest'],
+};
+// TenderNed en Flextender geven alleen een provincie; die valt terug op deze indeling
+const REGIO_PROVINCIES = {
+  'Randstad':['noord-holland','zuid-holland'],
+  'Noord':['friesland','fryslân','drenthe'],
+  'Oost':['overijssel','gelderland'],
+  'Zuid':['noord-brabant','limburg','zeeland'],
+  'Midden':['flevoland'],
 };
 
 const CAT_COLORS = { 'SAP':'#199DD9','Oracle':'#E9167D','Security':'#83007D','Data & BI':'#11448D','Cloud & Infra':'#4ab8e6','Development':'#2f6fb5','Functioneel & Beheer':'#b0468f','Project & Agile':'#6b7f96','Overig IT':'#5f7488','Niet-IT':'#3a4a5c' };
@@ -120,6 +128,7 @@ function regioVan(plaats, org){
   const p=(plaats||'').toLowerCase();
   if(/remote|thuis|hybride/.test(p)) return 'Remote';
   for(const [regio, steden] of Object.entries(REGIO_STEDEN)){ if(steden.some(s=>p.includes(s))) return regio; }
+  for(const [regio, prov] of Object.entries(REGIO_PROVINCIES)){ if(prov.some(s=>p.includes(s))) return regio; }
   const o=(org||'').toLowerCase();
   for(const [regio, steden] of Object.entries(REGIO_STEDEN)){ if(steden.some(s=>o.includes(s))) return regio; }
   return 'Overig / onbekend';
