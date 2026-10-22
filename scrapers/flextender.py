@@ -105,21 +105,21 @@ def _uit_kaart(kaart):
 
 # ---------------------------------------------------------------- detail
 
+# het DBA-standaardblok; de slotzin staat soms met, soms zonder punt
+_DBA = re.compile(r"Uitvoeringsvoorwaarde\b.{0,2500}?uit de\s+inschrijving\s+blijkt\.?", re.S)
+
+
 def _omschrijving(tekst):
     """Omschrijving uit de PDF-tekst: kopregels (tot en met Eindtijd) en het
     DBA-standaardblok eruit, afgebroken regels weer aan elkaar."""
-    regels = [r.strip() for r in tekst.replace("\xa0", " ").splitlines()]
+    regels = tekst.replace("\xa0", " ").splitlines()
     kop = next((i for i, r in enumerate(regels[:20]) if r.startswith("Eindtijd")), -1)
-    regels = regels[kop + 1:]
-    if regels and regels[0].startswith("Uitvoeringsvoorwaarde"):
-        einde = next((i for i, r in enumerate(regels[:30]) if r.endswith("blijkt.")), None)
-        if einde is not None:
-            regels = regels[einde + 1:]
+    regels = _DBA.sub("", "\n".join(regels[kop + 1:]), count=1).splitlines()
     uit = []
     for r in regels:
+        r = re.sub(r"^\? ", "- ", r.strip())  # opsommingstekens komen als "?" uit de PDF
         if not r:
             continue
-        r = re.sub(r"^\? ", "- ", r)  # opsommingstekens komen als "?" uit de PDF
         if uit and len(uit[-1]) >= 80:  # PDF breekt rond 110 tekens af
             uit[-1] += " " + r
         else:
