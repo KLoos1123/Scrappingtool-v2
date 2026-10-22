@@ -1,7 +1,9 @@
 /* Easter egg: klik 10 keer snel achter elkaar op het Profource-logo en je speelt
    Flappy Mat. Los bestand, geen afhankelijkheden; koppelen met
    flappyMat.koppel(element). Tik, klik, spatie of pijl omhoog om te vliegen,
-   Esc of × om te sluiten. De beste score blijft per browser bewaard. */
+   Esc of × om te sluiten. Elk punt levert een credit op; met credits koop je
+   in de winkel onder het speelveld andere personages. Beste score, credits en
+   gekochte personages blijven per browser bewaard. */
 (function(){
   const KLIKKEN = 10, KLIK_PAUZE = 1500;   // 10 klikken, hooguit 1,5 s ertussen
   const B = 400, H = 600, GROND = 70;      // logische afmetingen van het speelveld
@@ -9,12 +11,31 @@
   const SNELHEID = 150, GAT = 165, BREEDTE = 66, AFSTAND = 230;
   const HOOFD_B = 44, HOOFD_H = 63;
 
-  let overlay, canvas, ctx, frame = null, vorige = 0, spel, beste = leesBeste();
-  const hoofd = new Image();
-  hoofd.src = 'mat.png';
+  // Personages in de winkel. Een personage verschijnt pas als zijn foto laadt,
+  // dus een nieuw gezicht toevoegen = foto in web/ zetten + regel hieronder.
+  const PERSONAGES = [
+    { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
+    { id:'p2',      naam:'Personage 2', src:'persoon2.png', prijs:25 },
+    { id:'p3',      naam:'Personage 3', src:'persoon3.png', prijs:60 },
+    { id:'p4',      naam:'Personage 4', src:'persoon4.png', prijs:120 },
+  ];
+  const BEELDEN = {};
+  PERSONAGES.forEach(p => {
+    const img = new Image();
+    img.onload = () => { p.beschikbaar = true; if(overlay && !overlay.hidden) renderWinkel(); };
+    img.src = p.src;
+    BEELDEN[p.id] = img;
+  });
 
-  function leesBeste(){ try{ return +localStorage.getItem('flappyMatBest') || 0; }catch(e){ return 0; } }
-  function bewaarBeste(v){ try{ localStorage.setItem('flappyMatBest', String(v)); }catch(e){} }
+  let overlay, canvas, ctx, frame = null, vorige = 0, spel;
+  let beste = lees('flappyMatBest', 0), credits = lees('flappyMatCredits', 0);
+  let gekocht = lees('flappyMatGekocht', ['mat']), keuze = lees('flappyMatKeuze', 'mat');
+
+  function lees(sleutel, standaard){
+    try{ const v = localStorage.getItem(sleutel); return v == null ? standaard : JSON.parse(v); }catch(e){ return standaard; }
+  }
+  function bewaar(sleutel, waarde){ try{ localStorage.setItem(sleutel, JSON.stringify(waarde)); }catch(e){} }
+  function huidigBeeld(){ const img = BEELDEN[keuze]; return img && img.naturalWidth ? img : BEELDEN.mat; }
 
   function nieuwSpel(){
     spel = { fase:'start', y:H/2 - 40, v:0, pijpen:[], score:0, afstand:0, wiebel:0 };
@@ -26,30 +47,59 @@
       .fm-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(20,26,38,.72); display:flex; align-items:center; justify-content:center;
         padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); }
       .fm-overlay[hidden]{ display:none; }
-      .fm-doos{ position:relative; }
-      .fm-doos canvas{ display:block; width:min(400px, 92vw, calc(92vh * 2 / 3)); height:auto; aspect-ratio:2/3; border-radius:14px;
+      .fm-doos{ position:relative; display:flex; flex-direction:column; gap:10px; align-items:center; }
+      .fm-doos canvas{ display:block; width:min(400px, 92vw, calc((92vh - 150px) * 2 / 3)); height:auto; aspect-ratio:2/3; border-radius:14px;
         box-shadow:0 20px 60px rgba(0,0,0,.45); touch-action:none; cursor:pointer; }
+      .fm-veld{ position:relative; }
       .fm-sluit{ position:absolute; top:10px; right:10px; width:34px; height:34px; border:0; border-radius:50%;
         background:rgba(255,255,255,.9); color:#262b33; font:600 20px/1 'IBM Plex Sans',system-ui,sans-serif; cursor:pointer; }
-      .fm-sluit:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }`;
+      .fm-sluit:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }
+      .fm-winkel{ width:min(400px, 92vw); background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
+        box-shadow:0 10px 30px rgba(0,0,0,.3); }
+      .fm-winkel-kop{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:8px; }
+      .fm-winkel-kop b{ font-size:14px; }
+      .fm-credits{ font-weight:600; color:#2f5fa8; font-variant-numeric:tabular-nums; }
+      .fm-rij{ display:grid; grid-template-columns:repeat(auto-fit, minmax(80px, 1fr)); gap:8px; }
+      .fm-p{ display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border:1px solid #d9dde3; border-radius:10px; font-size:12px; text-align:center; }
+      .fm-p.gekozen{ border-color:#2f5fa8; background:#eef2fa; }
+      .fm-p img{ width:34px; height:46px; object-fit:cover; border-radius:50%; }
+      .fm-p.op-slot img{ filter:grayscale(1) brightness(.85); }
+      .fm-p button{ font:inherit; font-size:11.5px; font-weight:600; border:1px solid #2f5fa8; color:#2f5fa8; background:#fff; border-radius:6px; padding:3px 8px; cursor:pointer; white-space:nowrap; }
+      .fm-p button.koop{ background:#2f5fa8; color:#fff; }
+      .fm-p button:disabled{ border-color:#d9dde3; color:#7a8089; background:#f6f7f9; cursor:default; }
+      .fm-p button:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }`;
     document.head.appendChild(stijl);
     overlay = document.createElement('div');
     overlay.className = 'fm-overlay';
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-label', 'Flappy Mat');
-    overlay.innerHTML = '<div class="fm-doos"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button></div>';
+    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button></div><div class="fm-winkel" aria-label="Winkel"></div></div>';
     document.body.appendChild(overlay);
     canvas = overlay.querySelector('canvas');
     ctx = canvas.getContext('2d');
     canvas.addEventListener('pointerdown', e => { e.preventDefault(); actie(); });
     overlay.querySelector('.fm-sluit').addEventListener('click', sluit);
     overlay.addEventListener('pointerdown', e => { if(e.target === overlay) sluit(); });
+    overlay.querySelector('.fm-winkel').addEventListener('click', e => {
+      const knop = e.target.closest('button[data-id]');
+      if(!knop) return;
+      const p = PERSONAGES.find(x => x.id === knop.dataset.id);
+      if(!gekocht.includes(p.id)){
+        if(credits < p.prijs) return;
+        credits -= p.prijs; gekocht.push(p.id);
+        bewaar('flappyMatCredits', credits); bewaar('flappyMatGekocht', gekocht);
+      }
+      keuze = p.id; bewaar('flappyMatKeuze', keuze);
+      renderWinkel();
+      canvas.focus && canvas.blur();
+    });
   }
 
   function open(){
     if(!overlay) bouwOverlay();
     nieuwSpel();
+    renderWinkel();
     overlay.hidden = false;
     document.addEventListener('keydown', toets, true);
     vorige = performance.now();
@@ -64,6 +114,7 @@
   }
   function toets(e){
     if(e.key === 'Escape'){ e.preventDefault(); sluit(); return; }
+    if(e.target.closest && e.target.closest('.fm-winkel')) return; // knoppen in de winkel gewoon laten werken
     if(e.key === ' ' || e.key === 'ArrowUp' || e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); actie(); }
   }
 
@@ -114,7 +165,9 @@
     spel.fase = 'over';
     spel.einde = performance.now();
     spel.v = Math.max(spel.v, 0);
-    if(spel.score > beste){ beste = spel.score; bewaarBeste(beste); spel.record = true; }
+    if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
+    credits += spel.score; bewaar('flappyMatCredits', credits);
+    renderWinkel();
   }
 
   function teken(){
@@ -144,6 +197,7 @@
     ctx.translate(B * 0.3, spel.y);
     ctx.rotate(hoek);
     ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+    const hoofd = huidigBeeld();
     if(hoofd.complete && hoofd.naturalWidth){
       ctx.beginPath(); ctx.ellipse(0, 0, HOOFD_B/2, HOOFD_H/2, 0, 0, Math.PI * 2); ctx.closePath();
       ctx.save(); ctx.clip(); ctx.shadowColor = 'transparent';
@@ -167,7 +221,7 @@
       paneel(B/2, 245, 290, 150);
       tekst('Game over', B/2, 222, 30, '#bf3b2c');
       tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 256, 17, '#262b33');
-      if(spel.record) tekst('Nieuw record!', B/2, 282, 15, '#2f8a4e');
+      tekst(spel.record ? `Nieuw record! +${spel.score} credits` : `+${spel.score} credits`, B/2, 282, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
       tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, 306, 13, '#7a8089');
     }
   }
@@ -190,6 +244,22 @@
     ctx.font = `600 ${grootte}px 'IBM Plex Sans', system-ui, sans-serif`;
     if(rand){ ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(38,43,51,.55)'; ctx.strokeText(t, x, y); }
     ctx.fillStyle = kleur; ctx.fillText(t, x, y);
+  }
+
+  function renderWinkel(){
+    const el = overlay && overlay.querySelector('.fm-winkel');
+    if(!el) return;
+    const zichtbaar = PERSONAGES.filter(p => p.beschikbaar || p.id === 'mat');
+    el.innerHTML = `<div class="fm-winkel-kop"><b>Personages</b><span>Credits: <span class="fm-credits">${credits}</span></span></div>
+      <div class="fm-rij">${zichtbaar.map(p => {
+        const heeft = gekocht.includes(p.id), gekozen = keuze === p.id;
+        let knop;
+        if(gekozen) knop = '<button disabled>Gekozen</button>';
+        else if(heeft) knop = `<button data-id="${p.id}">Kies</button>`;
+        else if(credits >= p.prijs) knop = `<button class="koop" data-id="${p.id}">Koop · ${p.prijs}</button>`;
+        else knop = `<button disabled title="Nog ${p.prijs - credits} credits nodig">${p.prijs} credits</button>`;
+        return `<div class="fm-p${gekozen ? ' gekozen' : ''}${heeft ? '' : ' op-slot'}"><img src="${p.src}" alt="">${p.naam}${knop}</div>`;
+      }).join('')}</div>`;
   }
 
   // 10 klikken binnen korte tijd op het logo opent het spel
