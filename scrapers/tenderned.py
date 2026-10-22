@@ -12,6 +12,13 @@ hun termijn alleen in de eForms-notitie; de JSON-detail heeft hem niet en de
 XML is niet openbaar (403), dus voor die paar rijen lezen we de PDF.
 Gegund, wijziging, beëindiging en informatieve vooraankondigingen hebben
 geen termijn.
+
+De lijst geeft ook `opdrachtBeschrijving` (de omschrijving). De plaats van
+uitvoering staat alleen als NUTS-code in de detail-JSON; ~1800 detailcalls per
+run is te traag, maar de lijst-API filtert op `nutsCodes` (hiërarchisch, NL35
+geeft ook NL350). We vragen dus per provincie de id's op (12 kleine queries)
+en zetten de provincienaam als locatie. Ruim de helft heeft alleen code "NL"
+(heel Nederland); die houden locatie None.
 """
 
 import io
@@ -44,6 +51,13 @@ PDF_WERKERS = 4
 # met die code): oproep via vooraankondiging, marktconsultatie, lichte regeling
 PDF_CODES = {"EF10", "EF11", "EF12", "EF13", "EF14", "EFE1",
              "EF16", "EF17", "EF18", "EF19", "EF20", "EF21", "EF22", "EF23", "EF24"}
+# NUTS-2 (indeling 2024: Utrecht en Zuid-Holland zijn NL35/NL36, niet NL31/NL33)
+PROVINCIES = {
+    "NL11": "Groningen", "NL12": "Friesland", "NL13": "Drenthe",
+    "NL21": "Overijssel", "NL22": "Gelderland", "NL23": "Flevoland",
+    "NL32": "Noord-Holland", "NL34": "Zeeland", "NL35": "Utrecht",
+    "NL36": "Zuid-Holland", "NL41": "Noord-Brabant", "NL42": "Limburg",
+}
 _TERMIJN = re.compile(
     r"(?:Uiterste datum voor (?:de )?ontvangst[^:]{0,80}|Termijn (?:voor )?(?:de )?ontvangst[^:]{0,60}):"
     r"\s*(\d{2})/(\d{2})/(\d{4})\s+(\d{2}):(\d{2})\s*([+-]\d{2}):(\d{2})")
@@ -51,6 +65,12 @@ _TERMIJN = re.compile(
 
 def _oms(v):
     return (v or {}).get("omschrijving")
+
+
+def _beschrijving(tekst):
+    """opdrachtBeschrijving, maar None voor lege of nietszeggende waarden ("-")."""
+    tekst = (tekst or "").strip()
+    return tekst if re.search(r"[^\W\d_]{3}", tekst) else None
 
 
 def _uit_publicatie(p):
@@ -64,6 +84,7 @@ def _uit_publicatie(p):
         "deadline": p.get("sluitingsDatum") or p.get("sluitingsDatumMarktconsultatie"),
         "publicatiedatum": p.get("publicatieDatum"),
         "locatie": None,
+        "omschrijving": _beschrijving(p.get("opdrachtBeschrijving")),
         "type_opdracht": _oms(p.get("typeOpdracht")),
         "procedure": _oms(p.get("procedure")),
         "type_publicatie": _oms(p.get("typePublicatie")),
@@ -100,6 +121,41 @@ def _vul_termijnen(sessie, rijen, codes):
             rij["deadline"] = t
             gevonden += 1
     print(f"  termijn uit PDF: {gevonden} van {len(open_)}")
+
+
+def _ids_per_provincie(sessie, headers, cutoff, code):
+    """Publicatie-id's in het venster met (een deel van) deze NUTS-regio."""
+    ids, pagina = set(), 0
+    while pagina < MAX_PAGINA:
+        r = sessie.get(
+            API,
+            params={"page": pagina, "size": BLOK, "publicatieDatumVanaf": cutoff, "nutsCodes": code},
+            headers=headers,
+            timeout=45,
+        )
+        r.raise_for_status()
+        data = r.json()
+        content = data.get("content") or []
+        ids |= {str(p["publicatieId"]) for p in content if p.get("publicatieId")}
+        if data.get("last") or not content:
+            break
+        pagina += 1
+    return ids
+
+
+def _vul_locaties(sessie, headers, cutoff, rijen):
+    """Zet de provincie(s) van uitvoering als locatie; fouten negeren we."""
+    def per_code(code):
+        try:
+            return _ids_per_provincie(sessie, headers, cutoff, code)
+        except Exception:
+            return set()
+    with ThreadPoolExecutor(PDF_WERKERS) as pool:
+        ids = dict(zip(PROVINCIES, pool.map(per_code, PROVINCIES)))
+    for rij in rijen:
+        namen = [naam for code, naam in PROVINCIES.items() if rij["tender_id"] in ids[code]]
+        rij["locatie"] = ", ".join(namen) or None
+    print(f"  locatie (provincie): {sum(1 for r in rijen if r['locatie'])} van {len(rijen)}")
 
 
 def haal_op():
@@ -147,5 +203,7 @@ def haal_op():
         pagina += 1
 
     _vul_termijnen(sessie, rijen, codes)
-    print(f"  {len(rijen)} publicaties opgehaald")
+    _vul_locaties(sessie, headers, cutoff, rijen)
+    oms = sum(1 for r in rijen if r["omschrijving"])
+    print(f"  {len(rijen)} publicaties opgehaald, {oms} met omschrijving")
     return rijen

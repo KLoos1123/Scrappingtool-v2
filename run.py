@@ -25,7 +25,9 @@ import supabase_sync
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
                       stedin, tenderned, inhuurdesk_regio, gelderland,
                       flexwestbrabant, magnit, stedin_vms, opdrachtoverheid,
-                      harveynash, portofrotterdam, staffingms, heart)
+                      harveynash, portofrotterdam, staffingms, heart,
+                      mipublic, freep, quest4, publiekepartner,
+                      inhuurdesk_alliander, ns_vms, alliander_vms)
 # import sharepoint_writer
 
 
@@ -48,6 +50,13 @@ SCRAPERS = [
     portofrotterdam,
     staffingms,
     heart,
+    mipublic,
+    freep,
+    quest4,
+    publiekepartner,
+    inhuurdesk_alliander,
+    ns_vms,
+    alliander_vms,
 ]
  
 CSV_ALLES = "tenders.csv"
@@ -164,9 +173,10 @@ def main():
     print(f"\n=== tarieven ===")
     try:
         gevonden = tarieven.verzamel(alles)
-        print(f"  {len(gevonden)} tarieven gevonden")
+        print(f"  {sum(1 for r in gevonden if r['tarief'])} tarieven en "
+              f"{sum(1 for r in gevonden if r['uren'])} keer uren gevonden")
         if supabase_sync._configured():
-            print(f"  {supabase_sync.sync_tarieven(gevonden)} tarieven gesynct")
+            print(f"  {supabase_sync.sync_tarieven(gevonden)} rijen gesynct")
     except Exception as e:
         print(f"  tarieven MISLUKT: {e}")
  

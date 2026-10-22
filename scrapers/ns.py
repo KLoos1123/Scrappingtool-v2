@@ -9,9 +9,12 @@ De sluitingsdatum staat niet in de lijst, wel op de detailpagina: als
 validThrough in de JSON-LD (JobPosting) en zichtbaar als "Reageer voor:
 15-11-2026 00:00". Die pagina's halen we parallel op met requests.
 Vacatures zonder sluitingsdatum (doorlopend) hebben validThrough null.
+Uit dezelfde JSON-LD nemen we ook de description (HTML) mee als platte
+omschrijving; geen extra verzoeken.
 """
 
 import re
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -58,6 +61,7 @@ def _uit_kaart(a):
         "locatie": _metadata(a, "location"),
         "uren_per_week": _metadata(a, "hours"),
         "vakgebied": _metadata(a, "discipline"),
+        "omschrijving": None,
         "url": href if href.startswith("http") else BASE + href,
     }
 
@@ -71,12 +75,27 @@ def _deadline(html):
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
 
 
+def _omschrijving(html):
+    """Platte tekst van de JobPosting-description in de JSON-LD, of None."""
+    try:
+        soup = BeautifulSoup(html, "lxml")
+        for sc in soup.find_all("script", type="application/ld+json"):
+            data = json.loads(sc.string or "", strict=False)
+            if isinstance(data, dict) and data.get("description"):
+                tekst = BeautifulSoup(data["description"], "lxml").get_text(" ", strip=True)
+                return tekst or None
+    except Exception:
+        pass
+    return None
+
+
 def _vul_deadline(sessie, rij):
-    """Haalt de detailpagina op en zet de deadline (fouten negeren we)."""
+    """Haalt de detailpagina op en zet deadline en omschrijving (fouten negeren we)."""
     try:
         r = sessie.get(rij["url"], timeout=15)
         if r.ok:
             rij["deadline"] = _deadline(r.text)
+            rij["omschrijving"] = _omschrijving(r.text)
     except requests.RequestException:
         pass
 
@@ -123,5 +142,6 @@ def haal_op():
         list(pool.map(lambda r: _vul_deadline(sessie, r), rijen))
 
     met = sum(1 for r in rijen if r["deadline"])
-    print(f"  {len(rijen)} vacatures gevonden, {met} met sluitingsdatum")
+    oms = sum(1 for r in rijen if r["omschrijving"])
+    print(f"  {len(rijen)} vacatures gevonden, {met} met sluitingsdatum, {oms} met omschrijving")
     return rijen

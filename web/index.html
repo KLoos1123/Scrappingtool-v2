@@ -860,12 +860,12 @@ function werkNotitieIcoonBij(bron, tid){
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door','Geschikt voor','Tarief (notitie)','Opmerking','Ook op'];
+  const header=['Score','Datum','Deadline','Tarief','Uren','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door','Geschikt voor','Tarief (notitie)','Opmerking','Ook op'];
   const schoon=v=>String(v||'').replace(/[;\n\r]/g,',');
   const lines=[header.join(';')];
   rows.forEach(r=>{
     const n=NOTITIES.get(`${r.bron}|${r.tender_id}`)||{}, t=TARIEVEN.get(`${r.bron}|${r.tender_id}`);
-    lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', schoon(n.tarief||(t&&t.tarief)), r.organisatie,
+    lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', schoon(n.tarief||(t&&t.tarief)), schoon(t&&t.uren), r.organisatie,
       String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
       String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
       r.status||'', r.status_gewijzigd_door||'', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking), schoon(state.samenvoegen && r.ookOp ? r.ookOp.map(o=>o.bron).join(', ') : '')].join(';'));

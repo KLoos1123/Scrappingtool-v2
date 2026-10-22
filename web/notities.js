@@ -9,7 +9,7 @@
      volgNotities(naWijziging)                // live updates van collega's
 */
 let NOTITIES = new Map();   // "bron|tender_id" -> {geschikt_voor, tarief, opmerking, gewijzigd_door, gewijzigd_op}
-let TARIEVEN = new Map();   // "bron|tender_id" -> {tarief, tarief_min, tarief_max, herkomst}
+let TARIEVEN = new Map();   // "bron|tender_id" -> {tarief, tarief_min, tarief_max, herkomst, uren}
 let NOTITIES_ACTIEF = true; // false zolang de tabel 'notities' nog niet bestaat
 
 function notitieSleutel(bron, tid){ return `${bron}|${tid}`; }
@@ -32,7 +32,7 @@ async function laadNotitiesEnTarieven(){
   const [notities, tarieven]=await Promise.all([
     haalTabel('notities','bron, tender_id, geschikt_voor, tarief, opmerking, gewijzigd_door, gewijzigd_op')
       .catch(err=>{ console.warn('notities niet beschikbaar:', err.message||err); NOTITIES_ACTIEF=false; return []; }),
-    haalTabel('tarieven','bron, tender_id, tarief, tarief_min, tarief_max, herkomst')
+    haalTabel('tarieven','*')   // * zodat het ook werkt vóór en na supabase/uren.sql
       .catch(err=>{ console.warn('tarieven niet beschikbaar:', err.message||err); return []; }),
   ]);
   NOTITIES=new Map(notities.map(n=>[notitieSleutel(n.bron, n.tender_id), n]));
@@ -54,15 +54,15 @@ function notitieIcoon(bron, tid){
 // Een tarief uit de notitie (zelf ingevuld) gaat voor het gescrapete tarief.
 function tariefInhoud(bron, tid){
   const n=NOTITIES.get(notitieSleutel(bron, tid));
-  if(n && n.tarief){
-    const t=TARIEVEN.get(notitieSleutel(bron, tid));
-    const tip='Tarief uit de notitie'+(n.gewijzigd_door?` van ${n.gewijzigd_door}`:'')+(t?` (gescrapet: ${t.tarief})`:'');
-    return `<span class="tarief tarief-notitie" title="${notitieEsc(tip)}">${notitieEsc(n.tarief)}</span>`;
-  }
   const t=TARIEVEN.get(notitieSleutel(bron, tid));
-  if(!t) return '<span class="muted">—</span>';
+  const uren=t && t.uren ? `<span class="uren" title="Uren per week">${notitieEsc(t.uren)}</span>` : '';
+  if(n && n.tarief){
+    const tip='Tarief uit de notitie'+(n.gewijzigd_door?` van ${n.gewijzigd_door}`:'')+(t && t.tarief?` (gescrapet: ${t.tarief})`:'');
+    return `<span class="tarief tarief-notitie" title="${notitieEsc(tip)}">${notitieEsc(n.tarief)}</span>${uren}`;
+  }
+  if(!t || (!t.tarief && !t.uren)) return '<span class="muted">—</span>';
   const titel={ai:'uit de AI-verrijking van de omschrijving', bron:'zoals de bron het opgeeft'}[t.herkomst] || 'uit de omschrijving';
-  return `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>`;
+  return (t.tarief ? `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>` : '') + uren;
 }
 function tariefCel(bron, tid){
   return `<span class="tariefcel" data-sleutel="${notitieEsc(notitieSleutel(bron, tid))}">${tariefInhoud(bron, tid)}</span>`;
@@ -185,6 +185,7 @@ function volgNotities(naWijziging){
   .notitie-icoon{ margin-left:6px; font-size:11px; cursor:help; }
   .tarief{ white-space:nowrap; color:var(--sub); font-size:12px; }
   .tarief-notitie{ color:var(--text); font-weight:600; }
+  .uren{ display:block; white-space:nowrap; font-size:11px; color:var(--dim); margin-top:1px; }
   @media (max-width:700px){ .notitie-velden{ grid-template-columns:1fr; } }`;
   const st=document.createElement('style');
   st.textContent=css;
