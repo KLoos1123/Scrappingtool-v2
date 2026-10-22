@@ -201,3 +201,64 @@ function verrijkRij(r, ai){
   v.isWeek = d!==null && d<7;
   return v;
 }
+
+/* ===================== dubbele opdrachten ===================== */
+// Dezelfde opdracht staat vaak bij meerdere brokers/portalen (bv. een gemeente
+// via Mercell én TenderNed). groepeerDubbel voegt die samen tot één regel; de
+// andere vindplaatsen komen in r.ookOp. Regels: zelfde titel (zonder nummers,
+// codes en woorden als zzp/interim), zelfde organisatie of een bron die de
+// organisatie verbergt, en deadlines hooguit een week uit elkaar.
+const DUBBEL_RUIS = /\b(tk\d?|m\/v(\/x)?|v\/m|h\/v|zzp|zzp'er|freelance|freelancer|interim|inhuur|opdracht|vacature|gezocht)\b/g;
+function titelSleutel(t){
+  return String(t || '').toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/\b[a-z]{0,4}\d[\w./-]*\b/g, ' ')
+    .replace(DUBBEL_RUIS, ' ')
+    .replace(/[^a-zà-ÿ ]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+function orgSleutel(r){
+  const o = String(r.organisatie || '').toLowerCase().trim();
+  if(!o || o === '-' || r.isBureau || /^client team|onbekend|unknown/.test(o)) return '';
+  return o.replace(/\b(gemeente|provincie|b\.?v\.?|n\.?v\.?)\b/g, ' ').replace(/[^a-z0-9à-ÿ]+/g, ' ').trim();
+}
+function deadlinesPassen(a, b){
+  return a._deadline == null || b._deadline == null || Math.abs(a._deadline - b._deadline) <= 7 * 86400000;
+}
+// Hoe geschikt een regel is om de samengevoegde opdracht te tonen.
+function voorkeur(r){
+  return (r.status ? 1000 : 0) + (orgSleutel(r) ? 100 : 0) + (r._deadline != null ? 50 : 0) + (r.url ? 5 : 0) + r.score / 100;
+}
+function groepeerDubbel(rows){
+  const perTitel = new Map();
+  // eerst regels met een bekende organisatie, dan pas de rest aan een groep koppelen
+  const volgorde = rows.map((r, i) => [r, i]).sort((a, b) => (orgSleutel(a[0]) ? 0 : 1) - (orgSleutel(b[0]) ? 0 : 1));
+  volgorde.forEach(([r, i]) => {
+    const t = titelSleutel(r.titel);
+    if(t.length < 8){ perTitel.set('#' + i, [[r]]); return; }   // te kort om op te vertrouwen
+    if(!perTitel.has(t)) perTitel.set(t, []);
+    const groepen = perTitel.get(t), o = orgSleutel(r);
+    let doel = null;
+    if(o){
+      doel = groepen.find(g => g.some(x => orgSleutel(x) === o) && g.every(x => deadlinesPassen(x, r)))
+        || null;
+    } else {
+      // zonder organisatie alleen bij precies één passende groep mét bekende organisatie;
+      // twee onbekenden met een algemene titel ("Java ontwikkelaar") zijn vaak verschillende klanten
+      const passend = groepen.filter(g => g.some(x => orgSleutel(x)) && g.every(x => deadlinesPassen(x, r)));
+      if(passend.length === 1) doel = passend[0];
+    }
+    if(doel) doel.push(r); else groepen.push([r]);
+  });
+  const hoofd = new Map();   // regel -> samengevoegde groep, in de oorspronkelijke volgorde
+  for(const groepen of perTitel.values()){
+    for(const g of groepen){
+      const beste = g.reduce((a, b) => voorkeur(b) > voorkeur(a) ? b : a);
+      beste.ookOp = g.filter(x => x !== beste);
+      g.forEach(x => hoofd.set(x, beste));
+    }
+  }
+  const gezien = new Set(), uit = [];
+  rows.forEach(r => { const b = hoofd.get(r); if(!gezien.has(b)){ gezien.add(b); uit.push(b); } });
+  return uit;
+}
