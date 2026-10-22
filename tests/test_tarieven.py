@@ -1,6 +1,6 @@
 import unittest
 
-from tarieven import haal_tarief, uit_ai
+from tarieven import haal_tarief, uit_ai, uit_bron
 
 
 class HaalTarief(unittest.TestCase):
@@ -38,6 +38,13 @@ class HaalTarief(unittest.TestCase):
         self.assertEqual(uit_ai({"tarief_min": None, "tarief_max": 100})["tarief"], "€ 100 /uur")
         self.assertIsNone(uit_ai({"tarief_min": None, "tarief_max": None}))
         self.assertIsNone(uit_ai({"tarief_min": 5000, "tarief_max": 6000}))  # maandsalaris
+
+
+    def test_uit_bron(self):
+        # freelance.nl levert rateFrom/rateTo als tarief_min/tarief_max
+        self.assertEqual(uit_bron({"tarief_min": 80, "tarief_max": 100})["tarief"], "€ 80 – 100 /uur")
+        self.assertIsNone(uit_bron({"tarief_min": None, "tarief_max": None}))
+        self.assertIsNone(uit_bron({}))
 
 
 if __name__ == "__main__":

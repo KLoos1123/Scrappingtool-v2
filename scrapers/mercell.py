@@ -21,6 +21,9 @@ API = "https://api.s2c.mercell.com/api/v1"
 ORGANIZATION_ID = "2666"  # Profource
 FOLDER_GUID = "a14e5f3c-bf4f-4dd6-9f7a-995eddd63ada"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+# De Azure-gateway van s2c.mercell.com weigert (403) de standaard
+# "HeadlessChrome"-user-agent van Playwright; met een gewone werkt de login.
+BROWSER_UA = UA + " (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 # ---------------------------------------------------------------- login
@@ -35,7 +38,7 @@ def _token():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_context().new_page()
+        page = browser.new_context(user_agent=BROWSER_UA, locale="nl-NL").new_page()
 
         def onderschep(request):
             nonlocal token

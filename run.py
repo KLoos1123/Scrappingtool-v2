@@ -163,7 +163,7 @@ def main():
     # pas na supabase/notities_tarieven.sql.
     print(f"\n=== tarieven ===")
     try:
-        gevonden = tarieven.verzamel()
+        gevonden = tarieven.verzamel(alles)
         print(f"  {len(gevonden)} tarieven gevonden")
         if supabase_sync._configured():
             print(f"  {supabase_sync.sync_tarieven(gevonden)} tarieven gesynct")

@@ -60,7 +60,8 @@ def _sessie_cookies():
         _accept_cookies(page)
         page.fill("#username", email)
         page.fill("#password", wachtwoord)
-        page.click("button[type='submit']")
+        # Auth0 heeft een onzichtbare lok-submitknop vóór de echte; klik de primaire
+        page.click("button[data-action-button-primary='true']")
 
         try:
             page.wait_for_url(f"{APP}/**", timeout=30000)

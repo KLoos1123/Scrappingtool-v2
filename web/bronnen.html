@@ -575,7 +575,7 @@ function exportCsv(bron){
   const lines=[header.join(';')];
   rows.forEach(r=>{
     const n=NOTITIES.get(`${r.bron}|${r.tender_id}`)||{}, t=TARIEVEN.get(`${r.bron}|${r.tender_id}`);
-    lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(t&&t.tarief), schoon(r.organisatie),
+    lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(n.tarief||(t&&t.tarief)), schoon(r.organisatie),
       schoon(r.ai && r.ai.eindklant), schoon(r.titel), r.categorie, r.soort, r.regio, r.bron, schoon(r.status),
       isOnline(r)?'ja':'nee', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking), schoon(r.url)].join(';'));
   });
