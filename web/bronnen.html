@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bronnen · Profource Marktmonitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
+    --panel:#1b2b3d; --panel2:#22344a; --border:#2a3a4d;
+    --blauw:#199DD9; --blauw-l:#4ab8e6; --indigo:#11448D; --magenta:#E9167D;
+    --groen:#3ccf8e; --oranje:#f0a23c;
+    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; font-family:'IBM Plex Sans',sans-serif; color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
+      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
+      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
+    background-attachment:fixed; padding:28px 32px 60px; }
+  a{ color:var(--blauw); }
+  a:hover{ color:var(--magenta); }
+  h1,h2{ font-family:'Archivo',sans-serif; }
+  @keyframes pulseGlow{ 0%{opacity:1;} 50%{opacity:.35;} 100%{opacity:1;} }
+
+  .topbar{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
+    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .topbar h1{ font-size:16px; margin:0; }
+  .topbar .subtitle{ font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.05em; text-transform:uppercase; }
+  .topmeta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .live{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin-right:10px; }
+  .live .dot{ width:8px; height:8px; border-radius:50%; background:var(--blauw-l); display:inline-block; animation:pulseGlow 2s infinite; }
+  .btn{ font-size:12px; padding:8px 16px; border-radius:8px; cursor:pointer; border:1px solid rgba(25,157,217,0.4);
+    background:rgba(25,157,217,0.10); color:var(--blauw); font-weight:600; text-decoration:none; font-family:inherit; }
+  .btn:hover{ background:rgba(25,157,217,0.18); color:var(--blauw); }
+
+  .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+  .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .card .label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+  .card .value{ font-family:'Archivo',sans-serif; font-size:28px; font-weight:700; line-height:1; }
+  .card .sub{ font-size:11px; color:var(--dim); margin-top:6px; }
+
+  .bronnen{ display:flex; flex-direction:column; gap:10px; }
+  .bron{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .bron.open{ border-color:rgba(25,157,217,0.45); }
+  .bron-kop{ display:grid; grid-template-columns:22px minmax(160px,1.4fr) 130px repeat(4,minmax(80px,1fr)) 170px;
+    align-items:center; gap:12px; padding:14px 18px; cursor:pointer; }
+  .bron-kop:hover{ background:rgba(25,157,217,0.06); }
+  .bron.open .bron-kop{ background:rgba(25,157,217,0.10); }
+  .kop-labels{ display:grid; grid-template-columns:22px minmax(160px,1.4fr) 130px repeat(4,minmax(80px,1fr)) 170px;
+    gap:12px; padding:0 18px 4px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .pijl{ color:var(--muted); transition:transform .15s; font-size:12px; }
+  .bron.open .pijl{ transform:rotate(90deg); color:var(--blauw); }
+  .naam{ font-family:'Archivo',sans-serif; font-weight:600; font-size:15px; }
+  .naam .soort{ display:block; font-family:'IBM Plex Sans',sans-serif; font-weight:400; font-size:11px; color:var(--dim); margin-top:2px; }
+  .getal{ font-family:'Archivo',sans-serif; font-weight:700; font-size:17px; }
+  .getal.nul{ color:var(--dim); font-weight:500; }
+  .wanneer{ font-size:12.5px; color:var(--sub); }
+  .wanneer .rel{ display:block; font-size:11px; color:var(--dim); margin-top:2px; }
+
+  .status{ display:inline-flex; align-items:center; gap:7px; padding:4px 11px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .status i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .st-live{ background:rgba(60,207,142,0.14); color:var(--groen); }
+  .st-live i{ background:var(--groen); animation:pulseGlow 2s infinite; }
+  .st-vertraagd{ background:rgba(240,162,60,0.14); color:var(--oranje); }
+  .st-vertraagd i{ background:var(--oranje); }
+  .st-storing{ background:rgba(233,22,125,0.16); color:var(--magenta); }
+  .st-storing i{ background:var(--magenta); }
+  .st-leeg{ background:rgba(255,255,255,0.06); color:var(--muted); }
+  .st-leeg i{ background:var(--dim); }
+
+  .bron-body{ display:none; border-top:1px solid var(--border); padding:16px 18px 18px; background:var(--bg2); }
+  .bron.open .bron-body{ display:block; }
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .toolbar input[type=search]{ flex:1; min-width:220px; font-family:inherit; font-size:13px; padding:8px 12px; border-radius:8px;
+    border:1px solid var(--border); background:var(--panel); color:var(--text); }
+  .toolbar input[type=search]:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
+  .toolbar label{ font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .toolbar .telling{ font-size:12px; color:var(--muted); margin-left:auto; }
+  .orgs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .pill{ font-size:11px; padding:4px 11px; border-radius:999px; cursor:pointer; background:rgba(255,255,255,0.04);
+    color:var(--sub); border:1px solid rgba(255,255,255,0.08); font-family:inherit; }
+  .pill b{ color:var(--blauw); margin-left:4px; }
+  .pill.active{ background:rgba(25,157,217,0.16); color:var(--blauw); border-color:rgba(25,157,217,0.4); }
+
+  .table-wrap{ max-height:560px; overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--panel); }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; padding:9px 12px; color:var(--muted); font-weight:600; white-space:nowrap; position:sticky; top:0;
+    background:var(--panel2); border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.04em; z-index:1; }
+  td{ padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; color:var(--sub); }
+  td.titel{ color:var(--text); max-width:420px; }
+  td.nowrap{ white-space:nowrap; }
+  a.title-link{ color:var(--blauw); text-decoration:none; }
+  a.title-link:hover{ color:var(--magenta); }
+  .num{ font-size:10px; color:var(--dim); margin-top:2px; }
+  .nieuw{ font-size:9px; background:var(--indigo); color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; }
+  .weg{ font-size:9px; background:rgba(255,255,255,0.07); color:var(--muted); padding:2px 7px; border-radius:999px; margin-left:6px; }
+  .meer{ display:block; margin:12px auto 0; }
+  .loading, .error{ padding:30px; text-align:center; color:var(--muted); }
+  .error{ color:#f0b6cf; background:var(--panel); border:1px solid rgba(233,22,125,0.35); border-radius:14px; text-align:left; }
+  .muted{ color:var(--dim); font-size:12px; }
+  .uitleg{ font-size:11px; color:var(--dim); margin-top:16px; line-height:1.6; }
+
+  @media (max-width:1000px){
+    body{ padding:20px 16px 40px; }
+    .cards{ grid-template-columns:repeat(2,1fr); }
+    .kop-labels{ display:none; }
+    .bron-kop{ grid-template-columns:22px 1fr auto; }
+    .bron-kop .optioneel{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Bronnen · Profource Marktmonitor</h1>
+    <div class="subtitle">overzicht per website / broker</div>
+  </div>
+  <div class="topmeta">
+    <div class="live"><span class="dot"></span><span id="liveText">Live · data laden…</span></div>
+    <a href="index.html" class="btn">Naar dashboard</a>
+    <a id="adminLink" href="admin.html" class="btn" style="display:none">Beheer</a>
+    <button class="btn" id="refreshBtn">Vernieuwen</button>
+    <button class="btn" onclick="logout()">Uitloggen</button>
+  </div>
+</div>
+
+<div id="loading" class="loading">Bronnen worden geladen…</div>
+
+<div id="app" style="display:none">
+  <div class="cards">
+    <div class="card"><div class="label">Laatste scraper-run</div><div class="value" id="kLaatst">—</div><div class="sub" id="kLaatstSub"></div></div>
+    <div class="card"><div class="label">Bronnen live</div><div class="value" id="kLive">—</div><div class="sub" id="kLiveSub"></div></div>
+    <div class="card"><div class="label">Aanvragen totaal</div><div class="value" id="kTotaal">—</div><div class="sub" id="kTotaalSub"></div></div>
+    <div class="card"><div class="label">Nieuw laatste 24 uur</div><div class="value" id="kNieuw">—</div><div class="sub" id="kNieuwSub"></div></div>
+  </div>
+
+  <div class="kop-labels">
+    <span></span><span>Website / broker</span><span>Status</span>
+    <span>Online nu</span><span>Nieuw 24u</span><span>Nieuw 7d</span><span>Totaal</span>
+    <span>Laatst bijgewerkt</span>
+  </div>
+  <div class="bronnen" id="bronnen"></div>
+
+  <div class="uitleg">
+    <b>Live</b>: de bron is meegenomen in de laatste scraper-run.
+    <b>Vertraagd</b>: de bron ontbrak in de laatste run, maar leverde de afgelopen 36 uur nog wel data.
+    <b>Storing</b>: al meer dan 36 uur geen data van deze bron (meestal een login- of scraperprobleem).
+    <b>Online nu</b> = aanvragen die in de laatste run nog op de website stonden.
+    De scrapers draaien rond 08:00 en 14:00 (NL-tijd); deze pagina ververst zichzelf elke 5 minuten.
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+// Alle bronnen die run.py scrapet (BRON in scrapers/*.py), zodat ook een bron
+// zonder enige rij in Supabase zichtbaar blijft. Nieuwe bronnen verschijnen
+// vanzelf zodra ze data hebben.
+const BEKENDE_BRONNEN = ['mercell','flextender','hero','striive','freelance.nl','ns','stedin',
+  'tenderned','inhuurdesk-regio','gelderland','flexwestbrabant','magnit','stedin-vms',
+  'opdrachtoverheid','harveynash','portofrotterdam','staffingms','heart'];
+const VACATURE_BRONNEN = new Set(['ns','stedin']);
+
+const UUR = 3600000;
+const RUN_MARGE = 2*UUR;       // rijen binnen 2 uur van de nieuwste run horen bij die run
+const VERTRAAGD_GRENS = 36*UUR;
+const PAGINA = 1000;
+const TOON_PER_KEER = 100;
+
+const state = {
+  bronnen: [],            // overzicht per bron
+  laatsteRun: null,       // ms
+  open: new Set(),        // opengeklapte bronnen
+  detail: new Map(),      // bron -> {rijen, zoek, alleenOnline, org, toon}
+};
+
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function ms(iso){ if(!iso) return null; const t=new Date(iso).getTime(); return isNaN(t)?null:t; }
+function fmtDateTime(t){
+  if(t==null) return '—';
+  return new Date(t).toLocaleString('nl-NL',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function fmtDate(iso){
+  if(!iso) return '—';
+  const t=ms(iso);
+  if(t==null) return esc(iso);
+  return new Date(t).toLocaleDateString('nl-NL',{day:'2-digit',month:'short',year:'numeric'});
+}
+function relatief(t){
+  if(t==null) return '';
+  const min=Math.round((Date.now()-t)/60000);
+  if(min<1) return 'zojuist';
+  if(min<60) return `${min} min geleden`;
+  const u=Math.round(min/60);
+  if(u<48) return `${u} uur geleden`;
+  return `${Math.round(u/24)} dagen geleden`;
+}
+function nl(n){ return Number(n).toLocaleString('nl-NL'); }
+
+// PostgREST geeft max 1000 rijen per call: eerst het totaal, dan parallel de rest.
+async function haalAlles(select, filter, orderVelden){
+  const pagina=(from, metTelling)=>{
+    let q=supabase.from('tenders').select(select, metTelling?{count:'exact'}:undefined);
+    if(filter) q=filter(q);
+    orderVelden.forEach(([veld,asc])=>{ q=q.order(veld,{ascending:asc, nullsFirst:false}); });
+    return q.range(from, from+PAGINA-1);
+  };
+  const rijenVan=res=>{ if(res.error) throw new Error(res.error.message); return res.data||[]; };
+  const eerste=await pagina(0, true);
+  let out=rijenVan(eerste);
+  if(out.length===PAGINA && eerste.count!=null){
+    const verzoeken=[];
+    for(let from=PAGINA; from<eerste.count; from+=PAGINA) verzoeken.push(pagina(from));
+    for(const deel of (await Promise.all(verzoeken)).map(rijenVan)) out=out.concat(deel);
+  }
+  return out;
+}
+
+/* ===================== overzicht per bron ===================== */
+async function laadOverzicht(){
+  const rijen=await haalAlles('bron, eerst_gezien, laatst_gezien', null, [['bron',true],['tender_id',true]]);
+  let laatsteRun=null;
+  rijen.forEach(r=>{ const t=ms(r.laatst_gezien); if(t!=null && (laatsteRun==null || t>laatsteRun)) laatsteRun=t; });
+
+  const per=new Map(BEKENDE_BRONNEN.map(b=>[b,{bron:b,totaal:0,online:0,nieuw24:0,nieuw7:0,laatst:null,eerste:null}]));
+  const nu=Date.now();
+  rijen.forEach(r=>{
+    if(!r.bron) return;
+    if(!per.has(r.bron)) per.set(r.bron,{bron:r.bron,totaal:0,online:0,nieuw24:0,nieuw7:0,laatst:null,eerste:null});
+    const b=per.get(r.bron);
+    const lg=ms(r.laatst_gezien), eg=ms(r.eerst_gezien);
+    b.totaal++;
+    if(lg!=null && (b.laatst==null || lg>b.laatst)) b.laatst=lg;
+    if(lg!=null && laatsteRun!=null && lg>=laatsteRun-RUN_MARGE) b.online++;
+    if(eg!=null){
+      if(b.eerste==null || eg<b.eerste) b.eerste=eg;
+      if(nu-eg<24*UUR) b.nieuw24++;
+      if(nu-eg<7*24*UUR) b.nieuw7++;
+    }
+  });
+
+  const bronnen=[...per.values()].map(b=>({...b, status:statusVan(b, laatsteRun)}));
+  const volgorde={live:0, vertraagd:1, storing:2, leeg:3};
+  bronnen.sort((a,b)=>volgorde[a.status]-volgorde[b.status] || b.online-a.online || b.totaal-a.totaal);
+  state.bronnen=bronnen;
+  state.laatsteRun=laatsteRun;
+}
+
+function statusVan(b, laatsteRun){
+  if(!b.totaal || b.laatst==null) return 'leeg';
+  if(laatsteRun!=null && b.laatst>=laatsteRun-RUN_MARGE) return 'live';
+  if(Date.now()-b.laatst<=VERTRAAGD_GRENS) return 'vertraagd';
+  return 'storing';
+}
+const STATUS_LABEL={live:'Live', vertraagd:'Vertraagd', storing:'Storing', leeg:'Geen data'};
+function statusBadge(s){ return `<span class="status st-${s}"><i></i>${STATUS_LABEL[s]}</span>`; }
+function getal(n){ return `<span class="getal${n?'':' nul'}">${nl(n)}</span>`; }
+
+function renderKpis(){
+  const b=state.bronnen;
+  const live=b.filter(x=>x.status==='live').length;
+  const probleem=b.filter(x=>x.status==='vertraagd'||x.status==='storing').length;
+  const totaal=b.reduce((s,x)=>s+x.totaal,0);
+  const online=b.reduce((s,x)=>s+x.online,0);
+  const nieuw24=b.reduce((s,x)=>s+x.nieuw24,0);
+  const nieuw7=b.reduce((s,x)=>s+x.nieuw7,0);
+  document.getElementById('kLaatst').textContent=state.laatsteRun?new Date(state.laatsteRun).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'—';
+  document.getElementById('kLaatstSub').textContent=state.laatsteRun?`${fmtDateTime(state.laatsteRun)} · ${relatief(state.laatsteRun)}`:'nog geen run';
+  document.getElementById('kLive').textContent=`${live} / ${b.length}`;
+  document.getElementById('kLiveSub').textContent=probleem?`${probleem} bron${probleem>1?'nen':''} met een probleem`:'alle bronnen met data draaien';
+  document.getElementById('kTotaal').textContent=nl(totaal);
+  document.getElementById('kTotaalSub').textContent=`${nl(online)} nu online`;
+  document.getElementById('kNieuw').textContent=nl(nieuw24);
+  document.getElementById('kNieuwSub').textContent=`${nl(nieuw7)} in de laatste 7 dagen`;
+  document.getElementById('liveText').textContent=`Live · bijgewerkt ${new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+function renderBronnen(){
+  const el=document.getElementById('bronnen');
+  el.innerHTML=state.bronnen.map(b=>`
+    <div class="bron${state.open.has(b.bron)?' open':''}" data-bron="${esc(b.bron)}">
+      <div class="bron-kop">
+        <span class="pijl">▶</span>
+        <span class="naam">${esc(b.bron)}<span class="soort">${VACATURE_BRONNEN.has(b.bron)?'Vacatures':'Tenders / opdrachten'}</span></span>
+        <span>${statusBadge(b.status)}</span>
+        <span class="optioneel">${getal(b.online)}</span>
+        <span class="optioneel">${getal(b.nieuw24)}</span>
+        <span class="optioneel">${getal(b.nieuw7)}</span>
+        <span class="optioneel">${getal(b.totaal)}</span>
+        <span class="wanneer optioneel">${fmtDateTime(b.laatst)}<span class="rel">${relatief(b.laatst)}</span></span>
+      </div>
+      <div class="bron-body"></div>
+    </div>`).join('');
+  el.querySelectorAll('.bron').forEach(div=>{
+    div.querySelector('.bron-kop').onclick=()=>toggleBron(div.dataset.bron);
+    if(state.open.has(div.dataset.bron)) renderDetail(div.dataset.bron);
+  });
+}
+
+/* ===================== aanvragen per bron ===================== */
+async function toggleBron(bron){
+  if(state.open.has(bron)){ state.open.delete(bron); }
+  else { state.open.add(bron); }
+  const div=bronDiv(bron);
+  if(!div) return;
+  div.classList.toggle('open', state.open.has(bron));
+  if(state.open.has(bron)) renderDetail(bron);
+}
+function bronDiv(bron){
+  return [...document.querySelectorAll('#bronnen .bron')].find(d=>d.dataset.bron===bron);
+}
+
+async function laadDetail(bron){
+  const rijen=await haalAlles(
+    'bron, tender_id, nummer, titel, organisatie, locatie, deadline, publicatiedatum, eerst_gezien, laatst_gezien, url',
+    q=>q.eq('bron', bron),
+    [['eerst_gezien',false],['tender_id',true]]);
+  const vorig=state.detail.get(bron);
+  state.detail.set(bron, {
+    rijen,
+    zoek: vorig?.zoek||'',
+    // bij een bron die niet live is staat er niets 'online', dan direct alles tonen
+    alleenOnline: vorig?.alleenOnline ?? (state.bronnen.find(b=>b.bron===bron)?.status==='live'),
+    org: vorig?.org||'',
+    toon: TOON_PER_KEER,
+  });
+}
+
+async function renderDetail(bron){
+  const div=bronDiv(bron);
+  if(!div) return;
+  const body=div.querySelector('.bron-body');
+  if(!state.detail.has(bron)){
+    body.innerHTML='<div class="loading">Aanvragen laden…</div>';
+    try{ await laadDetail(bron); }
+    catch(err){ body.innerHTML=`<div class="error">Kon aanvragen niet laden: ${esc(err.message||err)}</div>`; return; }
+    if(!state.open.has(bron)) return;
+  }
+  const d=state.detail.get(bron);
+  body.innerHTML=`
+    <div class="toolbar">
+      <input type="search" class="zoek" placeholder="Zoek op titel, organisatie, locatie of nummer…" value="${esc(d.zoek)}">
+      <label><input type="checkbox" class="online" ${d.alleenOnline?'checked':''}> alleen nu online</label>
+      <span class="telling"></span>
+    </div>
+    <div class="orgs"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Locatie</th><th>Gepubliceerd</th><th>Deadline</th><th>Laatst gezien</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <button class="btn meer" style="display:none">Meer tonen</button>`;
+  const zoek=body.querySelector('.zoek');
+  let timer=null;
+  zoek.oninput=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ d.zoek=zoek.value; d.toon=TOON_PER_KEER; vulTabel(bron); },150); };
+  body.querySelector('.online').onchange=e=>{ d.alleenOnline=e.target.checked; d.toon=TOON_PER_KEER; vulTabel(bron); };
+  body.querySelector('.meer').onclick=()=>{ d.toon+=TOON_PER_KEER; vulTabel(bron); };
+  vulTabel(bron);
+}
+
+function gefilterd(d, metOrg){
+  const z=d.zoek.trim().toLowerCase();
+  return d.rijen.filter(r=>{
+    if(d.alleenOnline && !isOnline(r)) return false;
+    if(metOrg && d.org && (r.organisatie||'(onbekend)')!==d.org) return false;
+    if(z && ![r.titel,r.organisatie,r.locatie,r.nummer].some(v=>(v||'').toLowerCase().includes(z))) return false;
+    return true;
+  });
+}
+function isOnline(r){
+  const t=ms(r.laatst_gezien);
+  return t!=null && state.laatsteRun!=null && t>=state.laatsteRun-RUN_MARGE;
+}
+
+function vulTabel(bron){
+  const div=bronDiv(bron);
+  const d=state.detail.get(bron);
+  if(!div || !d) return;
+  const body=div.querySelector('.bron-body');
+
+  // organisaties binnen deze broker als snelfilter (top 12 van de huidige selectie)
+  const teller=new Map();
+  gefilterd(d, false).forEach(r=>{ const o=r.organisatie||'(onbekend)'; teller.set(o,(teller.get(o)||0)+1); });
+  const top=[...teller.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if(d.org && !teller.has(d.org)) d.org='';
+  const orgs=body.querySelector('.orgs');
+  orgs.innerHTML=top.length>1||d.org
+    ? `<button class="pill${d.org?'':' active'}" data-org="">Alle organisaties</button>`+
+      top.map(([o,n])=>`<button class="pill${d.org===o?' active':''}" data-org="${esc(o)}">${esc(o)}<b>${nl(n)}</b></button>`).join('')
+    : '';
+  orgs.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ d.org=p.dataset.org; d.toon=TOON_PER_KEER; vulTabel(bron); });
+
+  const rijen=gefilterd(d, true);
+  const nu=Date.now();
+  body.querySelector('tbody').innerHTML=rijen.slice(0,d.toon).map(r=>{
+    const eg=ms(r.eerst_gezien), lg=ms(r.laatst_gezien);
+    const nieuw=eg!=null && nu-eg<24*UUR;
+    const titel=esc(r.titel||'(zonder titel)');
+    return `<tr>
+      <td class="nowrap">${fmtDateTime(eg)}</td>
+      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${nieuw?'<span class="nieuw">NIEUW</span>':''}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td>${esc(r.organisatie||'—')}</td>
+      <td>${esc(r.locatie||'—')}</td>
+      <td class="nowrap">${fmtDate(r.publicatiedatum)}</td>
+      <td class="nowrap">${fmtDate(r.deadline)}</td>
+      <td class="nowrap">${fmtDateTime(lg)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
+  body.querySelector('.telling').textContent=`${nl(Math.min(d.toon,rijen.length))} van ${nl(rijen.length)} aanvragen`;
+  body.querySelector('.meer').style.display=rijen.length>d.toon?'block':'none';
+}
+
+/* ===================== verversen ===================== */
+async function ververs(){
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true;
+  document.getElementById('liveText').textContent='Live · verversen…';
+  try{
+    await laadOverzicht();
+    // opengeklapte bronnen opnieuw ophalen; filters blijven staan
+    await Promise.all([...state.open].map(b=>laadDetail(b).catch(()=>state.detail.delete(b))));
+    [...state.detail.keys()].forEach(b=>{ if(!state.open.has(b)) state.detail.delete(b); });
+    renderKpis();
+    renderBronnen();
+  }catch(err){
+    document.getElementById('liveText').textContent='Verversen mislukt';
+    console.error(err);
+  }finally{
+    btn.disabled=false;
+  }
+}
+
+(async ()=>{
+  const me=await requireUser();
+  if(!me) return; // requireUser heeft al doorgestuurd
+  if(me.role==='admin') document.getElementById('adminLink').style.display='';
+  try{
+    await laadOverzicht();
+  }catch(err){
+    document.getElementById('loading').outerHTML=`<div class="error">Kon de bronnen niet laden: ${esc(err.message||err)}</div>`;
+    return;
+  }
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  renderKpis();
+  renderBronnen();
+  document.getElementById('refreshBtn').onclick=ververs;
+  setInterval(ververs, 5*60000);
+})();
+</script>
+</body>
+</html>
