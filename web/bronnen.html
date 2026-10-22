@@ -5,625 +5,627 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bronnen · Profource Marktmonitor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+  /* Ontwerp: design_handoff_bronnen (Bronnen v3). Licht, zakelijk; opdrachten per bron
+     staan centraal, de scraperstatus is bewust secundair (grijze/amber regel per bron). */
   :root{
-    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
-    --panel:#1b2b3d; --panel2:#22344a; --border:#2a3a4d;
-    --blauw:#199DD9; --blauw-l:#4ab8e6; --indigo:#11448D; --magenta:#E9167D;
-    --groen:#3ccf8e; --oranje:#f0a23c;
-    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
-    color-scheme: dark;
+    --pagina:#f2f4f7; --vlak:#ffffff; --kop:#fcfcfd; --tekst:#262b33; --muted:#5f656e; --muted2:#7a8089;
+    --primair:#2f5fa8; --primair-donker:#244a86; --balk:#4a78c2; --balk-licht:#a9bde0; --balk-leeg:#eceef2;
+    --op:#2f8a4e; --neer:#bf3b2c; --waarschuw:#8a6a2a; --waarschuw-bg:#fbf3e3;
+    --rand:#d9dde3; --rand-veld:#c9ced6; --scheiding:#e8ebef; --kopregel:#f6f7f9;
+    --actief:#e9eef8; --actief-tekst:#2d56a0; --gekozen:#eef2fa; --hover:#f4f6fb;
+    /* namen die notities.js (gedeeld met het dashboard) verwacht */
+    --border:var(--rand-veld); --bg2:#ffffff; --text:var(--tekst); --sub:var(--muted); --dim:#8a9099;
+    --blauw:var(--primair); --blauw-l:var(--primair-donker);
+    color-scheme: light;
   }
   *{ box-sizing:border-box; }
-  body{ margin:0; min-height:100vh; font-family:'IBM Plex Sans',sans-serif; color:var(--text);
-    -webkit-font-smoothing:antialiased;
-    background:
-      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
-      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
-      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
-    background-attachment:fixed; padding:28px 32px 60px; }
-  a{ color:var(--blauw); }
-  a:hover{ color:var(--magenta); }
-  h1,h2{ font-family:'Archivo',sans-serif; }
-  @keyframes pulseGlow{ 0%{opacity:1;} 50%{opacity:.35;} 100%{opacity:1;} }
+  [hidden]{ display:none !important; }
+  body{ margin:0; background:var(--pagina); color:var(--tekst); font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a{ color:var(--primair); text-decoration:none; }
+  a:hover{ color:var(--primair-donker); text-decoration:underline; }
+  button{ font:inherit; }
+  :focus-visible{ outline:2px solid var(--primair); outline-offset:2px; }
+  .num{ font-variant-numeric:tabular-nums; }
 
-  .topbar{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
-    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); }
-  .topbar h1{ font-size:16px; margin:0; }
-  .topbar .subtitle{ font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.05em; text-transform:uppercase; }
-  .topmeta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .live{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin-right:10px; }
-  .live .dot{ width:8px; height:8px; border-radius:50%; background:var(--blauw-l); display:inline-block; animation:pulseGlow 2s infinite; }
-  .btn{ font-size:12px; padding:8px 16px; border-radius:8px; cursor:pointer; border:1px solid rgba(25,157,217,0.4);
-    background:rgba(25,157,217,0.10); color:var(--blauw); font-weight:600; text-decoration:none; font-family:inherit; }
-  .btn:hover{ background:rgba(25,157,217,0.18); color:var(--blauw); }
+  /* shell */
+  .shell{ height:48px; display:flex; align-items:center; gap:16px; padding:0 16px; background:var(--kop); border-bottom:1px solid var(--rand); }
+  .logo{ width:28px; height:28px; border-radius:6px; background:var(--primair); color:#fff; display:grid; place-items:center; font-weight:600; font-size:13px; }
+  .shell .naam{ font-weight:600; font-size:15px; }
+  .shell nav{ display:flex; gap:2px; margin-left:8px; font-size:14px; }
+  .shell nav a, .shell nav span{ padding:6px 12px; border-radius:6px; color:#4a515c; white-space:nowrap; }
+  .shell nav a:hover{ background:#f0f2f5; text-decoration:none; color:var(--tekst); }
+  .shell nav .actief{ background:var(--actief); color:var(--actief-tekst); font-weight:500; }
+  .shell .ruimte{ flex:1; }
+  .gebruiker{ position:relative; }
+  .initialen{ width:32px; height:32px; border-radius:50%; border:0; background:#dde5f3; color:var(--actief-tekst); font-size:12px; font-weight:600; cursor:pointer; }
+  .menu{ position:absolute; right:0; top:40px; background:var(--vlak); border:1px solid var(--rand); border-radius:8px; box-shadow:0 8px 24px rgba(30,40,60,.12); padding:6px; min-width:200px; z-index:10; }
+  .menu .wie{ font-size:12px; color:var(--muted); padding:6px 10px 8px; border-bottom:1px solid var(--scheiding); margin-bottom:4px; word-break:break-all; }
+  .menu button{ width:100%; text-align:left; border:0; background:transparent; padding:8px 10px; border-radius:6px; font-size:14px; cursor:pointer; color:var(--tekst); }
+  .menu button:hover{ background:#f0f2f5; }
 
-  .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
-  .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
-  .card .label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
-  .card .value{ font-family:'Archivo',sans-serif; font-size:28px; font-weight:700; line-height:1; }
-  .card .sub{ font-size:11px; color:var(--dim); margin-top:6px; }
+  /* paginakop */
+  .kop{ background:var(--kop); border-bottom:1px solid var(--rand); padding:16px 32px 20px; }
+  .kruimel{ font-size:13px; display:flex; gap:6px; color:var(--muted2); }
+  .kop-rij{ display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:20px; margin-top:10px; }
+  .kop h1{ margin:0; font-size:24px; font-weight:600; letter-spacing:-.01em; }
+  .kop .onder{ font-size:14px; color:var(--muted2); margin-top:4px; }
+  .cijfers{ display:flex; flex-wrap:wrap; gap:32px; }
+  .cijfer{ display:flex; flex-direction:column; gap:4px; }
+  .cijfer .l{ font-size:12px; color:var(--muted2); white-space:nowrap; }
+  .cijfer .w{ display:flex; align-items:baseline; gap:8px; }
+  .cijfer .w b{ font-size:28px; font-weight:500; line-height:1; }
+  .trend{ font-size:13px; font-weight:500; white-space:nowrap; }
+  .op{ color:var(--op); } .neer{ color:var(--neer); } .vlak{ color:var(--muted2); }
 
-  .bronnen{ display:flex; flex-direction:column; gap:10px; }
-  .bron{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
-  .bron.open{ border-color:rgba(25,157,217,0.45); }
-  .bron-kop{ display:grid; grid-template-columns:22px minmax(160px,1.4fr) 130px repeat(4,minmax(80px,1fr)) 170px;
-    align-items:center; gap:12px; padding:14px 18px; cursor:pointer; }
-  .bron-kop:hover{ background:rgba(25,157,217,0.06); }
-  .bron.open .bron-kop{ background:rgba(25,157,217,0.10); }
-  .kop-labels{ display:grid; grid-template-columns:22px minmax(160px,1.4fr) 130px repeat(4,minmax(80px,1fr)) 170px;
-    gap:12px; padding:0 18px 4px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-  .pijl{ color:var(--muted); transition:transform .15s; font-size:12px; }
-  .bron.open .pijl{ transform:rotate(90deg); color:var(--blauw); }
-  .naam{ font-family:'Archivo',sans-serif; font-weight:600; font-size:15px; }
-  .naam .soort{ display:block; font-family:'IBM Plex Sans',sans-serif; font-weight:400; font-size:11px; color:var(--dim); margin-top:2px; }
-  .getal{ font-family:'Archivo',sans-serif; font-weight:700; font-size:17px; }
-  .getal.nul{ color:var(--dim); font-weight:500; }
-  .wanneer{ font-size:12.5px; color:var(--sub); }
-  .wanneer .rel{ display:block; font-size:11px; color:var(--dim); margin-top:2px; }
+  /* filterbalk */
+  .filters{ background:var(--kop); border-bottom:1px solid var(--rand); padding:14px 32px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px; }
+  .veld{ display:flex; flex-direction:column; gap:6px; font-size:12px; color:#5a606a; }
+  .veld input[type=search]{ font:inherit; font-size:14px; height:36px; padding:0 12px; border:1px solid var(--rand-veld); border-radius:6px; background:#fff; width:240px; outline:none; color:var(--tekst); }
+  .veld input[type=search]:focus{ border-color:var(--primair); box-shadow:0 0 0 2px rgba(47,95,168,.15); }
+  .segment{ display:flex; height:36px; border:1px solid var(--rand-veld); border-radius:6px; overflow:hidden; background:#fff; }
+  .segment button{ font-size:14px; padding:0 14px; border:0; cursor:pointer; white-space:nowrap; background:#fff; color:var(--muted2); }
+  .segment button + button{ border-left:1px solid var(--rand-veld); }
+  .segment button[aria-pressed="true"]{ background:#e6edf9; color:var(--actief-tekst); }
+  .schakel{ display:flex; align-items:center; gap:8px; height:36px; font-size:14px; cursor:pointer; white-space:nowrap; }
+  .schakel input{ width:16px; height:16px; accent-color:var(--primair); }
 
-  .status{ display:inline-flex; align-items:center; gap:7px; padding:4px 11px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap; }
-  .status i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
-  .st-live{ background:rgba(60,207,142,0.14); color:var(--groen); }
-  .st-live i{ background:var(--groen); animation:pulseGlow 2s infinite; }
-  .st-vertraagd{ background:rgba(240,162,60,0.14); color:var(--oranje); }
-  .st-vertraagd i{ background:var(--oranje); }
-  .st-storing{ background:rgba(233,22,125,0.16); color:var(--magenta); }
-  .st-storing i{ background:var(--magenta); }
-  .st-leeg{ background:rgba(255,255,255,0.06); color:var(--muted); }
-  .st-leeg i{ background:var(--dim); }
+  /* inhoud */
+  main{ display:grid; grid-template-columns:minmax(0,1fr); gap:16px; padding:20px 32px 40px; align-items:start; }
+  main.met-detail{ grid-template-columns:minmax(0,1fr) minmax(300px,380px); }
+  .kaart{ background:var(--vlak); border:1px solid var(--rand); border-radius:10px; overflow:hidden; min-width:0; }
+  .werkbalk{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px; border-bottom:1px solid var(--scheiding); }
+  .werkbalk b{ font-weight:600; font-size:15px; }
+  .werkbalk span{ font-size:12px; color:var(--muted2); }
+  .scroll{ overflow-x:auto; }
+  .tabel{ min-width:820px; }
+  .rij{ display:grid; grid-template-columns:minmax(170px,1.4fr) minmax(140px,1.2fr) 90px 110px 80px 80px; gap:16px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .kopregel{ background:var(--kopregel); padding:10px 20px; font-size:12px; font-weight:500; color:#5a606a; }
+  .kopregel button{ font-size:12px; font-weight:500; padding:0; border:0; background:transparent; cursor:pointer; display:flex; gap:4px; align-items:center; color:#5a606a; white-space:nowrap; }
+  .kopregel button.r{ justify-content:flex-end; }
+  .kopregel button[aria-sort]:not([aria-sort="none"]){ color:var(--tekst); }
+  .data{ cursor:pointer; background:#fff; }
+  .data:hover{ background:var(--hover); }
+  .data.gekozen{ background:var(--gekozen); box-shadow:inset 3px 0 0 var(--primair); }
+  .bron{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .bron b{ font-weight:500; color:var(--actief-tekst); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bron small{ font-size:12px; color:#8a9099; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bron small.let{ color:var(--waarschuw); }
+  .aandeel{ display:flex; align-items:center; gap:10px; }
+  .aandeel .spoor{ flex:1; height:6px; border-radius:3px; background:var(--balk-leeg); overflow:hidden; }
+  .aandeel .spoor i{ display:block; height:100%; background:var(--balk); border-radius:3px; }
+  .aandeel span{ font-size:12px; color:#5a606a; width:40px; text-align:right; }
+  .r{ text-align:right; }
+  .hoofd{ font-size:16px; font-weight:600; }
+  .klein{ font-size:13px; font-weight:500; }
+  .grijs{ color:var(--muted2); }
+  .leeg{ padding:48px 20px; text-align:center; color:var(--muted2); font-size:14px; }
 
-  .bron-body{ display:none; border-top:1px solid var(--border); padding:16px 18px 18px; background:var(--bg2); }
-  .bron.open .bron-body{ display:block; }
-  .filters{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
-  .filters label{ font-size:11px; color:var(--muted); margin-right:6px; }
-  .filters .spacer{ flex:1; }
-  .filters select, .filters input[type=search]{ font-family:'IBM Plex Sans',sans-serif; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
-  .filters input[type=search]{ min-width:220px; padding:8px 12px; }
-  .filters select:focus, .filters input:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
-  .toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; }
-  .toggle input{ accent-color:var(--blauw); }
-  .csv-btn{ font-size:12px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; font-family:inherit; }
-  .csv-btn:hover{ border-color:var(--blauw); color:var(--text); }
-  .telregel{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin-bottom:10px; }
-  .wis{ font-size:11px; padding:3px 10px; border-radius:999px; cursor:pointer; background:rgba(233,22,125,0.14); color:var(--magenta); border:1px solid rgba(233,22,125,0.3); font-family:inherit; }
-  .score{ display:inline-block; min-width:42px; text-align:center; padding:3px 8px; border-radius:8px; font-weight:700; font-size:12px; }
-  .s-hot{ background:rgba(233,22,125,0.18); color:var(--magenta); border:1px solid rgba(233,22,125,0.4); }
-  .s-warm{ background:rgba(25,157,217,0.18); color:#5ab6e6; border:1px solid rgba(25,157,217,0.4); }
-  .s-cool{ background:rgba(255,255,255,0.06); color:var(--muted); border:1px solid rgba(255,255,255,0.12); }
-  .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; margin-left:6px; }
-  .badge-sap{ background:rgba(25,157,217,0.16); color:var(--blauw); border:1px solid rgba(25,157,217,0.35); }
-  .badge-oracle{ background:rgba(233,22,125,0.16); color:var(--magenta); border:1px solid rgba(233,22,125,0.35); }
-  .cat{ display:inline-block; padding:3px 9px; border-radius:8px; font-size:11px; background:rgba(255,255,255,0.06); white-space:nowrap; }
-  .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
-  .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
-  .dl{ font-size:10px; font-weight:700; margin-top:2px; }
-  .dl-kort{ color:var(--magenta); }
-  .dl-mid{ color:var(--blauw); }
-  .dl-ok{ color:var(--blauw-l); }
-  .dl-verlopen{ color:var(--muted); }
-  .wstatus{ display:inline-block; font-size:11.5px; padding:3px 8px; border-left:3px solid; border-radius:6px; background:rgba(255,255,255,0.04); white-space:nowrap; }
-  .orgs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
-  .pill{ font-size:11px; padding:4px 11px; border-radius:999px; cursor:pointer; background:rgba(255,255,255,0.04);
-    color:var(--sub); border:1px solid rgba(255,255,255,0.08); font-family:inherit; }
-  .pill b{ color:var(--blauw); margin-left:4px; }
-  .pill.active{ background:rgba(25,157,217,0.16); color:var(--blauw); border-color:rgba(25,157,217,0.4); }
+  /* detail */
+  .detail{ position:sticky; top:20px; }
+  .detail-kop{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:18px 20px; border-bottom:1px solid var(--scheiding); }
+  .detail-kop h2{ margin:0; font-size:20px; font-weight:600; }
+  .detail-kop a{ font-size:13px; }
+  .sluit{ font-size:18px; line-height:1; width:32px; height:32px; border:0; border-radius:6px; background:transparent; cursor:pointer; color:#5a606a; flex:none; }
+  .sluit:hover{ background:#f0f2f5; }
+  .vier{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--scheiding); border-bottom:1px solid var(--scheiding); }
+  .vier div{ padding:14px 20px; background:#fff; display:flex; flex-direction:column; gap:4px; }
+  .vier span{ font-size:12px; color:var(--muted2); }
+  .vier b{ font-size:22px; font-weight:500; }
+  .dagen{ padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+  .dagen h3{ margin:0; font-size:13px; font-weight:600; }
+  .staven, .daglabels{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+  .staven{ align-items:end; height:120px; }
+  .staaf{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:4px; height:100%; }
+  .staaf span{ font-size:11px; color:#5a606a; }
+  .staaf i{ display:block; width:100%; border-radius:3px 3px 0 0; background:var(--balk-licht); }
+  .staaf.vandaag i{ background:var(--primair); }
+  .daglabels span{ text-align:center; font-size:11px; color:var(--muted2); }
+  .let-op{ font-size:13px; color:var(--waarschuw); background:var(--waarschuw-bg); padding:10px 12px; border-radius:6px; }
+  .naar{ font-size:14px; font-weight:500; margin-top:4px; }
 
-  .table-wrap{ max-height:560px; overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--panel); }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; padding:9px 12px; color:var(--muted); font-weight:600; white-space:nowrap; position:sticky; top:0;
-    background:var(--panel2); border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.04em; z-index:1; }
-  td{ padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; color:var(--sub); }
-  td.titel{ color:var(--text); max-width:420px; }
-  td.nowrap{ white-space:nowrap; }
-  a.title-link{ color:var(--blauw); text-decoration:none; }
-  a.title-link:hover{ color:var(--magenta); }
-  .num{ font-size:10px; color:var(--dim); margin-top:2px; }
-  .nieuw{ font-size:9px; background:var(--indigo); color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; }
-  .weg{ font-size:9px; background:rgba(255,255,255,0.07); color:var(--muted); padding:2px 7px; border-radius:999px; margin-left:6px; }
-  tr.rij{ cursor:pointer; }
-  tr.rij:hover td{ background:rgba(25,157,217,0.06); }
-  tr.rij.open td{ background:rgba(25,157,217,0.10); }
-  tr.detail td{ background:var(--bg2); padding:12px 16px; }
-  .meer{ display:block; margin:12px auto 0; }
-  .loading, .error{ padding:30px; text-align:center; color:var(--muted); }
-  .error{ color:#f0b6cf; background:var(--panel); border:1px solid rgba(233,22,125,0.35); border-radius:14px; text-align:left; }
-  .muted{ color:var(--dim); font-size:12px; }
-  .uitleg{ font-size:11px; color:var(--dim); margin-top:16px; line-height:1.6; }
+  /* aanvragen van de gekozen bron */
+  .onder-main{ padding:0 32px 40px; }
+  main{ padding-bottom:16px !important; }
+  .aanvragen .werkbalk{ flex-wrap:wrap; }
+  .aanvragen .bediening{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .aanvragen input[type=search]{ font:inherit; font-size:14px; height:34px; padding:0 12px; border:1px solid var(--rand-veld); border-radius:6px; width:240px; outline:none; color:var(--tekst); }
+  .aanvragen input[type=search]:focus{ border-color:var(--primair); box-shadow:0 0 0 2px rgba(47,95,168,.15); }
+  .aanvragen select{ font:inherit; font-size:14px; height:34px; padding:0 8px; border:1px solid var(--rand-veld); border-radius:6px; background:#fff; color:var(--tekst); }
+  .aanvragen .segment{ height:34px; }
+  .aanvragen .telregel{ font-size:12px; color:var(--muted2); }
+  .atabel{ min-width:900px; }
+  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 104px 118px 130px 120px 24px; gap:16px; align-items:center; padding:11px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .arij.kopregel{ padding:10px 20px; }
+  .arij.data:hover{ background:var(--hover); }
+  .arij.open{ background:var(--gekozen); }
+  .atitel{ min-width:0; }
+  .atitel a{ font-weight:500; }
+  .atitel small{ display:block; font-size:12px; color:#8a9099; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .atitel .weg{ font-size:11px; color:var(--muted2); background:var(--kopregel); border:1px solid var(--rand); border-radius:999px; padding:0 7px; margin-left:6px; }
+  .atitel .nieuw{ font-size:11px; color:#fff; background:var(--primair); border-radius:999px; padding:0 7px; margin-left:6px; }
+  .dl small{ display:block; font-size:11px; font-weight:500; }
+  .dl .kort{ color:var(--neer); } .dl .mid{ color:var(--waarschuw); } .dl .ver{ color:var(--muted2); }
+  .wstatus{ font-size:12px; padding:2px 8px; border-radius:999px; background:var(--kopregel); border:1px solid var(--rand); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; max-width:100%; }
+  .adetail td, .adetail{ background:#fafbfc; }
+  .adetail{ padding:12px 20px 4px; border-bottom:1px solid var(--scheiding); }
+  .aanvragen .notitie{ background:#fff; border-color:var(--rand); }
+  .aanvragen .notitie-opslaan{ color:#fff; }
+  .meer{ display:block; margin:14px auto; font-size:14px; font-weight:500; padding:8px 16px; border-radius:6px; border:1px solid var(--rand-veld); background:#fff; color:var(--primair); cursor:pointer; }
+  .meer:hover{ background:var(--hover); }
+  .dashlink{ font-size:13px; font-weight:500; white-space:nowrap; }
+  .laden, .fout{ padding:48px 32px; text-align:center; color:var(--muted2); }
+  .fout{ color:var(--neer); }
 
-  @media (max-width:1000px){
-    body{ padding:20px 16px 40px; }
-    .cards{ grid-template-columns:repeat(2,1fr); }
-    .kop-labels{ display:none; }
-    .bron-kop{ grid-template-columns:22px 1fr auto; }
-    .bron-kop .optioneel{ display:none; }
+  @media (max-width:1239px){
+    main.met-detail{ grid-template-columns:minmax(0,1fr); }
+    .detail{ position:static; }
+  }
+  @media (max-width:640px){
+    .aanvragen input[type=search]{ width:100%; }
+    .aanvragen .bediening{ width:100%; }
+    .kop, .filters{ padding-left:16px; padding-right:16px; }
+    main{ padding:16px 16px 32px; }
+    .onder-main{ padding:0 16px 32px; }
+    .shell nav{ margin-left:0; }
+    .shell .naam{ display:none; }
+    .veld input[type=search]{ width:100%; }
+    .veld:first-child{ flex:1 1 100%; }
   }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div>
-    <h1>Bronnen · Profource Marktmonitor</h1>
-    <div class="subtitle">overzicht per website / broker</div>
+<header class="shell">
+  <div class="logo">P</div>
+  <span class="naam">Marktmonitor</span>
+  <nav>
+    <a href="index.html">Dashboard</a>
+    <span class="actief" aria-current="page">Bronnen</span>
+    <a id="beheerLink" href="admin.html" hidden>Beheer</a>
+  </nav>
+  <span class="ruimte"></span>
+  <div class="gebruiker">
+    <button class="initialen" id="initialen" aria-haspopup="true" aria-expanded="false" title="Account">··</button>
+    <div class="menu" id="menu" hidden>
+      <div class="wie" id="wie"></div>
+      <button onclick="logout()">Uitloggen</button>
+    </div>
   </div>
-  <div class="topmeta">
-    <div class="live"><span class="dot"></span><span id="liveText">Live · data laden…</span></div>
-    <a href="index.html" class="btn">Naar dashboard</a>
-    <a id="adminLink" href="admin.html" class="btn" style="display:none">Beheer</a>
-    <button class="btn" id="refreshBtn">Vernieuwen</button>
-    <button class="btn" onclick="logout()">Uitloggen</button>
-  </div>
-</div>
+</header>
 
-<div id="loading" class="loading">Bronnen worden geladen…</div>
-
-<div id="app" style="display:none">
-  <div class="cards">
-    <div class="card"><div class="label">Laatste scraper-run</div><div class="value" id="kLaatst">—</div><div class="sub" id="kLaatstSub"></div></div>
-    <div class="card"><div class="label">Bronnen live</div><div class="value" id="kLive">—</div><div class="sub" id="kLiveSub"></div></div>
-    <div class="card"><div class="label">Aanvragen totaal</div><div class="value" id="kTotaal">—</div><div class="sub" id="kTotaalSub"></div></div>
-    <div class="card"><div class="label">Nieuw laatste 24 uur</div><div class="value" id="kNieuw">—</div><div class="sub" id="kNieuwSub"></div></div>
+<section class="kop">
+  <div class="kruimel"><a href="index.html">Marktmonitor</a><span>/</span><span>Bronnen</span></div>
+  <div class="kop-rij">
+    <div>
+      <h1>Opdrachten per bron</h1>
+      <div class="onder" id="onder">Gegevens laden…</div>
+    </div>
+    <div class="cijfers">
+      <div class="cijfer"><span class="l">Nieuw 7 dagen</span><div class="w"><b class="num" id="k7">—</b><span class="trend" id="kTrend"></span></div></div>
+      <div class="cijfer"><span class="l">Nieuw 24 uur</span><div class="w"><b class="num" id="k24">—</b></div></div>
+      <div class="cijfer"><span class="l">Nu open</span><div class="w"><b class="num" id="kOpen">—</b></div></div>
+      <div class="cijfer"><span class="l">Totaal verzameld</span><div class="w"><b class="num" id="kTotaal">—</b></div></div>
+    </div>
   </div>
+</section>
 
-  <div class="kop-labels">
-    <span></span><span>Website / broker</span><span>Status</span>
-    <span>Online nu</span><span>Nieuw 24u</span><span>Nieuw 7d</span><span>Totaal</span>
-    <span>Laatst bijgewerkt</span>
+<section class="filters">
+  <label class="veld">Zoeken<input type="search" id="zoek" placeholder="Naam of domein" autocomplete="off"></label>
+  <div class="veld">Periode
+    <div class="segment" role="group" aria-label="Periode">
+      <button data-periode="7d" aria-pressed="true">7 dagen</button>
+      <button data-periode="24u" aria-pressed="false">24 uur</button>
+    </div>
   </div>
-  <div class="bronnen" id="bronnen"></div>
+  <label class="schakel"><input type="checkbox" id="actueel"> Alleen actuele bronnen</label>
+</section>
 
-  <div class="uitleg">
-    <b>Live</b>: de bron is meegenomen in de laatste scraper-run.
-    <b>Vertraagd</b>: de bron ontbrak in de laatste run, maar leverde de afgelopen 36 uur nog wel data.
-    <b>Storing</b>: al meer dan 36 uur geen data van deze bron (meestal een login- of scraperprobleem).
-    <b>Online nu</b> = aanvragen die in de laatste run nog op de website stonden.
-    De scrapers draaien rond 08:00 en 14:00 (NL-tijd); deze pagina ververst zichzelf elke 5 minuten.
-  </div>
+<main id="main">
+  <section class="kaart">
+    <div class="werkbalk"><b id="telling">Bronnen</b><span>Klik op een rij voor details</span></div>
+    <div class="scroll"><div class="tabel" id="tabel"><div class="laden">Bronnen laden…</div></div></div>
+  </section>
+  <aside class="kaart detail" id="detail" hidden></aside>
+</main>
+<div class="onder-main">
+  <section class="kaart aanvragen" id="aanvragen" hidden>
+    <div class="werkbalk">
+      <div><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span></div>
+      <div class="bediening">
+        <input type="search" id="aZoek" placeholder="Zoek titel, organisatie, plaats of nummer" autocomplete="off" aria-label="Zoek in aanvragen">
+        <div class="segment" role="group" aria-label="Welke aanvragen">
+          <button data-open="1" aria-pressed="true">Nu open</button>
+          <button data-open="0" aria-pressed="false">Alles</button>
+        </div>
+        <select id="aSort" aria-label="Sorteren">
+          <option value="deadline">Deadline eerst</option>
+          <option value="nieuw">Nieuwste eerst</option>
+          <option value="titel">Titel A-Z</option>
+        </select>
+        <a class="dashlink" id="aDash" href="index.html">Met alle filters in het dashboard →</a>
+      </div>
+    </div>
+    <div class="scroll"><div class="atabel" id="aTabel"></div></div>
+    <button class="meer" id="aMeer" hidden>Meer tonen</button>
+  </section>
 </div>
 
 <script src="auth.js"></script>
-<script src="marktlogica.js"></script>
 <script src="notities.js"></script>
+<script src="flappy.js"></script>
 <script>
-// Alle bronnen die run.py scrapet (BRON in scrapers/*.py), zodat ook een bron
-// zonder enige rij in Supabase zichtbaar blijft. Nieuwe bronnen verschijnen
-// vanzelf zodra ze data hebben.
-const BEKENDE_BRONNEN = ['mercell','flextender','hero','striive','freelance.nl','ns','stedin',
-  'tenderned','inhuurdesk-regio','gelderland','flexwestbrabant','magnit','stedin-vms',
-  'opdrachtoverheid','harveynash','portofrotterdam','staffingms','heart'];
-
-const UUR = 3600000;
-const RUN_MARGE = 2*UUR;       // rijen binnen 2 uur van de nieuwste run horen bij die run
-const VERTRAAGD_GRENS = 36*UUR;
-const PAGINA = 1000;
-const TOON_PER_KEER = 100;
-
-const state = {
-  bronnen: [],            // overzicht per bron
-  laatsteRun: null,       // ms
-  open: new Set(),        // opengeklapte bronnen
-  detail: new Map(),      // bron -> {rijen, zoek, alleenOnline, org, toon}
+// Alle bronnen die run.py scrapet (BRON in scrapers/*.py), met een leesbare naam
+// en het domein waar de scraper leest. Een nieuwe bron verschijnt vanzelf zodra
+// hij data heeft (met de BRON-code als naam).
+const BRONNEN = {
+  'freelance.nl':     ['Freelance.nl', 'freelance.nl'],
+  'tenderned':        ['TenderNed', 'tenderned.nl'],
+  'opdrachtoverheid': ['Opdrachtoverheid', 'opdrachtoverheid.nl'],
+  'mercell':          ['Mercell', 's2c.mercell.com'],
+  'flextender':       ['Flextender', 'flextender.nl'],
+  'striive':          ['Striive (Vertage)', 'partner.vertage.com'],
+  'magnit':           ['Magnit', 'portal.magnitglobal.com'],
+  'ns':               ['NS', 'werkenbijns.nl'],
+  'gelderland':       ['Werken in Gelderland', 'werkeningelderland.nl'],
+  'hero':             ['Hero Interim', 'hero.eu'],
+  'harveynash':       ['Harvey Nash', 'harveynash.nl'],
+  'flexwestbrabant':  ['Flex West-Brabant', 'flexwestbrabant.nl'],
+  'stedin':           ['Stedin', 'werkenbij.stedin.net'],
+  'inhuurdesk-regio': ['Inhuurdesk regio', 'werkeninnoordoostbrabant.nl e.a.'],
+  'heart':            ['HAErt', 'mijn.haert.nl'],
+  'portofrotterdam':  ['Port of Rotterdam', 'portofrotterdamsso.my.site.com'],
+  'staffingms':       ['StaffingMS', 'staffingdesk.my.site.com'],
+  'stedin-vms':       ['Stedin VMS', 'stedin-vms.my.site.com'],
 };
+const DAG = 86400000;
+const RUN_MARGE = 2*3600000;        // rijen binnen 2 uur van de nieuwste run horen bij die run
+const VERTRAAGD_GRENS = 36*3600000; // daarna telt een bron als 'geen recente data'
+const PAGINA = 1000;
+const WEEKDAG = ['zo','ma','di','wo','do','vr','za'];
+const KOLOMMEN = [
+  ['Bron','naam','l'], ['Aandeel','aandeel','l'], [null,'hoofd','r'],
+  ['vs vorige week','trend','r'], ['Nu open','open','r'], ['Totaal','totaal','r'],
+];
 
-function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function ms(iso){ if(!iso) return null; const t=new Date(iso).getTime(); return isNaN(t)?null:t; }
-function fmtDateTime(t){
-  if(t==null) return '—';
-  return new Date(t).toLocaleString('nl-NL',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-}
-function fmtDate(iso){
-  if(!iso) return '—';
-  const t=ms(iso);
-  if(t==null) return esc(iso);
-  return new Date(t).toLocaleDateString('nl-NL',{day:'2-digit',month:'short',year:'numeric'});
-}
-function relatief(t){
-  if(t==null) return '';
-  const min=Math.round((Date.now()-t)/60000);
-  if(min<1) return 'zojuist';
-  if(min<60) return `${min} min geleden`;
-  const u=Math.round(min/60);
-  if(u<48) return `${u} uur geleden`;
-  return `${Math.round(u/24)} dagen geleden`;
-}
-function nl(n){ return Number(n).toLocaleString('nl-NL'); }
+const state = { bronnen:[], laatsteRun:null, zoek:'', periode:'7d', actueel:false, sort:'hoofd', richting:-1, gekozen:null };
+
+const nl = n => Number(n).toLocaleString('nl-NL');
+const pct = x => `${x.toFixed(1).replace('.', ',')}%`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ms = iso => { if(!iso) return null; const t = new Date(iso).getTime(); return isNaN(t) ? null : t; };
+function trendTekst(p){ return p > 0 ? `+${p}%` : p < 0 ? `−${Math.abs(p)}%` : '0%'; }
+function trendKlas(p){ return p > 0 ? 'op' : p < 0 ? 'neer' : 'vlak'; }
+function trendVan(nu, vorig){ return vorig ? Math.round((nu - vorig) / vorig * 100) : (nu ? 100 : 0); }
+function begin(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
 
 // PostgREST geeft max 1000 rijen per call: eerst het totaal, dan parallel de rest.
-async function haalAlles(tabel, select, filter, orderVelden){
-  const pagina=(from, metTelling)=>{
-    let q=supabase.from(tabel).select(select, metTelling?{count:'exact'}:undefined);
-    if(filter) q=filter(q);
-    orderVelden.forEach(([veld,asc])=>{ q=q.order(veld,{ascending:asc, nullsFirst:false}); });
-    return q.range(from, from+PAGINA-1);
+async function haalAlles(select, bron){
+  const pagina = (from, metTelling) => {
+    let q = supabase.from('tenders').select(select, metTelling ? {count:'exact'} : undefined);
+    if(bron) q = q.eq('bron', bron);
+    return q.order('bron', {ascending:true}).order('tender_id', {ascending:true}).range(from, from + PAGINA - 1);
   };
-  const rijenVan=res=>{ if(res.error) throw new Error(res.error.message); return res.data||[]; };
-  const eerste=await pagina(0, true);
-  let out=rijenVan(eerste);
-  if(out.length===PAGINA && eerste.count!=null){
-    const verzoeken=[];
-    for(let from=PAGINA; from<eerste.count; from+=PAGINA) verzoeken.push(pagina(from));
-    for(const deel of (await Promise.all(verzoeken)).map(rijenVan)) out=out.concat(deel);
+  const rijenVan = res => { if(res.error) throw new Error(res.error.message); return res.data || []; };
+  const eerste = await pagina(0, true);
+  let uit = rijenVan(eerste);
+  if(uit.length === PAGINA && eerste.count != null){
+    const verzoeken = [];
+    for(let from = PAGINA; from < eerste.count; from += PAGINA) verzoeken.push(pagina(from));
+    for(const deel of (await Promise.all(verzoeken)).map(rijenVan)) uit = uit.concat(deel);
   }
-  return out;
+  return uit;
 }
 
-/* ===================== overzicht per bron ===================== */
-async function laadOverzicht(){
-  const rijen=await haalAlles('tenders', 'bron, eerst_gezien, laatst_gezien', null, [['bron',true],['tender_id',true]]);
-  let laatsteRun=null;
-  rijen.forEach(r=>{ const t=ms(r.laatst_gezien); if(t!=null && (laatsteRun==null || t>laatsteRun)) laatsteRun=t; });
+async function laad(){
+  const rijen = await haalAlles('bron, eerst_gezien, laatst_gezien');
+  const nu = Date.now(), vandaag = begin(nu);
+  let laatsteRun = null;
+  rijen.forEach(r => { const t = ms(r.laatst_gezien); if(t != null && (laatsteRun == null || t > laatsteRun)) laatsteRun = t; });
 
-  const per=new Map(BEKENDE_BRONNEN.map(b=>[b,{bron:b,totaal:0,online:0,nieuw24:0,nieuw7:0,laatst:null,eerste:null}]));
-  const nu=Date.now();
-  rijen.forEach(r=>{
+  const leeg = code => ({ code, naam:(BRONNEN[code]||[code])[0], domein:(BRONNEN[code]||[])[1] || '',
+    totaal:0, open:0, n24:0, dagen:[0,0,0,0,0,0,0], vorige7:0, laatst:null });
+  const per = new Map(Object.keys(BRONNEN).map(c => [c, leeg(c)]));
+  rijen.forEach(r => {
     if(!r.bron) return;
-    if(!per.has(r.bron)) per.set(r.bron,{bron:r.bron,totaal:0,online:0,nieuw24:0,nieuw7:0,laatst:null,eerste:null});
-    const b=per.get(r.bron);
-    const lg=ms(r.laatst_gezien), eg=ms(r.eerst_gezien);
+    if(!per.has(r.bron)) per.set(r.bron, leeg(r.bron));
+    const b = per.get(r.bron), eg = ms(r.eerst_gezien), lg = ms(r.laatst_gezien);
     b.totaal++;
-    if(lg!=null && (b.laatst==null || lg>b.laatst)) b.laatst=lg;
-    if(lg!=null && laatsteRun!=null && lg>=laatsteRun-RUN_MARGE) b.online++;
-    if(eg!=null){
-      if(b.eerste==null || eg<b.eerste) b.eerste=eg;
-      if(nu-eg<24*UUR) b.nieuw24++;
-      if(nu-eg<7*24*UUR) b.nieuw7++;
-    }
+    if(lg != null && (b.laatst == null || lg > b.laatst)) b.laatst = lg;
+    if(lg != null && laatsteRun != null && lg >= laatsteRun - RUN_MARGE) b.open++;
+    if(eg == null) return;
+    if(nu - eg < DAG) b.n24++;
+    // kalenderdagen: index 6 is vandaag, 0 is zes dagen terug; daarvoor de week ervoor
+    const dagTerug = Math.floor((vandaag - begin(eg)) / DAG);
+    if(dagTerug >= 0 && dagTerug < 7) b.dagen[6 - dagTerug]++;
+    else if(dagTerug >= 7 && dagTerug < 14) b.vorige7++;
   });
 
-  const bronnen=[...per.values()].map(b=>({...b, status:statusVan(b, laatsteRun)}));
-  const volgorde={live:0, vertraagd:1, storing:2, leeg:3};
-  bronnen.sort((a,b)=>volgorde[a.status]-volgorde[b.status] || b.online-a.online || b.totaal-a.totaal);
-  state.bronnen=bronnen;
-  state.laatsteRun=laatsteRun;
-}
-
-function statusVan(b, laatsteRun){
-  if(!b.totaal || b.laatst==null) return 'leeg';
-  if(laatsteRun!=null && b.laatst>=laatsteRun-RUN_MARGE) return 'live';
-  if(Date.now()-b.laatst<=VERTRAAGD_GRENS) return 'vertraagd';
-  return 'storing';
-}
-const STATUS_LABEL={live:'Live', vertraagd:'Vertraagd', storing:'Storing', leeg:'Geen data'};
-function statusBadge(s){ return `<span class="status st-${s}"><i></i>${STATUS_LABEL[s]}</span>`; }
-function getal(n){ return `<span class="getal${n?'':' nul'}">${nl(n)}</span>`; }
-
-function renderKpis(){
-  const b=state.bronnen;
-  const live=b.filter(x=>x.status==='live').length;
-  const probleem=b.filter(x=>x.status==='vertraagd'||x.status==='storing').length;
-  const totaal=b.reduce((s,x)=>s+x.totaal,0);
-  const online=b.reduce((s,x)=>s+x.online,0);
-  const nieuw24=b.reduce((s,x)=>s+x.nieuw24,0);
-  const nieuw7=b.reduce((s,x)=>s+x.nieuw7,0);
-  document.getElementById('kLaatst').textContent=state.laatsteRun?new Date(state.laatsteRun).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'—';
-  document.getElementById('kLaatstSub').textContent=state.laatsteRun?`${fmtDateTime(state.laatsteRun)} · ${relatief(state.laatsteRun)}`:'nog geen run';
-  document.getElementById('kLive').textContent=`${live} / ${b.length}`;
-  document.getElementById('kLiveSub').textContent=probleem?`${probleem} bron${probleem>1?'nen':''} met een probleem`:'alle bronnen met data draaien';
-  document.getElementById('kTotaal').textContent=nl(totaal);
-  document.getElementById('kTotaalSub').textContent=`${nl(online)} nu online`;
-  document.getElementById('kNieuw').textContent=nl(nieuw24);
-  document.getElementById('kNieuwSub').textContent=`${nl(nieuw7)} in de laatste 7 dagen`;
-  document.getElementById('liveText').textContent=`Live · bijgewerkt ${new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}`;
-}
-
-function renderBronnen(){
-  const el=document.getElementById('bronnen');
-  el.innerHTML=state.bronnen.map(b=>`
-    <div class="bron${state.open.has(b.bron)?' open':''}" data-bron="${esc(b.bron)}">
-      <div class="bron-kop">
-        <span class="pijl">▶</span>
-        <span class="naam">${esc(b.bron)}<span class="soort">${VACATURE_BRONNEN.has(b.bron)?'Vacatures':'Tenders / opdrachten'}</span></span>
-        <span>${statusBadge(b.status)}</span>
-        <span class="optioneel">${getal(b.online)}</span>
-        <span class="optioneel">${getal(b.nieuw24)}</span>
-        <span class="optioneel">${getal(b.nieuw7)}</span>
-        <span class="optioneel">${getal(b.totaal)}</span>
-        <span class="wanneer optioneel">${fmtDateTime(b.laatst)}<span class="rel">${relatief(b.laatst)}</span></span>
-      </div>
-      <div class="bron-body"></div>
-    </div>`).join('');
-  el.querySelectorAll('.bron').forEach(div=>{
-    div.querySelector('.bron-kop').onclick=()=>toggleBron(div.dataset.bron);
-    if(state.open.has(div.dataset.bron)) renderDetail(div.dataset.bron);
+  state.bronnen = [...per.values()].map(b => {
+    const n7 = b.dagen.reduce((a, v) => a + v, 0);
+    let status = 'ok';
+    if(!b.totaal || b.laatst == null) status = 'leeg';
+    else if(laatsteRun != null && b.laatst < laatsteRun - RUN_MARGE) status = (nu - b.laatst <= VERTRAAGD_GRENS) ? 'delay' : 'stale';
+    return { ...b, n7, trend:trendVan(n7, b.vorige7), status };
   });
+  state.laatsteRun = laatsteRun;
 }
 
-/* ===================== aanvragen per bron ===================== */
-// Zelfde filters als het dashboard (index.html), per opengeklapte bron. De
-// trefwoorden, categorie, regio en sales-score komen uit marktlogica.js.
-const FILTER_START = {
-  type:'', soort:'', regio:'', statusFilter:'', periode:'', sort:'deadline-asc', zoek:'', org:'',
-  verbergVerlopen:true, verbergBureaus:true, toonNietIt:false,
-};
+function subregel(b){
+  if(b.status === 'stale') return ['Geen recente data', true];
+  if(b.status === 'delay') return ['Laatste update ontbreekt', true];
+  if(b.status === 'leeg') return ['Nog geen data', true];
+  return [b.domein, false];
+}
+function hoofdwaarde(b){ return state.periode === '24u' ? b.n24 : b.n7; }
 
-async function toggleBron(bron){
-  if(state.open.has(bron)){ state.open.delete(bron); }
-  else { state.open.add(bron); }
-  const div=bronDiv(bron);
-  if(!div) return;
-  div.classList.toggle('open', state.open.has(bron));
-  if(state.open.has(bron)) renderDetail(bron);
-}
-function bronDiv(bron){
-  return [...document.querySelectorAll('#bronnen .bron')].find(d=>d.dataset.bron===bron);
-}
-function standaardOnline(bron){
-  // bij een bron die niet live is staat er niets 'online', dan direct alles tonen
-  return state.bronnen.find(b=>b.bron===bron)?.status==='live';
-}
-
-async function laadDetail(bron){
-  const [rijen, ai]=await Promise.all([
-    haalAlles('tenders', '*', q=>q.eq('bron', bron), [['eerst_gezien',false],['tender_id',true]]),
-    haalAlles('verrijkingen', 'bron, tender_id, eindklant, eindklant_zekerheid, senioriteit, modules',
-      q=>q.eq('bron', bron), [['tender_id',true]]).catch(()=>[]),
-  ]);
-  const aiMap=new Map(ai.map(a=>[String(a.tender_id), a]));
-  const verrijkt=rijen.map(r=>{
-    const v=verrijkRij(r, aiMap.get(String(r.tender_id))||null);
-    v._laatst=ms(r.laatst_gezien);
-    v._eerstGezien=r.eerst_gezien;
-    return v;
-  });
-  const vorig=state.detail.get(bron);
-  state.detail.set(bron, vorig
-    ? {...vorig, rijen:verrijkt, toon:TOON_PER_KEER}
-    : {...FILTER_START, alleenOnline:standaardOnline(bron), rijen:verrijkt, toon:TOON_PER_KEER});
-}
-
-const TYPE_OPTIES=[['','Alle IT'],['SAP','SAP'],['Oracle','Oracle'],['Data & BI','Data & BI'],['Cloud & Infra','Cloud & Infra'],
-  ['Development','Development'],['Security','Security'],['Functioneel & Beheer','Functioneel & Beheer'],['Project & Agile','Project & Agile'],['Overig IT','Overig IT']];
-const SOORT_OPTIES=[['','Alles'],['Tender/opdracht','Tender / opdracht'],['Vacature','Vacature']];
-const PERIODE_OPTIES=[['','Alle'],['1','Vandaag'],['3','Laatste 3 dagen'],['7','Deze week'],['31','Deze maand']];
-const SORT_OPTIES=[['deadline-asc','Deadline (eerst sluitend)'],['score-desc','Sales-score (hoog → laag)'],['datum-desc','Nieuwste eerst'],['organisatie-asc','Organisatie (A-Z)']];
-function opties(lijst, gekozen){
-  return lijst.map(([v,l])=>`<option value="${esc(v)}"${v===gekozen?' selected':''}>${esc(l)}</option>`).join('');
-}
-
-async function renderDetail(bron){
-  const div=bronDiv(bron);
-  if(!div) return;
-  const body=div.querySelector('.bron-body');
-  if(!state.detail.has(bron)){
-    body.innerHTML='<div class="loading">Aanvragen laden…</div>';
-    try{ await laadDetail(bron); }
-    catch(err){ body.innerHTML=`<div class="error">Kon aanvragen niet laden: ${esc(err.message||err)}</div>`; return; }
-    if(!state.open.has(bron)) return;
+function renderKop(){
+  const som = k => state.bronnen.reduce((a, b) => a + b[k], 0);
+  const n7 = som('n7'), vorig = som('vorige7'), t = trendVan(n7, vorig);
+  document.getElementById('k7').textContent = nl(n7);
+  const kt = document.getElementById('kTrend');
+  kt.textContent = trendTekst(t); kt.className = 'trend ' + trendKlas(t);
+  kt.title = `vorige week: ${nl(vorig)}`;
+  document.getElementById('k24').textContent = nl(som('n24'));
+  document.getElementById('kOpen').textContent = nl(som('open'));
+  document.getElementById('kTotaal').textContent = nl(som('totaal'));
+  let wanneer = '';
+  if(state.laatsteRun){
+    const d = new Date(state.laatsteRun), tijd = d.toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+    const dagen = Math.round((begin(Date.now()) - begin(state.laatsteRun)) / DAG);
+    wanneer = dagen === 0 ? `bijgewerkt vandaag ${tijd}` : dagen === 1 ? `bijgewerkt gisteren ${tijd}`
+      : `bijgewerkt ${d.toLocaleDateString('nl-NL', {day:'numeric', month:'short'})} ${tijd}`;
   }
-  const d=state.detail.get(bron);
-  body.innerHTML=`
-    <div class="filters">
-      <div><label>Type</label><select data-f="type">${opties(TYPE_OPTIES, d.type)}</select></div>
-      <div><label>Soort</label><select data-f="soort">${opties(SOORT_OPTIES, d.soort)}</select></div>
-      <div><label>Regio</label><select data-f="regio"></select></div>
-      <div><label>Status</label><select data-f="statusFilter"></select></div>
-      <div><label>Periode</label><select data-f="periode">${opties(PERIODE_OPTIES, d.periode)}</select></div>
-      <div><label>Sorteer</label><select data-f="sort">${opties(SORT_OPTIES, d.sort)}</select></div>
-      <label class="toggle"><input type="checkbox" data-f="verbergVerlopen"${d.verbergVerlopen?' checked':''}> Verberg verlopen &amp; oude</label>
-      <label class="toggle"><input type="checkbox" data-f="verbergBureaus"${d.verbergBureaus?' checked':''}> Alleen eindklanten</label>
-      <label class="toggle"><input type="checkbox" data-f="toonNietIt"${d.toonNietIt?' checked':''}> Toon ook niet-IT</label>
-      <label class="toggle"><input type="checkbox" data-f="alleenOnline"${d.alleenOnline?' checked':''}> Alleen nu online</label>
-      <div class="spacer"></div>
-      <button class="csv-btn">Exporteer CSV</button>
-      <input type="search" class="zoek" placeholder="Zoek op titel, organisatie of nummer…" value="${esc(d.zoek)}">
-    </div>
-    <div class="orgs"></div>
-    <div class="telregel"><span class="telling"></span><button class="wis" style="display:none">Filters wissen</button></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Score</th><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Categorie</th><th>Regio</th><th>Deadline</th><th>Tarief</th><th>Status</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <button class="btn meer" style="display:none">Meer tonen</button>`;
-  const opnieuw=()=>{ d.toon=TOON_PER_KEER; vulTabel(bron); };
-  body.querySelectorAll('select[data-f]').forEach(sel=>sel.onchange=()=>{ d[sel.dataset.f]=sel.value; opnieuw(); });
-  body.querySelectorAll('input[type=checkbox][data-f]').forEach(cb=>cb.onchange=()=>{ d[cb.dataset.f]=cb.checked; opnieuw(); });
-  const zoek=body.querySelector('.zoek');
-  let timer=null;
-  zoek.oninput=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ d.zoek=zoek.value; opnieuw(); },200); };
-  body.querySelector('.csv-btn').onclick=()=>exportCsv(bron);
-  body.querySelector('.wis').onclick=()=>{
-    Object.assign(d, FILTER_START, {verbergVerlopen:false, verbergBureaus:false, toonNietIt:true, alleenOnline:false});
-    renderDetail(bron);
-  };
-  body.querySelector('.meer').onclick=()=>{ d.toon+=TOON_PER_KEER; vulTabel(bron); };
-  vulTabel(bron);
+  document.getElementById('onder').textContent = `${state.bronnen.length} websites en brokers` + (wanneer ? ` · ${wanneer}` : '');
 }
 
-function isOnline(r){
-  return r._laatst!=null && state.laatsteRun!=null && r._laatst>=state.laatsteRun-RUN_MARGE;
+function zichtbareBronnen(){
+  const q = state.zoek.trim().toLowerCase();
+  const lijst = state.bronnen.filter(b => (!state.actueel || b.status === 'ok')
+    && (!q || b.naam.toLowerCase().includes(q) || b.domein.toLowerCase().includes(q) || b.code.includes(q)));
+  const sleutel = { naam:b => b.naam.toLowerCase(), aandeel:hoofdwaarde, hoofd:hoofdwaarde,
+    trend:b => (b.status === 'ok' ? b.trend : -Infinity), open:b => b.open, totaal:b => b.totaal };
+  const k = sleutel[state.sort], richting = state.sort === 'naam' ? -state.richting : state.richting;
+  return lijst.sort((a, b) => { const x = k(a), y = k(b); return (x > y ? 1 : x < y ? -1 : 0) * richting || b.totaal - a.totaal; });
 }
-// Basis zoals relevantRows() in het dashboard: verlopen/oud, bureaus, niet-IT en online.
-function basisRijen(d){
-  return d.rijen.filter(r=>{
-    if(d.verbergVerlopen && (r.verlopen || r.verouderd)) return false;
-    if(d.verbergBureaus && r.isBureau) return false;
-    if(!d.toonNietIt && !r.isIt) return false;
-    if(d.alleenOnline && !isOnline(r)) return false;
-    return true;
+
+function renderTabel(){
+  const lijst = zichtbareBronnen();
+  const maxHoofd = Math.max(1, ...state.bronnen.map(hoofdwaarde));
+  const totHoofd = state.bronnen.reduce((a, b) => a + hoofdwaarde(b), 0);
+  document.getElementById('telling').textContent = `Bronnen (${lijst.length})`;
+  const kop = KOLOMMEN.map(([label, k, uitlijn]) => {
+    const tekst = label || (state.periode === '24u' ? 'Nieuw 24u' : 'Nieuw 7d');
+    const actief = state.sort === k;
+    const pijl = actief ? (state.richting < 0 ? '↓' : '↑') : '';
+    return `<button class="${uitlijn}" data-sort="${k}" aria-sort="${actief ? (state.richting < 0 ? 'descending' : 'ascending') : 'none'}">${tekst}<span aria-hidden="true">${pijl}</span></button>`;
+  }).join('');
+  const rijen = lijst.map(b => {
+    const [sub, let_] = subregel(b), h = hoofdwaarde(b), geen = b.status !== 'ok';
+    return `<div class="rij data${state.gekozen === b.code ? ' gekozen' : ''}" data-code="${esc(b.code)}" tabindex="0" role="button" aria-label="${esc(b.naam)}, details">
+      <div class="bron"><b>${esc(b.naam)}</b><small class="${let_ ? 'let' : ''}">${esc(sub)}</small></div>
+      <div class="aandeel"><div class="spoor"><i style="width:${(h / maxHoofd * 100).toFixed(1)}%"></i></div><span class="num">${h ? pct(h / totHoofd * 100) : '—'}</span></div>
+      <span class="r hoofd num">${h ? nl(h) : '—'}</span>
+      <span class="r klein num ${geen ? 'grijs' : trendKlas(b.trend)}">${geen ? '—' : trendTekst(b.trend)}</span>
+      <span class="r num">${b.open ? nl(b.open) : '—'}</span>
+      <span class="r num grijs">${nl(b.totaal)}</span>
+    </div>`;
+  }).join('');
+  const tabel = document.getElementById('tabel');
+  tabel.innerHTML = `<div class="rij kopregel">${kop}</div>` + (rijen || '<div class="leeg">Geen bronnen gevonden.</div>');
+  tabel.querySelectorAll('[data-sort]').forEach(knop => knop.onclick = () => {
+    const k = knop.dataset.sort;
+    state.richting = state.sort === k ? -state.richting : -1;
+    state.sort = k;
+    renderTabel();
   });
-}
-function gefilterd(d, metOrg){
-  let rows=basisRijen(d);
-  if(d.type) rows=rows.filter(r=>r.categorie===d.type);
-  if(d.soort) rows=rows.filter(r=>r.soort===d.soort);
-  if(d.regio) rows=rows.filter(r=>r.regio===d.regio);
-  if(d.statusFilter) rows=rows.filter(r=> d.statusFilter==='__leeg__' ? !r.status : r.status===d.statusFilter);
-  if(d.periode){
-    const max=parseInt(d.periode,10);
-    rows=rows.filter(r=>{ const dg=recencyDagen(r); return dg!==null && dg<=max; });
-  }
-  const q=d.zoek.trim().toLowerCase();
-  if(q) rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)
-    ||String(r.nummer).toLowerCase().includes(q)||r.locatie.toLowerCase().includes(q)
-    ||(r.ai && [r.ai.eindklant||'', ...(r.ai.modules||[])].join(' ').toLowerCase().includes(q)));
-  if(metOrg && d.org) rows=rows.filter(r=>r.organisatie===d.org);
-  return rows;
-}
-function sorteer(rows, sort){
-  const [veld,dir]=sort.split('-');
-  const waarde=r=>veld==='score'?r.score:veld==='datum'?(r.datum||-Infinity):veld==='deadline'?(r._deadline||Infinity):String(r[veld]||'').toLowerCase();
-  return rows.slice().sort((a,b)=>{
-    const av=waarde(a), bv=waarde(b);
-    if(av<bv) return dir==='asc'?-1:1;
-    if(av>bv) return dir==='asc'?1:-1;
-    return b.score-a.score;
-  });
-}
-function vulSelect(sel, leeg, teller, gekozen, extra){
-  sel.innerHTML=`<option value="">${leeg}</option>`+
-    Object.entries(teller).sort((a,b)=>b[1]-a[1]).map(([v,c])=>`<option value="${esc(v)}">${esc(v)} (${nl(c)})</option>`).join('')+(extra||'');
-  sel.value=gekozen;
-  if(sel.value!==gekozen) sel.value='';
-}
-function deadlineCel(r){
-  if(r._deadline==null) return '<span class="muted">—</span>';
-  const dg=r.dagenTotDeadline;
-  const [cls,lbl]=dg<0?['dl-verlopen','verlopen']:dg===0?['dl-kort','sluit vandaag']:dg<=7?['dl-kort',`nog ${dg} d`]:dg<=21?['dl-mid',`nog ${dg} d`]:['dl-ok',`nog ${dg} d`];
-  return `${fmtDate(r.deadline)}<div class="dl ${cls}">${lbl}</div>`;
-}
-function statusCel(r){
-  if(!r.status) return '<span class="muted">—</span>';
-  const kleur=STATUS_COLORS[r.status]||'#5f7488';
-  return `<span class="wstatus" style="border-left-color:${kleur}">${esc(r.status)}</span>`;
-}
-
-function vulTabel(bron){
-  const div=bronDiv(bron);
-  const d=state.detail.get(bron);
-  if(!div || !d) return;
-  const body=div.querySelector('.bron-body');
-
-  // regio- en statusopties tellen op de basisselectie, zoals het dashboard
-  const basis=basisRijen(d);
-  const rc={}, sc={}; let leeg=0;
-  basis.forEach(r=>{ rc[r.regio]=(rc[r.regio]||0)+1; if(r.status) sc[r.status]=(sc[r.status]||0)+1; else leeg++; });
-  vulSelect(body.querySelector('select[data-f=regio]'), "Alle regio's", rc, d.regio);
-  vulSelect(body.querySelector('select[data-f=statusFilter]'), 'Alle statussen', sc, d.statusFilter,
-    `<option value="__leeg__"${d.statusFilter==='__leeg__'?' selected':''}>Geen status (${nl(leeg)})</option>`);
-
-  // organisaties binnen deze broker als snelfilter (top 12 van de huidige selectie)
-  const teller=new Map();
-  gefilterd(d, false).forEach(r=>teller.set(r.organisatie,(teller.get(r.organisatie)||0)+1));
-  const top=[...teller.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
-  if(d.org && !teller.has(d.org)) d.org='';
-  const orgs=body.querySelector('.orgs');
-  orgs.innerHTML=top.length>1||d.org
-    ? `<button class="pill${d.org?'':' active'}" data-org="">Alle organisaties</button>`+
-      top.map(([o,n])=>`<button class="pill${d.org===o?' active':''}" data-org="${esc(o)}">${esc(o)}<b>${nl(n)}</b></button>`).join('')
-    : '';
-  orgs.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ d.org=p.dataset.org; d.toon=TOON_PER_KEER; vulTabel(bron); });
-
-  const rijen=sorteer(gefilterd(d, true), d.sort);
-  d.laatsteSelectie=rijen;
-  body.querySelector('tbody').innerHTML=rijen.slice(0,d.toon).map(r=>{
-    const titel=esc(r.titel);
-    const klant=r.ai && r.ai.eindklant && r.ai.eindklant.toLowerCase()!==r.organisatie.toLowerCase()
-      ? `<div class="ai-klant">→ ${esc(r.ai.eindklant)}<span class="ai-tag">AI</span></div>` : '';
-    return `<tr class="rij" data-tid="${esc(r.tender_id)}">
-      <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
-      <td class="nowrap">${fmtDateTime(ms(r._eerstGezien))}</td>
-      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${notitieIcoon(r.bron, r.tender_id)}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
-      <td>${esc(r.organisatie)}${klant}</td>
-      <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
-      <td>${esc(r.regio)}${r.locatie?`<div class="num">${esc(r.locatie)}</div>`:''}</td>
-      <td class="nowrap">${deadlineCel(r)}</td>
-      <td>${tariefCel(r.bron, r.tender_id)}</td>
-      <td>${statusCel(r)}</td>
-    </tr>
-    <tr class="detail" style="display:none"><td colspan="9"></td></tr>`;
-  }).join('') || '<tr><td colspan="9" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
-  // klik op een rij klapt de notitie open/dicht (links blijven gewoon werken)
-  body.querySelectorAll('tbody tr.rij').forEach(tr=>{
-    tr.onclick=e=>{
-      if(e.target.closest('a')) return;
-      const det=tr.nextElementSibling;
-      const open=det.style.display!=='none';
-      if(!open) det.firstElementChild.innerHTML=notitieHtml(bron, tr.dataset.tid);
-      det.style.display=open?'none':'table-row';
-      tr.classList.toggle('open', !open);
+  tabel.querySelectorAll('.data').forEach(rij => {
+    const kies = () => {
+      state.gekozen = state.gekozen === rij.dataset.code ? null : rij.dataset.code;
+      renderTabel(); renderDetail(); toonAanvragen();
+      // onder 1240px staat het detail onder de tabel: breng het in beeld
+      if(state.gekozen && window.innerWidth < 1240) document.getElementById('detail').scrollIntoView({behavior:'smooth', block:'start'});
     };
+    rij.onclick = kies;
+    rij.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); kies(); } };
   });
-  const verborgen=d.rijen.length-rijen.length;
-  body.querySelector('.telling').textContent=
-    `${nl(Math.min(d.toon,rijen.length))} van ${nl(rijen.length)} aanvragen`+(verborgen?` · ${nl(verborgen)} verborgen door filters`:'');
-  body.querySelector('.wis').style.display=verborgen?'':'none';
-  body.querySelector('.meer').style.display=rijen.length>d.toon?'block':'none';
 }
 
-// Na opslaan alleen het 💬-icoon in die rij bijwerken, zodat de notitie open blijft.
-function werkNotitieIcoonBij(bron, tid){
-  const div=bronDiv(bron);
-  const tr=div && [...div.querySelectorAll('tr.rij')].find(t=>t.dataset.tid===tid);
-  if(!tr) return;
-  const cel=tr.querySelector('td.titel');
-  cel.querySelector('.notitie-icoon')?.remove();
-  const icoon=notitieIcoon(bron, tid);
-  if(!icoon) return;
-  const voor=cel.querySelector('.weg') || cel.querySelector('.num');
-  if(voor) voor.insertAdjacentHTML('beforebegin', icoon); else cel.insertAdjacentHTML('beforeend', icoon);
+function renderDetail(){
+  const paneel = document.getElementById('detail'), main = document.getElementById('main');
+  const b = state.bronnen.find(x => x.code === state.gekozen);
+  paneel.hidden = !b;
+  main.classList.toggle('met-detail', !!b);
+  if(!b) return;
+  const tot7 = state.bronnen.reduce((a, x) => a + x.n7, 0);
+  const geen = b.status !== 'ok', [sub] = subregel(b);
+  const max = Math.max(1, ...b.dagen);
+  const vandaag = new Date(); vandaag.setHours(12,0,0,0);
+  const labels = b.dagen.map((_, i) => WEEKDAG[new Date(vandaag.getTime() - (6 - i) * DAG).getDay()]);
+  const domeinLink = b.domein && !b.domein.includes(' ') ? `<a href="https://${esc(b.domein)}" target="_blank" rel="noopener">${esc(b.domein)}</a>` : `<span class="grijs" style="font-size:13px">${esc(b.domein)}</span>`;
+  paneel.innerHTML = `
+    <div class="detail-kop"><div style="min-width:0"><h2>${esc(b.naam)}</h2>${domeinLink}</div>
+      <button class="sluit" id="sluit" aria-label="Sluiten">×</button></div>
+    <div class="vier">
+      <div><span>Nieuw 7 dagen</span><b class="num">${nl(b.n7)}</b></div>
+      <div><span>vs vorige week</span><b class="num ${geen ? 'grijs' : trendKlas(b.trend)}" title="vorige week: ${nl(b.vorige7)}">${geen ? '—' : trendTekst(b.trend)}</b></div>
+      <div><span>Marktaandeel 7d</span><b class="num">${pct(tot7 ? b.n7 / tot7 * 100 : 0)}</b></div>
+      <div><span>Nu open</span><b class="num">${nl(b.open)}</b></div>
+    </div>
+    <div class="dagen">
+      <h3>Nieuwe opdrachten per dag</h3>
+      <div class="staven">${b.dagen.map((v, i) => `<div class="staaf${i === 6 ? ' vandaag' : ''}"><span class="num">${v}</span><i style="height:${Math.max(2, Math.round(v / max * 96))}px"></i></div>`).join('')}</div>
+      <div class="daglabels">${labels.map(l => `<span>${l}</span>`).join('')}</div>
+      ${geen ? `<span class="let-op">${esc(sub)}: cijfers zijn mogelijk onvolledig.</span>` : ''}
+      <a class="naar" href="#aanvragen" id="naarLijst">Bekijk opdrachten van ${esc(b.naam)} →</a>
+    </div>`;
+  document.getElementById('naarLijst').onclick = e => { e.preventDefault(); document.getElementById('aanvragen').scrollIntoView({behavior:'smooth', block:'start'}); };
+  document.getElementById('sluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
 }
 
-function exportCsv(bron){
-  const d=state.detail.get(bron);
-  if(!d) return;
-  const rows=d.laatsteSelectie||[];
-  const schoon=s=>String(s??'').replace(/[;\n\r]/g,',');
-  const header=['Score','Eerst gezien','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Online','Geschikt voor','Tarief (notitie)','Opmerking','URL'];
-  const lines=[header.join(';')];
-  rows.forEach(r=>{
-    const n=NOTITIES.get(`${r.bron}|${r.tender_id}`)||{}, t=TARIEVEN.get(`${r.bron}|${r.tender_id}`);
-    lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(n.tarief||(t&&t.tarief)), schoon(r.organisatie),
-      schoon(r.ai && r.ai.eindklant), schoon(r.titel), r.categorie, r.soort, r.regio, r.bron, schoon(r.status),
-      isOnline(r)?'ja':'nee', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking), schoon(r.url)].join(';'));
-  });
-  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=`marktmonitor-${bron}.csv`; a.click();
-  URL.revokeObjectURL(url);
+
+/* ===================== aanvragen van de gekozen bron ===================== */
+const TOON_PER_KEER = 100;
+const AANVRAGEN = new Map();   // bron -> rijen
+const av = { open:true, zoek:'', sort:'deadline', toon:TOON_PER_KEER, bron:null, opengeklapt:new Set() };
+
+function isOnline(r){ const t = ms(r.laatst_gezien); return t != null && state.laatsteRun != null && t >= state.laatsteRun - RUN_MARGE; }
+function datumKort(t){ return t == null ? '—' : new Date(t).toLocaleDateString('nl-NL', {day:'numeric', month:'short', year:'2-digit'}); }
+
+async function laadAanvragen(bron){
+  const rijen = await haalAlles('bron, tender_id, nummer, titel, organisatie, locatie, deadline, publicatiedatum, eerst_gezien, laatst_gezien, url, status', bron);
+  AANVRAGEN.set(bron, rijen);
 }
 
-/* ===================== verversen ===================== */
-async function ververs(){
-  const btn=document.getElementById('refreshBtn');
-  if(bezigMetNotitie()) return; // niet verversen terwijl iemand een notitie typt
-  btn.disabled=true;
-  document.getElementById('liveText').textContent='Live · verversen…';
-  try{
-    await Promise.all([laadOverzicht(), laadNotitiesEnTarieven()]);
-    // opengeklapte bronnen opnieuw ophalen; filters blijven staan
-    await Promise.all([...state.open].map(b=>laadDetail(b).catch(()=>state.detail.delete(b))));
-    [...state.detail.keys()].forEach(b=>{ if(!state.open.has(b)) state.detail.delete(b); });
-    renderKpis();
-    renderBronnen();
-  }catch(err){
-    document.getElementById('liveText').textContent='Verversen mislukt';
-    console.error(err);
-  }finally{
-    btn.disabled=false;
+async function toonAanvragen(){
+  const kaart = document.getElementById('aanvragen');
+  const b = state.bronnen.find(x => x.code === state.gekozen);
+  kaart.hidden = !b;
+  if(!b) return;
+  if(av.bron !== b.code){
+    // nieuwe bron: filters terug naar de standaard; zonder recente data direct alles tonen
+    av.bron = b.code; av.zoek = ''; av.toon = TOON_PER_KEER; av.opengeklapt.clear();
+    av.open = b.status === 'ok';
+    document.getElementById('aZoek').value = '';
+    document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String((k.dataset.open === '1') === av.open)));
   }
+  document.getElementById('aTitel').textContent = `Aanvragen van ${b.naam}`;
+  document.getElementById('aDash').href = `index.html?bron=${encodeURIComponent(b.code)}`;
+  if(!AANVRAGEN.has(b.code)){
+    document.getElementById('aTabel').innerHTML = '<div class="laden">Aanvragen laden…</div>';
+    document.getElementById('aTelling').textContent = '';
+    try{ await laadAanvragen(b.code); }
+    catch(err){ document.getElementById('aTabel').innerHTML = `<div class="fout">Kon de aanvragen niet laden: ${esc(err.message || err)}</div>`; return; }
+    if(state.gekozen !== b.code) return;
+  }
+  renderAanvragen();
 }
 
-(async ()=>{
-  const me=await requireUser();
-  if(!me) return; // requireUser heeft al doorgestuurd
-  if(me.role==='admin') document.getElementById('adminLink').style.display='';
+function gefilterdeAanvragen(){
+  const q = av.zoek.trim().toLowerCase();
+  const rijen = (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOnline(r))
+    && (!q || [r.titel, r.organisatie, r.locatie, r.nummer].some(v => String(v || '').toLowerCase().includes(q))));
+  const nu = Date.now();
+  const dl = r => { const t = ms(r.deadline); return t == null ? Infinity : (t < nu - DAG ? Infinity - 1 : t); };
+  const sorteer = {
+    deadline: (a, b) => dl(a) - dl(b) || (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
+    nieuw: (a, b) => (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
+    titel: (a, b) => String(a.titel || '').localeCompare(String(b.titel || ''), 'nl'),
+  }[av.sort];
+  return rijen.sort(sorteer);
+}
+
+function deadlineCel(r){
+  const t = ms(r.deadline);
+  if(t == null) return '<span class="grijs">—</span>';
+  const dagen = Math.floor((begin(t) - begin(Date.now())) / DAG);
+  const [klas, tekst] = dagen < 0 ? ['ver', 'verlopen'] : dagen === 0 ? ['kort', 'sluit vandaag'] : dagen <= 7 ? ['kort', `nog ${dagen} d`] : dagen <= 21 ? ['mid', `nog ${dagen} d`] : ['ver', `nog ${dagen} d`];
+  return `${datumKort(t)}<small class="${klas}">${tekst}</small>`;
+}
+
+function renderAanvragen(){
+  const alle = AANVRAGEN.get(av.bron) || [];
+  const rijen = gefilterdeAanvragen();
+  document.getElementById('aTelling').textContent = `${nl(Math.min(av.toon, rijen.length))} van ${nl(rijen.length)}` + (rijen.length !== alle.length ? ` · ${nl(alle.length)} totaal` : '');
+  const nu = Date.now();
+  const kop = `<div class="arij kopregel"><span>Aanvraag</span><span>Eerst gezien</span><span>Deadline</span><span class="r">Tarief</span><span>Status</span><span></span></div>`;
+  const regels = rijen.slice(0, av.toon).map(r => {
+    const eg = ms(r.eerst_gezien), sleutel = `${r.tender_id}`;
+    const titel = esc(r.titel || '(zonder titel)');
+    const sub = [r.organisatie, r.locatie, r.nummer && r.nummer !== r.tender_id ? r.nummer : null].filter(Boolean).map(esc).join(' · ');
+    const open = av.opengeklapt.has(sleutel);
+    return `<div class="arij data${open ? ' open' : ''}" data-tid="${esc(r.tender_id)}" tabindex="0" role="button" aria-expanded="${open}" aria-label="${titel}: notitie">
+        <div class="atitel">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>` : `<b>${titel}</b>`}${eg != null && nu - eg < DAG ? '<span class="nieuw">nieuw</span>' : ''}${isOnline(r) ? '' : '<span class="weg">offline</span>'}${notitieIcoon(r.bron, r.tender_id)}<small>${sub || '&nbsp;'}</small></div>
+        <span class="num">${datumKort(eg)}</span>
+        <span class="dl num">${deadlineCel(r)}</span>
+        <span class="r">${tariefCel(r.bron, r.tender_id)}</span>
+        <span>${r.status ? `<span class="wstatus" title="${esc(r.status)}">${esc(r.status)}</span>` : '<span class="grijs">—</span>'}</span>
+        <span aria-hidden="true" class="grijs">${open ? '▴' : '▾'}</span>
+      </div>${open ? `<div class="adetail">${notitieHtml(r.bron, r.tender_id)}</div>` : ''}`;
+  }).join('');
+  const tabel = document.getElementById('aTabel');
+  tabel.innerHTML = kop + (regels || '<div class="leeg">Geen aanvragen met deze filters.</div>');
+  tabel.querySelectorAll('.arij.data').forEach(rij => {
+    const wissel = () => {
+      const tid = rij.dataset.tid;
+      if(av.opengeklapt.has(tid)) av.opengeklapt.delete(tid); else av.opengeklapt.add(tid);
+      renderAanvragen();
+    };
+    rij.onclick = e => { if(!e.target.closest('a')) wissel(); };
+    rij.onkeydown = e => { if((e.key === 'Enter' || e.key === ' ') && e.target === rij){ e.preventDefault(); wissel(); } };
+  });
+  document.getElementById('aMeer').hidden = rijen.length <= av.toon;
+}
+
+// Na opslaan van een notitie alleen het icoon in die regel bijwerken (de notitie blijft open).
+function werkNotitieIcoonBij(bron, tid){
+  const rij = [...document.querySelectorAll('#aTabel .arij.data')].find(x => x.dataset.tid === tid);
+  if(!rij) return;
+  const cel = rij.querySelector('.atitel');
+  cel.querySelector('.notitie-icoon')?.remove();
+  cel.querySelector('small').insertAdjacentHTML('beforebegin', notitieIcoon(bron, tid));
+}
+
+document.getElementById('aZoek').oninput = e => { av.zoek = e.target.value; av.toon = TOON_PER_KEER; renderAanvragen(); };
+document.querySelectorAll('[data-open]').forEach(knop => knop.onclick = () => {
+  av.open = knop.dataset.open === '1'; av.toon = TOON_PER_KEER;
+  document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String(k === knop)));
+  renderAanvragen();
+});
+document.getElementById('aSort').onchange = e => { av.sort = e.target.value; renderAanvragen(); };
+document.getElementById('aMeer').onclick = () => { av.toon += TOON_PER_KEER; renderAanvragen(); };
+koppelNotities(document.getElementById('aanvragen'), werkNotitieIcoonBij);
+flappyMat.koppel(document.querySelector('.shell .logo'));
+
+function render(){ renderKop(); renderTabel(); renderDetail(); toonAanvragen(); }
+
+async function ververs(){
+  if(bezigMetNotitie()) return; // niet verversen terwijl iemand een notitie typt
   try{
-    await Promise.all([laadOverzicht(), laadNotitiesEnTarieven()]);
+    await Promise.all([laad(), laadNotitiesEnTarieven()]);
+    AANVRAGEN.clear();
+    render();
+  }
+  catch(err){ console.error('verversen mislukt', err); } // stil: de oude cijfers blijven staan
+}
+
+document.getElementById('zoek').oninput = e => { state.zoek = e.target.value; renderTabel(); };
+document.querySelectorAll('[data-periode]').forEach(knop => knop.onclick = () => {
+  state.periode = knop.dataset.periode;
+  document.querySelectorAll('[data-periode]').forEach(k => k.setAttribute('aria-pressed', String(k === knop)));
+  renderTabel();
+});
+document.getElementById('actueel').onchange = e => { state.actueel = e.target.checked; renderTabel(); };
+const initialen = document.getElementById('initialen'), menu = document.getElementById('menu');
+initialen.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; initialen.setAttribute('aria-expanded', String(!menu.hidden)); };
+document.addEventListener('click', e => { if(!menu.hidden && !menu.contains(e.target)){ menu.hidden = true; initialen.setAttribute('aria-expanded', 'false'); } });
+
+function initialenVan(email){
+  const delen = (email || '').split('@')[0].split(/[._-]+/).filter(Boolean);
+  if(!delen.length) return '?';
+  return (delen.length > 1 ? delen[0][0] + delen[delen.length - 1][0] : delen[0].slice(0, 2)).toUpperCase();
+}
+
+(async () => {
+  const me = await requireUser();
+  if(!me) return; // requireUser heeft al doorgestuurd
+  if(me.role === 'admin') document.getElementById('beheerLink').hidden = false;
+  initialen.textContent = initialenVan(me.email);
+  document.getElementById('wie').textContent = me.email || '';
+  try{
+    await Promise.all([laad(), laadNotitiesEnTarieven()]);
   }catch(err){
-    document.getElementById('loading').outerHTML=`<div class="error">Kon de bronnen niet laden: ${esc(err.message||err)}</div>`;
+    document.getElementById('tabel').innerHTML = `<div class="fout">Kon de bronnen niet laden: ${esc(err.message || err)}</div>`;
+    document.getElementById('onder').textContent = 'Laden mislukt';
     return;
   }
-  document.getElementById('loading').style.display='none';
-  document.getElementById('app').style.display='block';
-  renderKpis();
-  renderBronnen();
-  document.getElementById('refreshBtn').onclick=ververs;
-  koppelNotities(document.getElementById('bronnen'), werkNotitieIcoonBij);
-  volgNotities(null); // notities van collega's bijhouden; zichtbaar bij de volgende render
-  setInterval(ververs, 5*60000);
+  // standaard de grootste bron open, zoals in het ontwerp
+  state.gekozen = zichtbareBronnen()[0]?.code || null;
+  render();
+  volgNotities(null); // notities van collega's bijhouden; zichtbaar bij de volgende weergave
+  setInterval(ververs, 5 * 60000);
 })();
 </script>
 </body>
