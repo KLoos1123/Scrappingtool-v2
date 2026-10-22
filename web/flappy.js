@@ -22,9 +22,9 @@
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
     { id:'p4',      naam:'Overloper', src:'persoon4.png', euro:5 },   // grap: niet te koop met credits
     { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50, bonus:2 },   // geluksvogel: dubbele credits
-    { id:'p5',      naam:'Collega 5', src:'persoon5.png', prijs:100 },
+    { id:'p5',      naam:'Troy',      src:'persoon5.png', prijs:100 },
     { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200 },
-    { id:'p6',      naam:'Collega 6', src:'persoon6.png', prijs:300 },
+    { id:'p6',      naam:'Chantal',   src:'persoon6.png', prijs:300 },
   ];
   const BEELDEN = {};
   PERSONAGES.forEach(p => {
@@ -37,7 +37,29 @@
   let overlay, canvas, ctx, frame = null, vorige = 0, spel;
   let beste = lees('flappyMatBest', 0), credits = lees('flappyMatCredits', 0);
   let gekocht = lees('flappyMatGekocht', ['mat']), keuze = lees('flappyMatKeuze', 'mat');
-  let gespeeld = lees('flappyMatGespeeld', 0), melding = '';
+  let gespeeld = lees('flappyMatGespeeld', 0), melding = '', geluid = lees('flappyMatGeluid', false);
+
+  // ---- geluid: korte piepjes via WebAudio, standaard uit (kantoor)
+  let audio = null;
+  function piep(freq, duur, type, vol, glijTot){
+    if(!geluid) return;
+    try{
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+      o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
+      if(glijTot) o.frequency.exponentialRampToValueAtTime(glijTot, t + duur);
+      g.gain.setValueAtTime(vol || 0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + duur);
+      o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + duur);
+    }catch(e){}
+  }
+  const GELUID = {
+    flap:  () => piep(520, 0.08, 'square', 0.03, 760),
+    punt:  () => piep(880, 0.09, 'triangle', 0.05),
+    munt:  () => { piep(990, 0.07, 'square', 0.04); setTimeout(() => piep(1320, 0.12, 'square', 0.04), 70); },
+    koffie:() => piep(330, 0.25, 'triangle', 0.06, 990),
+    schild:() => piep(700, 0.2, 'sawtooth', 0.05, 200),
+    dood:  () => piep(300, 0.45, 'sawtooth', 0.06, 60),
+  };
   // online: { id, naam } zodra de gebruiker bekend is; fout: tabel ontbreekt of geen toegang
   const online = { id:null, naam:'', klaar:false, fout:false, lijst:[], plek:null };
 
@@ -64,7 +86,9 @@
       .fm-veld{ position:relative; }
       .fm-sluit{ position:absolute; top:10px; right:10px; width:34px; height:34px; border:0; border-radius:50%;
         background:rgba(255,255,255,.9); color:#262b33; font:600 20px/1 'IBM Plex Sans',system-ui,sans-serif; cursor:pointer; }
-      .fm-sluit:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }
+      .fm-geluid{ position:absolute; top:10px; left:10px; height:34px; padding:0 10px; border:0; border-radius:17px;
+        background:rgba(255,255,255,.9); color:#262b33; font:600 12px/1 'IBM Plex Sans',system-ui,sans-serif; cursor:pointer; }
+      .fm-sluit:focus-visible, .fm-geluid:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }
       .fm-zij{ display:flex; flex-direction:column; gap:10px; width:min(400px, 92vw); }
       .fm-ranglijst{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
         box-shadow:0 10px 30px rgba(0,0,0,.3); font-size:13px; }
@@ -106,12 +130,16 @@
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-label', 'Flappy Mat');
-    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button></div><div class="fm-zij"><div class="fm-ranglijst" aria-label="Ranglijst"></div><div class="fm-winkel" aria-label="Winkel"></div></div></div>';
+    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button><button class="fm-geluid" aria-pressed="false"></button></div><div class="fm-zij"><div class="fm-ranglijst" aria-label="Ranglijst"></div><div class="fm-winkel" aria-label="Winkel"></div></div></div>';
     document.body.appendChild(overlay);
     canvas = overlay.querySelector('canvas');
     ctx = canvas.getContext('2d');
     canvas.addEventListener('pointerdown', e => { e.preventDefault(); actie(); });
     overlay.querySelector('.fm-sluit').addEventListener('click', sluit);
+    const knopGeluid = overlay.querySelector('.fm-geluid');
+    const zetGeluid = () => { knopGeluid.textContent = geluid ? '♪ Geluid aan' : '♪ Geluid uit'; knopGeluid.setAttribute('aria-pressed', String(geluid)); };
+    zetGeluid();
+    knopGeluid.addEventListener('click', () => { geluid = !geluid; bewaar('flappyMatGeluid', geluid); zetGeluid(); GELUID.punt(); knopGeluid.blur(); });
     overlay.addEventListener('pointerdown', e => { if(e.target === overlay) sluit(); });
     overlay.querySelector('.fm-winkel').addEventListener('click', e => {
       const knop = e.target.closest('button[data-id]');
@@ -159,9 +187,9 @@
   }
 
   function actie(){
-    if(spel.fase === 'start'){ spel.fase = 'vliegen'; spel.v = FLAP; return; }
-    if(spel.fase === 'vliegen'){ spel.v = FLAP; return; }
-    if(spel.fase === 'over' && performance.now() - spel.einde > 450){ nieuwSpel(); spel.fase = 'vliegen'; spel.v = FLAP; }
+    if(spel.fase === 'start'){ spel.fase = 'vliegen'; spel.v = FLAP; GELUID.flap(); return; }
+    if(spel.fase === 'vliegen'){ spel.v = FLAP; GELUID.flap(); return; }
+    if(spel.fase === 'over' && performance.now() - spel.einde > 450){ nieuwSpel(); spel.fase = 'vliegen'; spel.v = FLAP; GELUID.flap(); }
   }
 
   function lus(nu){
@@ -185,6 +213,9 @@
     const tempo = SNELHEID * (1 + Math.min(0.6, spel.score * 0.015));
     spel.afstand += tempo * dt;
     spel.flits = Math.max(0, spel.flits - dt);
+    spel.onkwetsbaar = Math.max(0, (spel.onkwetsbaar || 0) - dt);
+    // vanaf 30 punten gaan sommige pijpen op en neer
+    spel.pijpen.forEach(p => { if(p.amp) p.gat = p.basis + Math.sin(spel.wiebel * 1.6 + p.fase) * p.amp; });
     spel.pijpen.forEach(p => p.x -= tempo * dt);
     spel.munten.forEach(m => m.x -= tempo * dt);
     spel.pijpen = spel.pijpen.filter(p => p.x > -BREEDTE);
@@ -193,21 +224,33 @@
     if(!laatste || laatste.x < B - AFSTAND){
       const marge = 70, hoogte = GAT - Math.min(35, spel.score * 1.2);   // gat wordt langzaam kleiner
       const gat = marge + Math.random() * (H - GROND - hoogte - marge * 2);
-      spel.pijpen.push({ x:B + 10, gat, hoogte, geteld:false });
-      // munt net achter deze pijp (nog buiten beeld), ongeveer op hoogte van het gat
-      if(spel.pijpen.length > 1 && Math.random() < 0.55)
-        spel.munten.push({ x:B + 10 + BREEDTE + (AFSTAND - BREEDTE) / 2, y:gat + hoogte / 2 + (Math.random() - 0.5) * 50 });
+      const beweegt = spel.score >= 30 && Math.random() < 0.5;
+      const amp = beweegt ? Math.min(45, gat - 30, H - GROND - 30 - gat - hoogte) : 0;
+      spel.pijpen.push({ x:B + 10, gat, basis:gat, hoogte, geteld:false, amp:Math.max(0, amp), fase:Math.random() * 6 });
+      // munt (of af en toe een kop koffie = schild) net achter deze pijp, nog buiten beeld
+      const kans = Math.random();
+      if(spel.pijpen.length > 1 && kans < 0.62){
+        const koffie = kans < 0.07 && !spel.schild;
+        spel.munten.push({ x:B + 10 + BREEDTE + (AFSTAND - BREEDTE) / 2, y:gat + hoogte / 2 + (Math.random() - 0.5) * 50, koffie });
+      }
     }
     // score en botsingen (iets kleinere hitbox: het is een hoofd, geen vierkant)
     const hx = B * 0.3, kx = HOOFD_B * 0.36, ky = HOOFD_H * 0.4;
     for(const p of spel.pijpen){
-      if(!p.geteld && p.x + BREEDTE < hx - kx){ p.geteld = true; spel.score++; }
+      if(!p.geteld && p.x + BREEDTE < hx - kx){ p.geteld = true; spel.score++; GELUID.punt(); }
       const binnenX = hx + kx > p.x && hx - kx < p.x + BREEDTE;
       const binnenGat = spel.y - ky > p.gat && spel.y + ky < p.gat + p.hoogte;
-      if(binnenX && !binnenGat) return einde();
+      if(binnenX && !binnenGat && !spel.onkwetsbaar){
+        if(!spel.schild) return einde();
+        spel.schild = false; spel.onkwetsbaar = 1.2; GELUID.schild();   // koffie vangt één botsing op
+      }
     }
     for(const m of spel.munten){
-      if(Math.hypot(m.x - hx, m.y - spel.y) < MUNT_R + kx){ m.weg = true; spel.gepakt++; spel.flits = 0.35; }
+      if(Math.hypot(m.x - hx, m.y - spel.y) < MUNT_R + kx){
+        m.weg = true;
+        if(m.koffie){ spel.schild = true; GELUID.koffie(); }
+        else { spel.gepakt++; spel.flits = 0.35; GELUID.munt(); }
+      }
     }
     if(spel.y + ky > H - GROND || spel.y - ky < 0) return einde();
   }
@@ -217,6 +260,7 @@
     spel.fase = 'over';
     spel.einde = performance.now();
     spel.v = Math.max(spel.v, 0);
+    GELUID.dood();
     if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
     const p = PERSONAGES.find(x => x.id === keuze);
     spel.verdiend = (spel.score + spel.gepakt * MUNT_WAARDE) * ((p && p.bonus) || 1);
@@ -251,7 +295,7 @@
       pijp(p.x, 0, p.gat, true);
       pijp(p.x, p.gat + p.hoogte, H - GROND - p.gat - p.hoogte, false);
     }
-    for(const m of spel.munten) munt(m.x, m.y + Math.sin(spel.wiebel * 4 + m.x / 40) * 3);
+    for(const m of spel.munten) (m.koffie ? kop : munt)(m.x, m.y + Math.sin(spel.wiebel * 4 + m.x / 40) * 3);
     // grond
     ctx.fillStyle = '#d9c9a3'; ctx.fillRect(0, H - GROND, B, GROND);
     ctx.fillStyle = '#7fb069'; ctx.fillRect(0, H - GROND, B, 12);
@@ -270,6 +314,10 @@
       ctx.drawImage(hoofd, -HOOFD_B/2, -HOOFD_H/2, HOOFD_B, HOOFD_H);
       ctx.restore();
       ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      if(spel.schild || (spel.onkwetsbaar && Math.floor(spel.onkwetsbaar * 10) % 2)){
+        ctx.beginPath(); ctx.ellipse(0, 0, HOOFD_B/2 + 7, HOOFD_H/2 + 7, 0, 0, Math.PI * 2);
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(120,190,255,.85)'; ctx.shadowColor = '#7ec0ff'; ctx.shadowBlur = 12; ctx.stroke();
+      }
     } else {
       ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.ellipse(0, 0, HOOFD_B/2, HOOFD_H/2, 0, 0, Math.PI * 2); ctx.fill();
     }
@@ -279,14 +327,15 @@
     if(spel.fase !== 'start') tekst(String(spel.score), B/2, 70, 44, '#fff', true);
     if(spel.fase === 'vliegen' && spel.gepakt){
       ctx.textAlign = 'right';
-      tekst('● ' + spel.gepakt, B - 16, 34, 18, spel.flits ? '#fff3c4' : '#e3b23c', true);
+      tekst('● ' + spel.gepakt, B - 16, 76, 18, spel.flits ? '#fff3c4' : '#e3b23c', true);
       ctx.textAlign = 'center';
     }
     if(spel.fase === 'start'){
-      paneel(B/2, 162, 310, 150);
+      paneel(B/2, 172, 310, 170);
       tekst('Flappy Mat', B/2, 140, 34, '#2f5fa8');
       tekst('Tik, klik of spatie om te vliegen', B/2, 172, 15, '#5f656e');
       tekst('Pak de gouden munten: +' + MUNT_WAARDE + ' credits', B/2, 222, 13, '#b8860b');
+      tekst('Koffie = schild tegen één pijp', B/2, 244, 13, '#6b4a2b');
       if(beste) tekst('Beste: ' + beste, B/2, 196, 14, '#5f656e');
     }
     if(spel.fase === 'over'){
@@ -317,6 +366,15 @@
     ctx.font = "700 14px 'IBM Plex Sans', system-ui, sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#7a5a00'; ctx.fillText('P', x, y + 1);
     ctx.textBaseline = 'alphabetic';
+  }
+  function kop(x, y){
+    // kop koffie met stoom: geeft een schild
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 10, y - 8); ctx.lineTo(x + 8, y - 8); ctx.lineTo(x + 6, y + 10); ctx.lineTo(x - 8, y + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + 10, y, 5, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+    ctx.fillStyle = '#6b4a2b'; ctx.fillRect(x - 8, y - 6, 15, 4);
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.5;
+    for(const dx of [-4, 2]){ ctx.beginPath(); ctx.moveTo(x + dx, y - 12); ctx.quadraticCurveTo(x + dx + 4, y - 17, x + dx, y - 22); ctx.stroke(); }
   }
   function meng(a, b, t){
     const n = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
