@@ -1037,6 +1037,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   document.getElementById('logoutBtn').onclick = logout;
 
+  // vanaf de bronnenpagina: index.html?bron=<code> opent gefilterd op die bron. Bij
+  // brokers is de opdrachtgever vaak verborgen, dus dan ook bureaus tonen.
+  const bronUitUrl = new URLSearchParams(location.search).get('bron');
+  if (bronUitUrl) {
+    state.bron = bronUitUrl;
+    state.verbergBureaus = false;
+    document.getElementById('verbergBureaus').checked = false;
+  }
+
   bindEvents();
   setupRealtime();
   koppelNotities(document.getElementById('tableBody'), werkNotitieIcoonBij);
