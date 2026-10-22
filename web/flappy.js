@@ -2,8 +2,11 @@
    Flappy Mat. Los bestand, geen afhankelijkheden; koppelen met
    flappyMat.koppel(element). Tik, klik, spatie of pijl omhoog om te vliegen,
    Esc of × om te sluiten. Elk punt levert een credit op; met credits koop je
-   in de winkel onder het speelveld andere personages. Beste score, credits en
-   gekochte personages blijven per browser bewaard. */
+   in de winkel onder het speelveld andere personages. Ingelogd worden beste
+   score, credits en gekochte personages per gebruiker in Supabase bewaard
+   (tabel flappy_scores, zie supabase/flappy_scores.sql) en staat er een
+   ranglijst naast het speelveld; zonder die tabel valt alles terug op
+   localStorage. */
 (function(){
   const KLIKKEN = 10, KLIK_PAUZE = 1500;   // 10 klikken, hooguit 1,5 s ertussen
   const B = 400, H = 600, GROND = 70;      // logische afmetingen van het speelveld
@@ -15,9 +18,9 @@
   // dus een nieuw gezicht toevoegen = foto in web/ zetten + regel hieronder.
   const PERSONAGES = [
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
-    { id:'p2',      naam:'Personage 2', src:'persoon2.png', prijs:25 },
-    { id:'p3',      naam:'Personage 3', src:'persoon3.png', prijs:60 },
-    { id:'p4',      naam:'Personage 4', src:'persoon4.png', prijs:120 },
+    { id:'p2',      naam:'Collega 2', src:'persoon2.png', prijs:25 },
+    { id:'p3',      naam:'Collega 3', src:'persoon3.png', prijs:60 },
+    { id:'p4',      naam:'Collega 4', src:'persoon4.png', prijs:120 },
   ];
   const BEELDEN = {};
   PERSONAGES.forEach(p => {
@@ -30,6 +33,9 @@
   let overlay, canvas, ctx, frame = null, vorige = 0, spel;
   let beste = lees('flappyMatBest', 0), credits = lees('flappyMatCredits', 0);
   let gekocht = lees('flappyMatGekocht', ['mat']), keuze = lees('flappyMatKeuze', 'mat');
+  let gespeeld = lees('flappyMatGespeeld', 0);
+  // online: { id, naam } zodra de gebruiker bekend is; fout: tabel ontbreekt of geen toegang
+  const online = { id:null, naam:'', klaar:false, fout:false, lijst:[], plek:null };
 
   function lees(sleutel, standaard){
     try{ const v = localStorage.getItem(sleutel); return v == null ? standaard : JSON.parse(v); }catch(e){ return standaard; }
@@ -46,25 +52,45 @@
     stijl.textContent = `
       .fm-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(20,26,38,.72); display:flex; align-items:center; justify-content:center;
         padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); }
+      .fm-overlay{ overflow-y:auto; }
       .fm-overlay[hidden]{ display:none; }
-      .fm-doos{ position:relative; display:flex; flex-direction:column; gap:10px; align-items:center; }
-      .fm-doos canvas{ display:block; width:min(400px, 92vw, calc((92vh - 150px) * 2 / 3)); height:auto; aspect-ratio:2/3; border-radius:14px;
+      .fm-doos{ margin:auto; padding:8px 0; display:flex; flex-direction:column; gap:10px; align-items:center; }
+      .fm-doos canvas{ display:block; width:min(400px, 92vw, calc((92vh - 290px) * 2 / 3)); height:auto; aspect-ratio:2/3; border-radius:14px;
         box-shadow:0 20px 60px rgba(0,0,0,.45); touch-action:none; cursor:pointer; }
       .fm-veld{ position:relative; }
       .fm-sluit{ position:absolute; top:10px; right:10px; width:34px; height:34px; border:0; border-radius:50%;
         background:rgba(255,255,255,.9); color:#262b33; font:600 20px/1 'IBM Plex Sans',system-ui,sans-serif; cursor:pointer; }
       .fm-sluit:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }
-      .fm-winkel{ width:min(400px, 92vw); background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
+      .fm-zij{ display:flex; flex-direction:column; gap:10px; width:min(400px, 92vw); }
+      .fm-ranglijst{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
+        box-shadow:0 10px 30px rgba(0,0,0,.3); font-size:13px; }
+      .fm-ranglijst ol{ list-style:none; margin:0; padding:0; max-height:100px; overflow:auto; }
+      .fm-ranglijst li{ display:grid; grid-template-columns:22px 22px 1fr auto; gap:8px; align-items:center; padding:3px 4px; border-radius:6px; }
+      .fm-ranglijst li.ik{ background:#eef2fa; font-weight:600; }
+      .fm-ranglijst li.los{ border-top:1px dashed #d9dde3; border-radius:0; margin-top:2px; padding-top:5px; }
+      .fm-ranglijst .nr{ color:#7a8089; font-variant-numeric:tabular-nums; text-align:right; }
+      .fm-ranglijst li:nth-child(-n+3) .nr{ color:#b8860b; font-weight:600; }
+      .fm-ranglijst img{ width:20px; height:24px; object-fit:cover; border-radius:50%; }
+      .fm-ranglijst .wie{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .fm-ranglijst .sc{ font-weight:600; font-variant-numeric:tabular-nums; }
+      .fm-ranglijst .leeg{ color:#7a8089; font-size:12.5px; }
+      @media (min-width:760px){
+        .fm-doos{ flex-direction:row; align-items:flex-start; }
+        .fm-doos canvas{ width:min(400px, calc(92vh * 2 / 3)); }
+        .fm-zij{ width:270px; }
+        .fm-ranglijst ol{ max-height:300px; }
+      }
+      .fm-winkel{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
         box-shadow:0 10px 30px rgba(0,0,0,.3); }
-      .fm-winkel-kop{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:8px; }
+      .fm-winkel-kop, .fm-rang-kop{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:8px; }
       .fm-winkel-kop b{ font-size:14px; }
       .fm-credits{ font-weight:600; color:#2f5fa8; font-variant-numeric:tabular-nums; }
-      .fm-rij{ display:grid; grid-template-columns:repeat(auto-fit, minmax(80px, 1fr)); gap:8px; }
-      .fm-p{ display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border:1px solid #d9dde3; border-radius:10px; font-size:12px; text-align:center; }
+      .fm-rij{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+      .fm-p{ min-width:0; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border:1px solid #d9dde3; border-radius:10px; font-size:12px; text-align:center; }
       .fm-p.gekozen{ border-color:#2f5fa8; background:#eef2fa; }
       .fm-p img{ width:34px; height:46px; object-fit:cover; border-radius:50%; }
       .fm-p.op-slot img{ filter:grayscale(1) brightness(.85); }
-      .fm-p button{ font:inherit; font-size:11.5px; font-weight:600; border:1px solid #2f5fa8; color:#2f5fa8; background:#fff; border-radius:6px; padding:3px 8px; cursor:pointer; white-space:nowrap; }
+      .fm-p button{ font:inherit; font-size:11.5px; font-weight:600; border:1px solid #2f5fa8; color:#2f5fa8; background:#fff; border-radius:6px; padding:3px 6px; cursor:pointer; white-space:nowrap; max-width:100%; }
       .fm-p button.koop{ background:#2f5fa8; color:#fff; }
       .fm-p button:disabled{ border-color:#d9dde3; color:#7a8089; background:#f6f7f9; cursor:default; }
       .fm-p button:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }`;
@@ -74,7 +100,7 @@
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-label', 'Flappy Mat');
-    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button></div><div class="fm-winkel" aria-label="Winkel"></div></div>';
+    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button></div><div class="fm-zij"><div class="fm-ranglijst" aria-label="Ranglijst"></div><div class="fm-winkel" aria-label="Winkel"></div></div></div>';
     document.body.appendChild(overlay);
     canvas = overlay.querySelector('canvas');
     ctx = canvas.getContext('2d');
@@ -92,6 +118,7 @@
       }
       keuze = p.id; bewaar('flappyMatKeuze', keuze);
       renderWinkel();
+      bewaarOnline();
       canvas.focus && canvas.blur();
     });
   }
@@ -100,7 +127,9 @@
     if(!overlay) bouwOverlay();
     nieuwSpel();
     renderWinkel();
+    renderRanglijst();
     overlay.hidden = false;
+    startOnline();
     document.addEventListener('keydown', toets, true);
     vorige = performance.now();
     frame = requestAnimationFrame(lus);
@@ -167,7 +196,9 @@
     spel.v = Math.max(spel.v, 0);
     if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
     credits += spel.score; bewaar('flappyMatCredits', credits);
+    gespeeld++; bewaar('flappyMatGespeeld', gespeeld);
     renderWinkel();
+    bewaarOnline().then(laadRanglijst);
   }
 
   function teken(){
@@ -223,6 +254,7 @@
       tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 256, 17, '#262b33');
       tekst(spel.record ? `Nieuw record! +${spel.score} credits` : `+${spel.score} credits`, B/2, 282, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
       tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, 306, 13, '#7a8089');
+      if(online.plek) tekst('#' + online.plek + ' op de ranglijst', B/2, 340, 15, '#262b33', false);
     }
   }
 
@@ -260,6 +292,82 @@
         else knop = `<button disabled title="Nog ${p.prijs - credits} credits nodig">${p.prijs} credits</button>`;
         return `<div class="fm-p${gekozen ? ' gekozen' : ''}${heeft ? '' : ' op-slot'}"><img src="${p.src}" alt="">${p.naam}${knop}</div>`;
       }).join('')}</div>`;
+  }
+
+  // ---- online: per gebruiker opslaan + ranglijst (Supabase, tabel flappy_scores)
+  function naamUitEmail(email){
+    const deel = String(email || '').split('@')[0];
+    return deel.split(/[._-]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ') || 'Onbekend';
+  }
+  function esc(t){ return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function db(){ return window.supabase && window.supabase.from ? window.supabase : null; }
+
+  let startBezig = null;
+  function startOnline(){
+    if(online.klaar || online.fout) return laadRanglijst();
+    if(!startBezig) startBezig = koppelGebruiker().catch(() => { online.fout = true; }).then(() => { startBezig = null; renderRanglijst(); return laadRanglijst(); });
+    return startBezig;
+  }
+  async function koppelGebruiker(){
+    const sb = db();
+    if(!sb || !window.getSession){ online.fout = true; return; }
+    const sessie = await window.getSession();
+    if(!sessie){ online.fout = true; return; }
+    online.id = sessie.user.id;
+    online.naam = naamUitEmail(sessie.user.email);
+    const { data, error } = await sb.from('flappy_scores').select('*').eq('user_id', online.id).maybeSingle();
+    if(error){ online.fout = true; return; }
+    if(data){
+      // de opgeslagen stand is leidend (dan klopt hij op elk apparaat); de beste score en
+      // gekochte personages van deze browser gaan niet verloren
+      beste = Math.max(beste, data.beste || 0);
+      credits = data.credits || 0;
+      gekocht = Array.from(new Set([...(data.gekocht || []), ...gekocht]));
+      keuze = gekocht.includes(data.keuze) ? data.keuze : keuze;
+      gespeeld = Math.max(gespeeld, data.gespeeld || 0);
+      bewaar('flappyMatBest', beste); bewaar('flappyMatCredits', credits);
+      bewaar('flappyMatGekocht', gekocht); bewaar('flappyMatKeuze', keuze);
+    }
+    online.klaar = true;
+    renderWinkel();
+    await bewaarOnline();
+  }
+  async function bewaarOnline(){
+    const sb = db();
+    if(!sb || !online.klaar) return;
+    const { error } = await sb.from('flappy_scores').upsert({
+      user_id:online.id, naam:online.naam, beste, credits, gekocht, keuze, gespeeld,
+      bijgewerkt_op:new Date().toISOString(),
+    }, { onConflict:'user_id' });
+    if(error) console.warn('Flappy Mat: score niet opgeslagen', error.message);
+  }
+  async function laadRanglijst(){
+    const sb = db();
+    if(!sb || !online.klaar) return;
+    const { data, error } = await sb.from('flappy_scores').select('user_id, naam, beste, keuze')
+      .gt('beste', 0).order('beste', { ascending:false }).order('bijgewerkt_op', { ascending:true }).limit(10);
+    if(error) return;
+    online.lijst = data || [];
+    const i = online.lijst.findIndex(r => r.user_id === online.id);
+    if(i >= 0) online.plek = i + 1;
+    else if(beste > 0){
+      const { count } = await sb.from('flappy_scores').select('user_id', { count:'exact', head:true }).gt('beste', beste);
+      online.plek = count == null ? null : count + 1;
+    } else online.plek = null;
+    renderRanglijst();
+  }
+  function renderRanglijst(){
+    const el = overlay && overlay.querySelector('.fm-ranglijst');
+    if(!el) return;
+    const kop = '<div class="fm-rang-kop"><b>Ranglijst</b><span>Jouw beste: <span class="fm-credits">' + beste + '</span></span></div>';
+    if(online.fout){ el.innerHTML = kop + '<div class="leeg">Ranglijst is nog niet actief; je score wordt in deze browser bewaard.</div>'; return; }
+    if(!online.klaar){ el.innerHTML = kop + '<div class="leeg">Laden…</div>'; return; }
+    const beeld = id => (PERSONAGES.find(p => p.id === id && (p.beschikbaar || p.id === 'mat')) || PERSONAGES[0]).src;
+    const rij = (nr, r, extra) => `<li class="${r.user_id === online.id ? 'ik' : ''}${extra || ''}"><span class="nr">${nr}</span><img src="${beeld(r.keuze)}" alt=""><span class="wie">${esc(r.naam)}</span><span class="sc">${r.beste}</span></li>`;
+    let html = online.lijst.map((r, i) => rij(i + 1, r)).join('');
+    if(online.plek && online.plek > online.lijst.length)
+      html += rij(online.plek, { user_id:online.id, naam:online.naam, beste, keuze }, ' los');
+    el.innerHTML = kop + (html ? '<ol>' + html + '</ol>' : '<div class="leeg">Nog geen scores. Zet de eerste neer!</div>');
   }
 
   // 10 klikken binnen korte tijd op het logo opent het spel
