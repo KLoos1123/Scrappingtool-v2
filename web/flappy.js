@@ -21,10 +21,10 @@
   const PERSONAGES = [
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
     { id:'p4',      naam:'Overloper', src:'persoon4.png', euro:5 },   // grap: niet te koop met credits
-    { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50, bonus:2 },   // geluksvogel: dubbele credits
-    { id:'p5',      naam:'Troy',      src:'persoon5.png', prijs:100 },
-    { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200 },
-    { id:'p6',      naam:'Chantal',   src:'persoon6.png', prijs:300 },
+    { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50, bonus:2, uitleg:'2× credits' },
+    { id:'p5',      naam:'Troy',      src:'persoon5.png', prijs:100, kracht:'magneet', uitleg:'Munt-magneet' },
+    { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200, kracht:'schild', uitleg:'Start met koffie' },
+    { id:'p6',      naam:'Chantal',   src:'persoon6.png', prijs:300, kracht:'zen', uitleg:'Rustiger tempo' },
   ];
   const BEELDEN = {};
   PERSONAGES.forEach(p => {
@@ -38,6 +38,53 @@
   let beste = lees('flappyMatBest', 0), credits = lees('flappyMatCredits', 0);
   let gekocht = lees('flappyMatGekocht', ['mat']), keuze = lees('flappyMatKeuze', 'mat');
   let gespeeld = lees('flappyMatGespeeld', 0), melding = '', geluid = lees('flappyMatGeluid', false);
+  let behaald = lees('flappyMatPrestaties', []), uitdaging = lees('flappyMatUitdaging', {});
+
+  function kracht(k){ const p = PERSONAGES.find(x => x.id === keuze); return !!p && p.kracht === k; }
+
+  // ---- dagelijkse uitdaging: elke dag een andere, één keer per dag bonuscredits
+  const UITDAGINGEN = [
+    { tekst:'Haal 15 punten in één potje',          klaar:s => s.score >= 15,                  beloning:30 },
+    { tekst:'Pak 5 munten in één potje',            klaar:s => s.gepakt >= 5,                  beloning:40 },
+    { tekst:'Haal 25 punten in één potje',          klaar:s => s.score >= 25,                  beloning:60 },
+    { tekst:'Red jezelf met een kop koffie',        klaar:s => s.gered >= 1,                   beloning:40 },
+    { tekst:'Speel 5 potjes',                       klaar:(s, u) => u.potjes >= 5, doel:5,     beloning:25 },
+    { tekst:'Haal 10 punten zonder munten',         klaar:s => s.score >= 10 && !s.gepakt,     beloning:35 },
+    { tekst:'Pak 3 munten én haal 12 punten',       klaar:s => s.gepakt >= 3 && s.score >= 12, beloning:45 },
+  ];
+  function vandaag(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function huidigeUitdaging(){
+    const dag = vandaag();
+    if(uitdaging.datum !== dag){ uitdaging = { datum:dag, potjes:0, klaar:false }; bewaar('flappyMatUitdaging', uitdaging); }
+    return UITDAGINGEN[Math.floor(Date.parse(dag) / 864e5) % UITDAGINGEN.length];
+  }
+
+  // ---- prestaties: eenmalig vrij te spelen, per browser bewaard
+  const PRESTATIES = [
+    ['munt',        '🪙', 'Eerste munt',             s => s.gepakt >= 1],
+    ['10',          '🥉', '10 punten',               s => s.score >= 10],
+    ['25',          '🥈', '25 punten',               s => s.score >= 25],
+    ['nacht',       '🌙', 'Nachtvlieger: 40 punten', s => s.score >= 40],
+    ['50',          '🥇', '50 punten',               s => s.score >= 50],
+    ['100',         '💯', '100 punten',              s => s.score >= 100],
+    ['koffie',      '☕', 'Gered door koffie',       s => s.gered >= 1],
+    ['jager',       '🧲', '10 munten in één potje',  s => s.gepakt >= 10],
+    ['volhouder',   '🔁', '25 potjes gespeeld',      () => gespeeld >= 25],
+    ['verzamelaar', '👥', 'Alle personages gekocht', () => PERSONAGES.every(p => p.euro || gekocht.includes(p.id))],
+  ];
+  function controleerPrestaties(){
+    const s = spel || {};
+    const nieuw = PRESTATIES.filter(([id, , , test]) => !behaald.includes(id) && test(s));
+    if(!nieuw.length) return;
+    nieuw.forEach(([id]) => behaald.push(id));
+    bewaar('flappyMatPrestaties', behaald);
+    if(spel) spel.toast = { tekst:nieuw.map(n => n[1] + ' ' + n[2]).join('  ·  '), t:2.6 };
+    GELUID.koffie();
+    renderExtra();
+  }
 
   // ---- geluid: korte piepjes via WebAudio, standaard uit (kantoor)
   let audio = null;
@@ -70,7 +117,8 @@
   function huidigBeeld(){ const img = BEELDEN[keuze]; return img && img.naturalWidth ? img : BEELDEN.mat; }
 
   function nieuwSpel(){
-    spel = { fase:'start', y:H/2 - 40, v:0, pijpen:[], munten:[], score:0, gepakt:0, afstand:0, wiebel:0, flits:0 };
+    spel = { fase:'start', y:H/2 - 40, v:0, pijpen:[], munten:[], score:0, gepakt:0, gered:0, afstand:0, wiebel:0, flits:0,
+             schild:kracht('schild') };
   }
 
   function bouwOverlay(){
@@ -107,11 +155,20 @@
         .fm-doos canvas{ width:min(400px, calc(92vh * 2 / 3)); }
         .fm-zij{ width:270px; }
         .fm-winkel .fm-rij{ grid-template-columns:repeat(2, 1fr); }
-        .fm-ranglijst ol{ max-height:210px; }
+        .fm-ranglijst ol{ max-height:150px; }
       }
+      .fm-extra{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
+        box-shadow:0 10px 30px rgba(0,0,0,.3); font-size:13px; }
+      .fm-uitdaging{ display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-radius:8px; background:#f3f6fb; margin-bottom:10px; }
+      .fm-uitdaging.klaar{ background:#e9f6ee; color:#2f6b45; }
+      .fm-uitdaging .vink{ font-weight:700; }
+      .fm-badges{ display:flex; flex-wrap:wrap; gap:4px; }
+      .fm-badge{ width:28px; height:28px; display:grid; place-items:center; border-radius:8px; background:#f3f6fb; font-size:16px; cursor:default; }
+      .fm-badge:not(.aan){ filter:grayscale(1); opacity:.35; }
+      .fm-kracht{ color:#2f8a4e; font-size:11px; }
       .fm-winkel{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
         box-shadow:0 10px 30px rgba(0,0,0,.3); }
-      .fm-winkel-kop, .fm-rang-kop{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:8px; }
+      .fm-winkel-kop, .fm-rang-kop, .fm-extra-kop{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:8px; }
       .fm-winkel-kop b{ font-size:14px; }
       .fm-credits{ font-weight:600; color:#2f5fa8; font-variant-numeric:tabular-nums; }
       .fm-rij{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
@@ -130,7 +187,7 @@
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-label', 'Flappy Mat');
-    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button><button class="fm-geluid" aria-pressed="false"></button></div><div class="fm-zij"><div class="fm-ranglijst" aria-label="Ranglijst"></div><div class="fm-winkel" aria-label="Winkel"></div></div></div>';
+    overlay.innerHTML = '<div class="fm-doos"><div class="fm-veld"><canvas width="' + B + '" height="' + H + '" aria-label="Flappy Mat speelveld"></canvas><button class="fm-sluit" aria-label="Sluiten">×</button><button class="fm-geluid" aria-pressed="false"></button></div><div class="fm-zij"><div class="fm-ranglijst" aria-label="Ranglijst"></div><div class="fm-extra" aria-label="Uitdaging en prestaties"></div><div class="fm-winkel" aria-label="Winkel"></div></div></div>';
     document.body.appendChild(overlay);
     canvas = overlay.querySelector('canvas');
     ctx = canvas.getContext('2d');
@@ -151,7 +208,7 @@
       }
       if(!gekocht.includes(p.id)){
         if(credits < p.prijs) return;
-        credits -= p.prijs; gekocht.push(p.id);
+        credits -= p.prijs; gekocht.push(p.id); controleerPrestaties();
         bewaar('flappyMatCredits', credits); bewaar('flappyMatGekocht', gekocht);
       }
       keuze = p.id; bewaar('flappyMatKeuze', keuze);
@@ -167,6 +224,7 @@
     nieuwSpel();
     renderWinkel();
     renderRanglijst();
+    renderExtra();
     overlay.hidden = false;
     startOnline();
     document.addEventListener('keydown', toets, true);
@@ -202,6 +260,7 @@
 
   function stap(dt){
     spel.wiebel += dt;
+    if(spel.toast) spel.toast.t -= dt;
     if(spel.fase === 'start'){ spel.y = H/2 - 40 + Math.sin(spel.wiebel * 3) * 8; return; }
     if(spel.fase === 'over'){
       if(spel.y < H - GROND - HOOFD_H/2){ spel.v += ZWAARTE * dt; spel.y = Math.min(H - GROND - HOOFD_H/2, spel.y + spel.v * dt); }
@@ -210,7 +269,8 @@
     spel.v += ZWAARTE * dt;
     spel.y += spel.v * dt;
     // pijpen en munten verschuiven en bijmaken; het tempo loopt op met de score
-    const tempo = SNELHEID * (1 + Math.min(0.6, spel.score * 0.015));
+    const zen = kracht('zen');
+    const tempo = SNELHEID * (1 + (zen ? Math.min(0.3, spel.score * 0.007) : Math.min(0.6, spel.score * 0.015)));
     spel.afstand += tempo * dt;
     spel.flits = Math.max(0, spel.flits - dt);
     spel.onkwetsbaar = Math.max(0, (spel.onkwetsbaar || 0) - dt);
@@ -222,7 +282,7 @@
     spel.munten = spel.munten.filter(m => m.x > -MUNT_R && !m.weg);
     const laatste = spel.pijpen[spel.pijpen.length - 1];
     if(!laatste || laatste.x < B - AFSTAND){
-      const marge = 70, hoogte = GAT - Math.min(35, spel.score * 1.2);   // gat wordt langzaam kleiner
+      const marge = 70, hoogte = GAT - (zen ? Math.min(15, spel.score * 0.5) : Math.min(35, spel.score * 1.2));   // gat wordt langzaam kleiner
       const gat = marge + Math.random() * (H - GROND - hoogte - marge * 2);
       const beweegt = spel.score >= 30 && Math.random() < 0.5;
       const amp = beweegt ? Math.min(45, gat - 30, H - GROND - 30 - gat - hoogte) : 0;
@@ -237,19 +297,23 @@
     // score en botsingen (iets kleinere hitbox: het is een hoofd, geen vierkant)
     const hx = B * 0.3, kx = HOOFD_B * 0.36, ky = HOOFD_H * 0.4;
     for(const p of spel.pijpen){
-      if(!p.geteld && p.x + BREEDTE < hx - kx){ p.geteld = true; spel.score++; GELUID.punt(); }
+      if(!p.geteld && p.x + BREEDTE < hx - kx){ p.geteld = true; spel.score++; GELUID.punt(); controleerPrestaties(); }
       const binnenX = hx + kx > p.x && hx - kx < p.x + BREEDTE;
       const binnenGat = spel.y - ky > p.gat && spel.y + ky < p.gat + p.hoogte;
       if(binnenX && !binnenGat && !spel.onkwetsbaar){
         if(!spel.schild) return einde();
-        spel.schild = false; spel.onkwetsbaar = 1.2; GELUID.schild();   // koffie vangt één botsing op
+        spel.schild = false; spel.onkwetsbaar = 1.2; spel.gered++; GELUID.schild(); controleerPrestaties();   // koffie vangt één botsing op
       }
     }
     for(const m of spel.munten){
+      if(!m.koffie && kracht('magneet') && m.x > hx - 10 && Math.hypot(m.x - hx, m.y - spel.y) < 120){
+        const f = Math.min(1, dt * 7);   // Troy trekt munten naar zich toe
+        m.x += (hx - m.x) * f; m.y += (spel.y - m.y) * f;
+      }
       if(Math.hypot(m.x - hx, m.y - spel.y) < MUNT_R + kx){
         m.weg = true;
         if(m.koffie){ spel.schild = true; GELUID.koffie(); }
-        else { spel.gepakt++; spel.flits = 0.35; GELUID.munt(); }
+        else { spel.gepakt++; spel.flits = 0.35; GELUID.munt(); controleerPrestaties(); }
       }
     }
     if(spel.y + ky > H - GROND || spel.y - ky < 0) return einde();
@@ -264,9 +328,14 @@
     if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
     const p = PERSONAGES.find(x => x.id === keuze);
     spel.verdiend = (spel.score + spel.gepakt * MUNT_WAARDE) * ((p && p.bonus) || 1);
-    credits += spel.verdiend; bewaar('flappyMatCredits', credits);
+    credits += spel.verdiend;
     gespeeld++; bewaar('flappyMatGespeeld', gespeeld);
-    renderWinkel();
+    const u = huidigeUitdaging();
+    uitdaging.potjes++;
+    if(!uitdaging.klaar && u.klaar(spel, uitdaging)){ uitdaging.klaar = true; credits += u.beloning; spel.uitdagingBonus = u.beloning; }
+    bewaar('flappyMatUitdaging', uitdaging); bewaar('flappyMatCredits', credits);
+    controleerPrestaties();
+    renderWinkel(); renderExtra();
     bewaarOnline().then(laadRanglijst);
   }
 
@@ -325,6 +394,15 @@
     // teksten
     ctx.textAlign = 'center';
     if(spel.fase !== 'start') tekst(String(spel.score), B/2, 70, 44, '#fff', true);
+    if(spel.toast && spel.toast.t > 0){
+      ctx.globalAlpha = Math.min(1, spel.toast.t * 2);
+      ctx.font = "600 14px 'IBM Plex Sans', system-ui, sans-serif";
+      const w = Math.min(B - 30, ctx.measureText(spel.toast.tekst).width + 30);
+      ctx.fillStyle = 'rgba(38,43,51,.82)';
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(B/2 - w/2, 92, w, 30, 15) : ctx.rect(B/2 - w/2, 92, w, 30); ctx.fill();
+      tekst(spel.toast.tekst, B/2, 112, 14, '#fff');
+      ctx.globalAlpha = 1;
+    }
     if(spel.fase === 'vliegen' && spel.gepakt){
       ctx.textAlign = 'right';
       tekst('● ' + spel.gepakt, B - 16, 76, 18, spel.flits ? '#fff3c4' : '#e3b23c', true);
@@ -341,7 +419,7 @@
     if(spel.fase === 'over'){
       const med = medaille(spel.score);
       const extra = (spel.gepakt ? ` · ${spel.gepakt} munt${spel.gepakt > 1 ? 'en' : ''}` : '') + (spel.verdiend > spel.score + spel.gepakt * MUNT_WAARDE ? ' · Lucky ×2' : '');
-      const onder = (extra ? 306 : 286) + (med ? 40 : 0) + (online.plek ? 22 : 0) + 16;
+      const onder = (extra ? 306 : 286) + (med ? 40 : 0) + (online.plek ? 22 : 0) + (spel.uitdagingBonus ? 22 : 0) + 16;
       paneel(B/2, (172 + onder) / 2, 320, onder - 172);
       tekst('Game over', B/2, 200, 30, '#bf3b2c');
       tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 234, 17, '#262b33');
@@ -354,6 +432,7 @@
         ctx.textAlign = 'left'; tekst(med[1], B/2 - 30, y + 12, 15, '#262b33'); ctx.textAlign = 'center';
         y += 40;
       }
+      if(spel.uitdagingBonus){ tekst('Uitdaging gehaald! +' + spel.uitdagingBonus + ' credits', B/2, y, 14, '#2f8a4e'); y += 22; }
       if(online.plek) { tekst('#' + online.plek + ' op de ranglijst', B/2, y, 14, '#262b33'); y += 22; }
       tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, y, 12, '#7a8089');
     }
@@ -414,9 +493,21 @@
         else if(p.euro) knop = `<button class="koop" data-id="${p.id}">€ ${p.euro},-</button>`;
         else if(credits >= p.prijs) knop = `<button class="koop" data-id="${p.id}">Koop · ${p.prijs}</button>`;
         else knop = `<button disabled title="Nog ${p.prijs - credits} credits nodig">${p.prijs} credits</button>`;
-        if(p.bonus) knop = `<small style="color:#2f8a4e">${p.bonus}× credits</small>` + knop;
+        if(p.uitleg) knop = `<small class="fm-kracht">${p.uitleg}</small>` + knop;
         return `<div class="fm-p${gekozen ? ' gekozen' : ''}${heeft ? '' : ' op-slot'}"><img src="${p.src}" alt="">${p.naam}${knop}</div>`;
       }).join('')}</div>${melding ? `<div class="fm-melding" role="status">${melding}</div>` : ''}`;
+  }
+
+  function renderExtra(){
+    const el = overlay && overlay.querySelector('.fm-extra');
+    if(!el) return;
+    const u = huidigeUitdaging();
+    const voortgang = u.doel && !uitdaging.klaar ? ` (${Math.min(uitdaging.potjes, u.doel)}/${u.doel})` : '';
+    el.innerHTML = `<div class="fm-extra-kop"><b>Uitdaging van vandaag</b><span class="fm-credits">+${u.beloning}</span></div>
+      <div class="fm-uitdaging${uitdaging.klaar ? ' klaar' : ''}"><span class="vink">${uitdaging.klaar ? '✓' : '○'}</span><span>${u.tekst}${voortgang}${uitdaging.klaar ? ' · gehaald' : ''}</span></div>
+      <div class="fm-extra-kop"><b>Prestaties</b><span>${behaald.length}/${PRESTATIES.length}</span></div>
+      <div class="fm-badges">${PRESTATIES.map(([id, icoon, naam]) =>
+        `<span class="fm-badge${behaald.includes(id) ? ' aan' : ''}" title="${naam}${behaald.includes(id) ? '' : ' (nog niet behaald)'}" aria-label="${naam}">${icoon}</span>`).join('')}</div>`;
   }
 
   // ---- online: per gebruiker opslaan + ranglijst (Supabase, tabel flappy_scores)
