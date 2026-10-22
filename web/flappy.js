@@ -18,8 +18,8 @@
   // dus een nieuw gezicht toevoegen = foto in web/ zetten + regel hieronder.
   const PERSONAGES = [
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
-    { id:'p4',      naam:'Overloper', src:'persoon4.png', prijs:5 },
-    { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50 },
+    { id:'p4',      naam:'Overloper', src:'persoon4.png', euro:5 },   // grap: niet te koop met credits
+    { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50, bonus:2 },   // geluksvogel: dubbele credits
     { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200 },
   ];
   const BEELDEN = {};
@@ -33,7 +33,7 @@
   let overlay, canvas, ctx, frame = null, vorige = 0, spel;
   let beste = lees('flappyMatBest', 0), credits = lees('flappyMatCredits', 0);
   let gekocht = lees('flappyMatGekocht', ['mat']), keuze = lees('flappyMatKeuze', 'mat');
-  let gespeeld = lees('flappyMatGespeeld', 0);
+  let gespeeld = lees('flappyMatGespeeld', 0), melding = '';
   // online: { id, naam } zodra de gebruiker bekend is; fout: tabel ontbreekt of geen toegang
   const online = { id:null, naam:'', klaar:false, fout:false, lijst:[], plek:null };
 
@@ -93,6 +93,7 @@
       .fm-p button{ font:inherit; font-size:11.5px; font-weight:600; border:1px solid #2f5fa8; color:#2f5fa8; background:#fff; border-radius:6px; padding:3px 6px; cursor:pointer; white-space:nowrap; max-width:100%; }
       .fm-p button.koop{ background:#2f5fa8; color:#fff; }
       .fm-p button:disabled{ border-color:#d9dde3; color:#7a8089; background:#f6f7f9; cursor:default; }
+      .fm-melding{ margin-top:8px; padding:6px 8px; border-radius:8px; background:#fff6e0; color:#7a5a00; font-size:12.5px; }
       .fm-p button:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }`;
     document.head.appendChild(stijl);
     overlay = document.createElement('div');
@@ -111,12 +112,17 @@
       const knop = e.target.closest('button[data-id]');
       if(!knop) return;
       const p = PERSONAGES.find(x => x.id === knop.dataset.id);
+      if(p.euro && !gekocht.includes(p.id)){
+        melding = `${p.naam} kost echt € ${p.euro},-. Stuur een Tikkie naar Mathieu en misschien zet hij hem vrij.`;
+        return renderWinkel();
+      }
       if(!gekocht.includes(p.id)){
         if(credits < p.prijs) return;
         credits -= p.prijs; gekocht.push(p.id);
         bewaar('flappyMatCredits', credits); bewaar('flappyMatGekocht', gekocht);
       }
       keuze = p.id; bewaar('flappyMatKeuze', keuze);
+      melding = '';
       renderWinkel();
       bewaarOnline();
       canvas.focus && canvas.blur();
@@ -195,7 +201,9 @@
     spel.einde = performance.now();
     spel.v = Math.max(spel.v, 0);
     if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
-    credits += spel.score; bewaar('flappyMatCredits', credits);
+    const p = PERSONAGES.find(x => x.id === keuze);
+    spel.verdiend = spel.score * ((p && p.bonus) || 1);
+    credits += spel.verdiend; bewaar('flappyMatCredits', credits);
     gespeeld++; bewaar('flappyMatGespeeld', gespeeld);
     renderWinkel();
     bewaarOnline().then(laadRanglijst);
@@ -252,7 +260,8 @@
       paneel(B/2, 245, 290, 150);
       tekst('Game over', B/2, 222, 30, '#bf3b2c');
       tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 256, 17, '#262b33');
-      tekst(spel.record ? `Nieuw record! +${spel.score} credits` : `+${spel.score} credits`, B/2, 282, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
+      const extra = spel.verdiend > spel.score ? ' (Lucky ×2)' : '';
+      tekst(spel.record ? `Nieuw record! +${spel.verdiend} credits${extra}` : `+${spel.verdiend} credits${extra}`, B/2, 282, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
       tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, 306, 13, '#7a8089');
       if(online.plek) tekst('#' + online.plek + ' op de ranglijst', B/2, 340, 15, '#262b33', false);
     }
@@ -288,10 +297,12 @@
         let knop;
         if(gekozen) knop = '<button disabled>Gekozen</button>';
         else if(heeft) knop = `<button data-id="${p.id}">Kies</button>`;
+        else if(p.euro) knop = `<button class="koop" data-id="${p.id}">€ ${p.euro},-</button>`;
         else if(credits >= p.prijs) knop = `<button class="koop" data-id="${p.id}">Koop · ${p.prijs}</button>`;
         else knop = `<button disabled title="Nog ${p.prijs - credits} credits nodig">${p.prijs} credits</button>`;
+        if(p.bonus) knop = `<small style="color:#2f8a4e">${p.bonus}× credits</small>` + knop;
         return `<div class="fm-p${gekozen ? ' gekozen' : ''}${heeft ? '' : ' op-slot'}"><img src="${p.src}" alt="">${p.naam}${knop}</div>`;
-      }).join('')}</div>`;
+      }).join('')}</div>${melding ? `<div class="fm-melding" role="status">${melding}</div>` : ''}`;
   }
 
   // ---- online: per gebruiker opslaan + ranglijst (Supabase, tabel flappy_scores)
