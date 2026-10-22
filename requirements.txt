@@ -7,3 +7,4 @@ beautifulsoup4
 lxml
 openpyxl
 anthropic>=1.15,<2
+pypdf
