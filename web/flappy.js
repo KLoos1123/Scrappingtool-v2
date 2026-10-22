@@ -18,9 +18,9 @@
   // dus een nieuw gezicht toevoegen = foto in web/ zetten + regel hieronder.
   const PERSONAGES = [
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
-    { id:'p2',      naam:'Collega 2', src:'persoon2.png', prijs:25 },
-    { id:'p3',      naam:'Collega 3', src:'persoon3.png', prijs:60 },
-    { id:'p4',      naam:'Collega 4', src:'persoon4.png', prijs:120 },
+    { id:'p4',      naam:'Overloper', src:'persoon4.png', prijs:5 },
+    { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50 },
+    { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200 },
   ];
   const BEELDEN = {};
   PERSONAGES.forEach(p => {
