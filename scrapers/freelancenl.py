@@ -39,6 +39,8 @@ query PublicSearch($query: SearchQueryInput!, $sortMethod: String!, $limit: Int!
         place
         hoursFrom
         hoursTo
+        rateFrom
+        rateTo
         id
         status
         publishAt
@@ -91,6 +93,10 @@ def _uren(a):
 
 
 # ---------------------------------------------------------------- ingelogd
+
+class Captcha(RuntimeError):
+    """Het inlogscherm vraagt om een robotcontrole; opnieuw proberen heeft geen zin."""
+
 
 def _accept_cookies(page):
     for txt in ["Accepteer alles", "Akkoord", "Accept", "Alles accepteren"]:
@@ -161,14 +167,20 @@ def _ingelogd(email, wachtwoord):
         page.on("response", handler)
 
         page.goto(f"{MIJN}/inloggen", timeout=60000, wait_until="domcontentloaded")
-        _accept_cookies(page)
+        # de cookiebanner verschijnt pas na het laden en ligt over de knop
+        try:
+            page.locator("button:has-text('Accepteer alles')").click(timeout=10000)
+        except Exception:
+            _accept_cookies(page)
         page.wait_for_timeout(1200)
-        page.fill("input[name='email']", email)
-        page.fill("input[name='password']", wachtwoord)
-        (page.query_selector("button[type='submit']")
-         or page.query_selector("button:has-text('Inloggen')")).click()
+        # sinds okt 2026: velden met id i.p.v. name, plus Cloudflare Turnstile
+        page.fill("#E-mailadres, input[name='email']", email)
+        page.fill("#Wachtwoord, input[name='password']", wachtwoord)
+        page.locator("form button[type='submit']").first.click()
         page.wait_for_timeout(6000)
         if "inloggen" in page.url:
+            if page.query_selector("input[name='cfTurnstileResponse']"):
+                raise Captcha("Cloudflare-robotcontrole op het inlogscherm")
             raise RuntimeError("inloggen mislukt")
 
         page.goto(f"{MIJN}/opdracht-vinden/zoeken?resultaten=36",
@@ -238,6 +250,9 @@ def _uit_public(a):
         "publicatiedatum": a.get("publishAt"),
         "locatie": a.get("place") or None,
         "uren_per_week": _uren(a),
+        # uurtarief (excl. btw); gaat in tarieven.py vóór een tarief uit de tekst
+        "tarief_min": a.get("rateFrom"),
+        "tarief_max": a.get("rateTo"),
         # publiek geen deadlineveld; de omschrijving bevat 'm vaak wel als tekst
         # ("Deadline: 13-08-2026 om 13:00") en voedt de tekst-fallback in run.py
         "omschrijving": a.get("description") or None,
@@ -320,7 +335,11 @@ def haal_op():
                 return _ingelogd(email, wachtwoord)
             except Exception as e:
                 # NOOIT de volledige exception loggen: een Playwright-request-fout
-                # bevat de request-headers incl. auth-cookies/tokens. Alleen het type.
-                print(f"  ingelogd poging {poging + 1} mislukt ({type(e).__name__})")
+                # bevat de request-headers incl. auth-cookies/tokens. Alleen het
+                # type, plus de tekst van onze eigen RuntimeErrors.
+                reden = f": {e}" if type(e) in (RuntimeError, Captcha) else ""
+                print(f"  ingelogd poging {poging + 1} mislukt ({type(e).__name__}{reden})")
+                if isinstance(e, Captcha):
+                    break
         print("  val terug op publiek (geen deadlineveld)")
     return _publiek()

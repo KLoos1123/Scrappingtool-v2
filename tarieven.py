@@ -112,10 +112,16 @@ def uit_ai(data):
     return {"tarief": _omschrijf(lo, hi, False), "tarief_min": lo, "tarief_max": hi}
 
 
-def verzamel():
+def uit_bron(rij):
+    """Tarief dat de scraper als veld aanlevert (tarief_min/tarief_max per uur), of None."""
+    return uit_ai(rij)
+
+
+def verzamel(rijen=()):
     """Tarieven voor alle opdrachten met een omschrijving of AI-verrijking in
-    tenders.db. Geeft dicts met bron, tender_id, tarief, tarief_min, tarief_max,
-    herkomst ('tekst' of 'ai')."""
+    tenders.db, plus de rijen van deze run die zelf een tarief meegeven (zoals
+    freelance.nl). Geeft dicts met bron, tender_id, tarief, tarief_min,
+    tarief_max, herkomst ('bron', 'tekst' of 'ai')."""
     conn = sqlite3.connect(DB)
     uit = {}
     try:
@@ -137,6 +143,11 @@ def verzamel():
     except sqlite3.OperationalError:
         pass
     conn.close()
+    # een tariefveld van de bron zelf is het betrouwbaarst en wint altijd
+    for r in rijen:
+        gevonden = uit_bron(r)
+        if gevonden and r.get("bron") and r.get("tender_id") is not None:
+            uit[(r["bron"], str(r["tender_id"]))] = {**gevonden, "herkomst": "bron"}
     return [{"bron": b, "tender_id": t, **v} for (b, t), v in uit.items()]
 
 

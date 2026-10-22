@@ -54,7 +54,7 @@ function notitieIcoon(bron, tid){
 function tariefCel(bron, tid){
   const t=TARIEVEN.get(notitieSleutel(bron, tid));
   if(!t) return '<span class="muted">—</span>';
-  const titel=t.herkomst==='ai' ? 'uit de AI-verrijking van de omschrijving' : 'uit de omschrijving';
+  const titel={ai:'uit de AI-verrijking van de omschrijving', bron:'zoals de bron het opgeeft'}[t.herkomst] || 'uit de omschrijving';
   return `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>`;
 }
 
