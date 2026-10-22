@@ -136,6 +136,34 @@ def normaliseer_bestaande_datums():
     return gewijzigd
 
 
+def deadlines_uit_omschrijving(haal_deadline):
+    """Vult een lege deadline van eerder opgeslagen tenders aan uit hun
+    omschrijving (zie deadlines.py). Idempotent; geeft de gewijzigde rijen
+    terug zodat run.py ze ook naar Supabase kan sturen."""
+    conn = verbind()
+    try:
+        kandidaten = conn.execute(
+            "SELECT t.*, b.omschrijving FROM tenders t "
+            "JOIN beschrijvingen b USING (bron, tender_id) "
+            "WHERE (t.deadline IS NULL OR t.deadline = '') AND b.omschrijving IS NOT NULL"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        kandidaten = []  # tabel beschrijvingen bestaat nog niet
+    gewijzigd = []
+    for r in kandidaten:
+        deadline = haal_deadline(r["omschrijving"], r["publicatiedatum"] or r["eerst_gezien"])
+        if not deadline:
+            continue
+        conn.execute("UPDATE tenders SET deadline = ? WHERE bron = ? AND tender_id = ?",
+                     (deadline, r["bron"], r["tender_id"]))
+        rij = {k: r[k] for k in r.keys() if k != "omschrijving"}
+        rij["deadline"] = deadline
+        gewijzigd.append(rij)
+    conn.commit()
+    conn.close()
+    return gewijzigd
+
+
 def te_verrijken(maak_hash, limiet):
     """Niet-verlopen tenders met een omschrijving die nog niet (of met een oudere
     titel/omschrijving) verrijkt zijn, nieuwste eerst."""

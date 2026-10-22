@@ -85,5 +85,8 @@ def haal_op():
     items = soup.select("h5 a[href^='/interim-opdrachten/']")
     items = [a.find_parent("li") or a for a in items]
     print(f"  {len(items)} opdrachten gevonden")
+    # lege lijst door de site zelf, niet door verouderde selectors
+    if not items and "geen interim-aanvragen open" in r.text:
+        print("  hero.eu meldt: geen interim-aanvragen open")
 
     return [rij for rij in (_uit_item(i) for i in items) if rij]

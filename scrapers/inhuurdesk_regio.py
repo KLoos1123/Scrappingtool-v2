@@ -8,6 +8,10 @@ Drie desks draaien op identieke software (server-side gerenderd):
 Opdracht-links hebben de vorm /Opdracht/{Organisatie-slug}/{Titel-slug}/{id}.
 We lezen de /opdrachten-lijstpagina (en de homepage als vangnet) en proberen
 eenvoudige ?page=N-paginering tot er geen nieuwe id's meer bijkomen.
+
+Op /opdrachten zijn de items geen <a>, maar li.searchresult-item met een
+data-view-url; daar staat ook de deadline ("Reageren voor: 02-11-2026 17:00").
+De detailpagina toont die deadline niet, de homepage-ankers ook niet.
 """
 
 import re
@@ -27,6 +31,7 @@ DESKS = [
 ]
 
 OPDRACHT_RE = re.compile(r"^/Opdracht/([^/]+)/([^/]+)/(\d+)$")
+DEADLINE_RE = re.compile(r"(\d{1,2})-(\d{1,2})-(\d{4})(?:\s+(\d{1,2}):(\d{2}))?")
 MAX_PAGINA = 30
 
 
@@ -35,15 +40,46 @@ def _ontslug(s):
     return re.sub(r"\s+", " ", unquote(s).replace("-", " ")).strip()
 
 
+def _iso(tekst):
+    """'02-11-2026 17:00' -> '2026-11-02T17:00'."""
+    m = DEADLINE_RE.search(tekst or "")
+    if not m:
+        return None
+    dag, maand, jaar, uur, minuut = m.groups()
+    datum = f"{jaar}-{int(maand):02d}-{int(dag):02d}"
+    if uur:
+        datum += f"T{int(uur):02d}:{minuut}"
+    return datum
+
+
+def _uit_item(li, base, prefix, regio):
+    """Item van de /opdrachten-lijst: titel, labels/waarden en de deadline."""
+    kop = li.select_one(".searchresult-item-header > div")
+    rij = _maak_rij(li.get("data-view-url"), kop.get_text(strip=True) if kop else None,
+                    base, prefix, regio)
+    if not rij:
+        return None
+    labels = [l.get_text(strip=True).lower() for l in li.select(".searchresult-item-label")]
+    waarden = [w.get_text(" ", strip=True) for w in li.select(".searchresult-item-value")]
+    for label, waarde in zip(labels, waarden):
+        if label.startswith("reageren voor"):
+            rij["deadline"] = _iso(waarde)
+    return rij
+
+
 def _uit_anker(a, base, prefix, regio):
-    m = OPDRACHT_RE.match(a.get("href") or "")
+    return _maak_rij(a.get("href"), a.get_text(strip=True), base, prefix, regio)
+
+
+def _maak_rij(href, tekst, base, prefix, regio):
+    m = OPDRACHT_RE.match(href or "")
     if not m:
         return None
     org_slug, titel_slug, oid = m.groups()
 
     # De h3 op de homepage kapt lange titels af ("...piek..."); de URL-slug
     # bevat de volledige titel, dus die heeft dan de voorkeur.
-    titel = a.get_text(strip=True) or None
+    titel = tekst or None
     if (not titel or titel.lower() in ("delen", "bekijk")
             or titel.endswith("...") or titel.endswith("…")):
         titel = _ontslug(titel_slug)
@@ -57,7 +93,7 @@ def _uit_anker(a, base, prefix, regio):
         "deadline": None,
         "publicatiedatum": None,
         "locatie": regio,
-        "url": base + a["href"],
+        "url": base + href,
     }
 
 
@@ -66,8 +102,12 @@ def _desk(ctx, prefix, regio, base):
 
     def verwerk(html):
         nieuw = 0
-        for a in BeautifulSoup(html, "lxml").select("a[href^='/Opdracht/']"):
-            rij = _uit_anker(a, base, prefix, regio)
+        soup = BeautifulSoup(html, "lxml")
+        kandidaten = [_uit_item(li, base, prefix, regio)
+                      for li in soup.select("li.searchresult-item[data-view-url]")]
+        kandidaten += [_uit_anker(a, base, prefix, regio)
+                       for a in soup.select("a[href^='/Opdracht/']")]
+        for rij in kandidaten:
             if rij and rij["tender_id"] not in rijen:
                 # kies het anker met de beste titel (h3 boven lege ankers)
                 rijen[rij["tender_id"]] = rij
@@ -75,6 +115,7 @@ def _desk(ctx, prefix, regio, base):
             elif rij:
                 oud = rijen[rij["tender_id"]]
                 if (not oud["titel"] or len(rij["titel"] or "") > len(oud["titel"])):
+                    rij["deadline"] = rij["deadline"] or oud["deadline"]
                     rijen[rij["tender_id"]] = rij
         return nieuw
 
@@ -115,5 +156,6 @@ def haal_op():
                 print(f"    {regio} MISLUKT: {e}")
         browser.close()
 
-    print(f"  {len(rijen)} opdrachten gevonden")
+    print(f"  {len(rijen)} opdrachten gevonden, "
+          f"{sum(1 for r in rijen if r['deadline'])} met deadline")
     return rijen

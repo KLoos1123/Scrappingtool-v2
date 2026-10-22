@@ -4,8 +4,20 @@ Geen login nodig. De zoekpagina toont 15 vacatures per pagina en pagineert
 via de query-parameter ?p=N. Het CDN kan kale requests blokkeren, daarom
 halen we de pagina's op via een browsercontext (Playwright) en parsen we de
 HTML met BeautifulSoup.
+
+Een sluitingsdatum staat niet in de lijst en ook niet als validThrough in de
+JSON-LD van de detailpagina. Sommige vacatures noemen hem wel in de
+omschrijving ("De sluitingsdatum is 23 oktober 2026", "Solliciteren kan tot
+..."). We geven de JSON-LD-omschrijving van de detailpagina mee; run.py haalt
+de deadline eruit (deadlines.py).
 """
 
+import json
+import re
+from concurrent.futures import ThreadPoolExecutor
+from html import unescape
+
+import requests
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
@@ -18,6 +30,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 KAART = "a.job-list--link[data-job-id]"
 MAX_PAGINA = 40  # veiligheidsgrens
+WERKERS = 4  # parallelle detailpagina's
 
 
 def _tekst(el):
@@ -42,6 +55,31 @@ def _uit_kaart(a):
         "categorie": _tekst(a.find("span", class_="category")),
         "url": BASE + href if href else None,
     }
+
+
+def _detail(html):
+    """(omschrijving als platte tekst, datePosted) uit de JSON-LD van de detailpagina."""
+    m = re.search(r'<script[^>]*ld\+json[^>]*>(.*?)</script>', html, re.S)
+    if not m:
+        return None, None
+    try:
+        ld = json.loads(m.group(1), strict=False)  # er staan soms tabs in
+    except ValueError:
+        return None, None
+    tekst = unescape(re.sub(r"<[^>]+>", " ", ld.get("description") or ""))
+    return re.sub(r"\s+", " ", tekst).strip() or None, ld.get("datePosted")
+
+
+def _vul_detail(rij):
+    """Haalt de detailpagina op voor de omschrijving (fouten negeren we). De
+    sluitingsdatum haalt run.py daaruit (deadlines.py)."""
+    try:
+        r = requests.get(rij["url"], headers={"User-Agent": UA}, timeout=20)
+        if r.ok:
+            rij["omschrijving"], geplaatst = _detail(r.text)
+            rij["publicatiedatum"] = rij.get("publicatiedatum") or geplaatst
+    except requests.RequestException:
+        pass
 
 
 def haal_op():
@@ -77,5 +115,9 @@ def haal_op():
 
         browser.close()
 
-    print(f"  {len(rijen)} vacatures gevonden")
+    with ThreadPoolExecutor(WERKERS) as pool:
+        list(pool.map(_vul_detail, [r for r in rijen if r["url"]]))
+
+    met = sum(1 for r in rijen if r.get("omschrijving"))
+    print(f"  {len(rijen)} vacatures gevonden, {met} met omschrijving")
     return rijen

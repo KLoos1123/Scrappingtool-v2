@@ -4,9 +4,17 @@ Geen login nodig. De vacatures staan server-side in de overzichtspagina;
 de paginering gaat via ?o=N (offset in stappen van 10). We halen de
 pagina's op via een browsercontext (Playwright) en parsen de HTML met
 BeautifulSoup.
+
+De sluitingsdatum staat niet in de lijst, wel op de detailpagina: als
+validThrough in de JSON-LD (JobPosting) en zichtbaar als "Reageer voor:
+15-11-2026 00:00". Die pagina's halen we parallel op met requests.
+Vacatures zonder sluitingsdatum (doorlopend) hebben validThrough null.
 """
 
 import re
+from concurrent.futures import ThreadPoolExecutor
+
+import requests
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
@@ -19,6 +27,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 STAP = 10
 MAX_OFFSET = 2000  # veiligheidsgrens
+WERKERS = 4  # parallelle detailpagina's
 
 
 def _tekst(el):
@@ -51,6 +60,25 @@ def _uit_kaart(a):
         "vakgebied": _metadata(a, "discipline"),
         "url": href if href.startswith("http") else BASE + href,
     }
+
+
+def _deadline(html):
+    """Sluitingsdatum (ISO) van een detailpagina, of None."""
+    m = re.search(r'"validThrough":\s*"(\d{4}-\d{2}-\d{2})', html)
+    if m:
+        return m.group(1)
+    m = re.search(r"Reageer voor:\s*(?:<[^>]+>\s*)*(\d{2})-(\d{2})-(\d{4})", html)
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else None
+
+
+def _vul_deadline(sessie, rij):
+    """Haalt de detailpagina op en zet de deadline (fouten negeren we)."""
+    try:
+        r = sessie.get(rij["url"], timeout=15)
+        if r.ok:
+            rij["deadline"] = _deadline(r.text)
+    except requests.RequestException:
+        pass
 
 
 def haal_op():
@@ -89,5 +117,11 @@ def haal_op():
 
         browser.close()
 
-    print(f"  {len(rijen)} vacatures gevonden")
+    sessie = requests.Session()
+    sessie.headers["User-Agent"] = UA
+    with ThreadPoolExecutor(WERKERS) as pool:
+        list(pool.map(lambda r: _vul_deadline(sessie, r), rijen))
+
+    met = sum(1 for r in rijen if r["deadline"])
+    print(f"  {len(rijen)} vacatures gevonden, {met} met sluitingsdatum")
     return rijen
