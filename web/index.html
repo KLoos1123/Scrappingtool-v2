@@ -4,253 +4,223 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <base target="_top">
-<title>Profource · SAP & Marktmonitor</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<title>Dashboard · Profource Marktmonitor</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
 <script src="marktlogica.js"></script>
 <script src="notities.js"></script>
 <script src="flappy.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
+  /* Zelfde ontwerp als bronnen.html (design handoff v3): licht en zakelijk. De leadlijst
+     staat centraal; naast de tabel alleen wat helpt kiezen (waar zit de vraag). */
   :root{
-    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
-    --panel:#1b2b3d; --panel2:#22344a; --border:#2a3a4d;
-    --blauw:#199DD9; --blauw-l:#4ab8e6; --indigo:#11448D; --violet:#83007D; --magenta:#E9167D;
-    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
-    color-scheme: dark;
+    --pagina:#f2f4f7; --vlak:#ffffff; --kop:#fcfcfd; --tekst:#262b33; --muted:#5f656e; --muted2:#7a8089;
+    --primair:#2f5fa8; --primair-donker:#244a86; --balk:#4a78c2; --balk-leeg:#eceef2;
+    --op:#2f8a4e; --neer:#bf3b2c; --waarschuw:#8a6a2a; --waarschuw-bg:#fbf3e3;
+    --rand:#d9dde3; --rand-veld:#c9ced6; --scheiding:#e8ebef; --kopregel:#f6f7f9;
+    --actief:#e9eef8; --actief-tekst:#2d56a0; --gekozen:#eef2fa; --hover:#f4f6fb;
+    /* namen die notities.js (gedeeld) verwacht */
+    --border:var(--rand-veld); --bg2:#ffffff; --text:var(--tekst); --sub:var(--muted); --dim:#8a9099;
+    --blauw:var(--primair); --blauw-l:var(--primair-donker);
+    color-scheme: light;
   }
   *{ box-sizing:border-box; }
-  html,body{ margin:0; padding:0; }
-  body{
-    font-family:'IBM Plex Sans',sans-serif; color:var(--text);
-    -webkit-font-smoothing:antialiased;
-    background:
-      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
-      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
-      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
-    background-attachment:fixed;
-    padding:28px 32px 60px; min-height:100vh;
-  }
-  a{ color:var(--blauw); }
-  a:hover{ color:var(--magenta); }
-  h1,h2{ font-family:'Archivo',sans-serif; }
-  ::-webkit-scrollbar{ width:10px; height:10px; }
-  ::-webkit-scrollbar-track{ background:transparent; }
-  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:6px; }
-  @keyframes pulseGlow{ 0%{opacity:1;} 50%{opacity:.35;} 100%{opacity:1;} }
-  @keyframes fadeInUp{ from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+  [hidden]{ display:none !important; }
+  body{ margin:0; background:var(--pagina); color:var(--tekst); font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a{ color:var(--primair); text-decoration:none; }
+  a:hover{ color:var(--primair-donker); text-decoration:underline; }
+  button, select, input{ font:inherit; }
+  :focus-visible{ outline:2px solid var(--primair); outline-offset:2px; }
+  .num{ font-variant-numeric:tabular-nums; }
+  .muted{ color:var(--muted2); font-size:12px; }
 
-  .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
-    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid rgba(255,255,255,0.08); }
-  .brand{ display:flex; align-items:center; gap:16px; }
-  .brand img{ height:38px; width:auto; display:block; background:#fff; padding:8px 12px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.25); }
-  .wordmark{ display:none; align-items:center; gap:9px; }
-  .wordmark .wm-text{ font-family:'Archivo',sans-serif; font-size:22px; color:var(--blauw); font-weight:500; line-height:1; }
-  .wordmark .wm-text b{ color:var(--text); font-weight:700; }
-  .title-block{ padding-left:16px; border-left:1px solid rgba(255,255,255,0.12); }
-  .title-block h1{ font-size:16px; font-weight:600; margin:0; line-height:1.1; }
-  .title-block .subtitle{ font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.05em; text-transform:uppercase; }
-  .topmeta{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
-  .live{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
-  .live .dot{ width:8px; height:8px; border-radius:50%; background:var(--blauw-l); display:inline-block; animation:pulseGlow 2s infinite; }
-  .refresh-btn{ font-size:12px; padding:8px 16px; border-radius:8px; border:1px solid rgba(25,157,217,0.4); background:rgba(25,157,217,0.10); color:var(--blauw); cursor:pointer; font-weight:600; }
-  .refresh-btn:hover{ background:rgba(25,157,217,0.18); }
+  /* shell */
+  .shell{ height:48px; display:flex; align-items:center; gap:16px; padding:0 16px; background:var(--kop); border-bottom:1px solid var(--rand); }
+  .logo{ width:28px; height:28px; border-radius:6px; background:var(--primair); color:#fff; display:grid; place-items:center; font-weight:600; font-size:13px; cursor:default; user-select:none; }
+  .shell .naam{ font-weight:600; font-size:15px; }
+  .shell nav{ display:flex; gap:2px; margin-left:8px; font-size:14px; }
+  .shell nav a, .shell nav span{ padding:6px 12px; border-radius:6px; color:#4a515c; white-space:nowrap; }
+  .shell nav a:hover{ background:#f0f2f5; text-decoration:none; color:var(--tekst); }
+  .shell nav .actief{ background:var(--actief); color:var(--actief-tekst); font-weight:500; }
+  .shell .ruimte{ flex:1; }
+  .live{ font-size:12px; color:var(--muted2); white-space:nowrap; }
+  .icoonknop{ border:1px solid var(--rand-veld); background:#fff; border-radius:6px; height:30px; padding:0 10px; font-size:13px; color:#4a515c; cursor:pointer; white-space:nowrap; }
+  .icoonknop:hover{ background:#f0f2f5; }
+  .gebruiker{ position:relative; }
+  .initialen{ width:32px; height:32px; border-radius:50%; border:0; background:#dde5f3; color:var(--actief-tekst); font-size:12px; font-weight:600; cursor:pointer; }
+  .menu{ position:absolute; right:0; top:40px; background:var(--vlak); border:1px solid var(--rand); border-radius:8px; box-shadow:0 8px 24px rgba(30,40,60,.12); padding:6px; min-width:200px; z-index:10; }
+  .menu .wie{ font-size:12px; color:var(--muted); padding:6px 10px 8px; border-bottom:1px solid var(--scheiding); margin-bottom:4px; word-break:break-all; }
+  .menu button, .menu a{ display:block; width:100%; text-align:left; border:0; background:transparent; padding:8px 10px; border-radius:6px; font-size:14px; cursor:pointer; color:var(--tekst); }
+  .menu button:hover, .menu a:hover{ background:#f0f2f5; text-decoration:none; }
 
-  .ticker{ display:flex; align-items:center; gap:12px; background:rgba(233,22,125,0.10); border:1px solid rgba(233,22,125,0.35); border-radius:12px; padding:10px 14px; margin-bottom:18px; }
-  .ticker .lbl{ font-size:11px; font-weight:700; color:var(--magenta); white-space:nowrap; letter-spacing:.05em; }
-  .ticker .items{ display:flex; gap:8px; overflow-x:auto; flex:1; }
-  .ticker a{ text-decoration:none; white-space:nowrap; font-size:12px; color:var(--text); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:5px 12px; }
-  .ticker a b{ color:var(--magenta); }
-  .ticker .close{ border:none; background:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:0 4px; }
+  /* paginakop */
+  .kop{ background:var(--kop); border-bottom:1px solid var(--rand); padding:16px 32px 20px; }
+  .kruimel{ font-size:13px; display:flex; gap:6px; color:var(--muted2); }
+  .kop-rij{ display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:20px; margin-top:10px; }
+  .kop h1{ margin:0; font-size:24px; font-weight:600; letter-spacing:-.01em; }
+  .kop .onder{ font-size:14px; color:var(--muted2); margin-top:4px; }
+  .cijfers{ display:flex; flex-wrap:wrap; gap:8px 12px; }
+  .cijfer{ display:flex; flex-direction:column; gap:4px; border:1px solid transparent; background:transparent; border-radius:8px; padding:6px 10px; cursor:pointer; text-align:left; color:inherit; }
+  .cijfer:hover{ background:var(--hover); }
+  .cijfer[aria-pressed="true"]{ background:var(--actief); border-color:#c8d5ee; }
+  .cijfer .l{ font-size:12px; color:var(--muted2); white-space:nowrap; }
+  .cijfer b{ font-size:28px; font-weight:500; line-height:1; }
+  .cijfer.urgent b{ color:var(--neer); }
+  .cijfer .s{ font-size:12px; color:var(--muted2); white-space:nowrap; }
 
-  .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
-  .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; animation:fadeInUp .5s ease both; }
-  .card .label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
-  .card .value{ font-family:'Archivo',sans-serif; font-size:32px; font-weight:700; line-height:1; }
-  .card .sub{ font-size:11px; color:var(--dim); margin-top:6px; }
-  .card .spark{ display:flex; align-items:flex-end; gap:2px; height:26px; margin-top:12px; }
-  .card .spark i{ flex:1; background:var(--blauw); border-radius:2px; opacity:.85; }
-  .card.sap{ background:rgba(25,157,217,0.08); border-color:rgba(25,157,217,0.35); }
-  .card.sap .value{ color:var(--blauw); }
+  /* filterbalk */
+  .filters{ background:var(--kop); border-bottom:1px solid var(--rand); padding:14px 32px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 16px; }
+  .veld{ display:flex; flex-direction:column; gap:6px; font-size:12px; color:#5a606a; min-width:0; max-width:100%; }
+  .veld input[type=search], .veld select{ font-size:14px; height:36px; padding:0 10px; border:1px solid var(--rand-veld); border-radius:6px; background:#fff; color:var(--tekst); outline:none; }
+  .veld input[type=search]{ width:240px; padding:0 12px; }
+  .veld input[type=search]:focus, .veld select:focus{ border-color:var(--primair); box-shadow:0 0 0 2px rgba(47,95,168,.15); }
+  .segment{ display:flex; height:36px; border:1px solid var(--rand-veld); border-radius:6px; overflow:hidden; background:#fff; }
+  .segment button{ font-size:14px; padding:0 12px; border:0; cursor:pointer; white-space:nowrap; background:#fff; color:var(--muted2); }
+  .segment button + button{ border-left:1px solid var(--rand-veld); }
+  .segment button[aria-pressed="true"]{ background:#e6edf9; color:var(--actief-tekst); }
+  .schakels{ display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; min-height:36px; }
+  .schakel{ display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; white-space:nowrap; color:var(--tekst); }
+  .schakel input{ width:15px; height:15px; accent-color:var(--primair); }
 
-  .views{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
-  .view-btn{ font-size:12px; font-weight:600; padding:8px 16px; border-radius:999px; cursor:pointer; background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid rgba(255,255,255,0.1); }
-  .view-btn:hover{ color:var(--text); }
-  .view-btn.active{ background:rgba(25,157,217,0.18); color:var(--blauw); border-color:rgba(25,157,217,0.45); }
-
-  .layout{ display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
-  .layout3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
-  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
-  .panel h2{ font-size:14px; font-weight:600; margin:0 0 12px 0; color:var(--text); }
-  .panel h2 .hint{ color:var(--dim); font-weight:400; font-size:11px; }
-  .chart-wrap{ position:relative; height:250px; }
-
-  .filters{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:14px; }
-  .filters label{ font-size:11px; color:var(--muted); margin-right:6px; }
-  select, input[type=text]{ font-family:'IBM Plex Sans',sans-serif; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
-  input[type=text]{ min-width:220px; padding:8px 12px; }
-  select:focus, input:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
-  .toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; }
-  .toggle input{ accent-color:var(--blauw); }
-  .csv-btn{ font-size:12px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; }
-  .csv-btn:hover{ border-color:var(--blauw); color:var(--text); }
-
-  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
-  .chip{ display:inline-flex; align-items:center; gap:6px; background:rgba(25,157,217,0.14); color:#9fc4ec; border:1px solid rgba(25,157,217,0.3); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px; }
-  .chip button{ border:none; background:none; cursor:pointer; color:#7a9bc4; font-size:14px; line-height:1; padding:0 2px; }
-  .chip.clear{ background:rgba(233,22,125,0.14); color:var(--magenta); border-color:rgba(233,22,125,0.3); cursor:pointer; padding:4px 12px; }
-
+  /* inhoud */
+  main{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; padding:20px 32px 40px; align-items:start; }
+  .kaart{ background:var(--vlak); border:1px solid var(--rand); border-radius:10px; overflow:hidden; min-width:0; }
+  .werkbalk{ display:flex; align-items:center; justify-content:space-between; gap:10px 12px; padding:12px 20px; border-bottom:1px solid var(--scheiding); flex-wrap:wrap; }
+  .werkbalk b{ font-weight:600; font-size:15px; }
+  .werkbalk .rechts{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip{ display:inline-flex; align-items:center; gap:4px; font-size:12px; background:var(--actief); color:var(--actief-tekst); border-radius:999px; padding:2px 4px 2px 10px; }
+  .chip button{ border:0; background:transparent; color:inherit; cursor:pointer; font-size:14px; line-height:1; padding:0 4px; }
+  .chip.clear{ background:transparent; color:var(--muted2); padding:2px 6px; cursor:pointer; }
+  .chip.clear:hover{ color:var(--neer); }
+  .scroll{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:14px; min-width:860px; }
+  th{ text-align:left; padding:10px 12px; background:var(--kopregel); border-bottom:1px solid var(--scheiding); font-size:12px; font-weight:500; color:#5a606a; white-space:nowrap; }
+  th[data-key]{ cursor:pointer; }
+  th[data-key]:hover{ color:var(--tekst); }
+  th.r, td.r{ text-align:right; }
+  td{ padding:10px 12px; border-bottom:1px solid var(--scheiding); vertical-align:top; }
   tr.rij{ cursor:pointer; }
-  tr.rij:hover td{ background:rgba(25,157,217,0.06); }
-  tr.rij.open td{ background:rgba(25,157,217,0.10); }
-  .hasdesc{ margin-left:6px; opacity:.7; font-size:11px; }
-  .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
-  .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
-  .ai-paneel{ white-space:normal; background:rgba(25,157,217,0.06); border:1px solid rgba(25,157,217,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
-  .ai-paneel .ai-sam{ color:var(--text); margin-bottom:8px; }
-  .ai-paneel dl{ display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; margin:0; font-size:12px; }
-  .ai-paneel dt{ color:var(--muted); }
-  .ai-paneel dd{ margin:0; color:var(--sub); }
-  .ai-paneel .ai-voet{ margin-top:8px; font-size:10.5px; color:var(--dim); }
-  tr.detail td{ background:var(--bg2); color:var(--sub); font-size:12.5px; line-height:1.55;
-    white-space:pre-wrap; padding:14px 18px; border-bottom:1px solid var(--border); }
-  tr.detail .det-leeg{ color:var(--dim); font-style:italic; }
-  .table-wrap{ max-height:640px; overflow:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:600; white-space:nowrap; position:sticky; top:0; background:var(--panel2); border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.04em; z-index:1; }
-  td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }
-  tr:hover td{ background:rgba(255,255,255,0.03); }
-  a.title-link{ color:var(--blauw); text-decoration:none; }
-  a.title-link:hover{ color:var(--magenta); }
-  .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; margin-left:6px; }
-  .badge-sap{ background:rgba(25,157,217,0.16); color:var(--blauw); border:1px solid rgba(25,157,217,0.35); }
-  .badge-oracle{ background:rgba(233,22,125,0.16); color:var(--magenta); border:1px solid rgba(233,22,125,0.35); }
-  .badge-tender{ display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; background:rgba(25,157,217,0.15); color:var(--blauw); }
-  .badge-vac{ display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; background:rgba(74,184,230,0.15); color:var(--blauw-l); }
-  .cat{ display:inline-block; padding:3px 9px; border-radius:8px; font-size:11px; background:rgba(255,255,255,0.06); }
-  .score{ display:inline-block; min-width:42px; text-align:center; padding:3px 8px; border-radius:8px; font-weight:700; font-size:12px; }
-  .s-hot{ background:rgba(233,22,125,0.18); color:var(--magenta); border:1px solid rgba(233,22,125,0.4); }
-  .s-warm{ background:rgba(25,157,217,0.18); color:#5ab6e6; border:1px solid rgba(25,157,217,0.4); }
-  .s-cool{ background:rgba(255,255,255,0.06); color:var(--muted); border:1px solid rgba(255,255,255,0.12); }
-  .nieuw{ font-size:9px; background:var(--indigo); color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; }
-  .num{ font-size:10px; color:var(--dim); margin-top:2px; }
-  .dl{ font-size:10px; font-weight:700; margin-top:2px; }
-  .dl-kort{ color:var(--magenta); }
-  .dl-mid{ color:var(--blauw); }
-  .dl-ok{ color:var(--blauw-l); }
-  .dl-verlopen{ color:var(--muted); }
-
+  tr.rij:hover td{ background:var(--hover); }
+  tr.rij.open td{ background:var(--gekozen); }
+  tr.rij.open td:first-child{ box-shadow:inset 3px 0 0 var(--primair); }
+  .score{ display:inline-block; min-width:36px; text-align:center; padding:2px 6px; border-radius:6px; font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .s-hot{ background:#fde8e6; color:var(--neer); }
+  .s-warm{ background:#e6edf9; color:var(--actief-tekst); }
+  .s-cool{ background:var(--kopregel); color:var(--muted2); }
+  a.title-link{ font-weight:500; }
+  .sub{ display:block; font-size:12px; color:#8a9099; margin-top:2px; }
+  .badge{ display:inline-block; font-size:10.5px; font-weight:600; padding:0 6px; border-radius:999px; margin-left:6px; vertical-align:1px; }
+  .badge-sap{ background:#e6edf9; color:var(--actief-tekst); }
+  .badge-oracle{ background:#fde8e6; color:var(--neer); }
+  .nieuw{ font-size:10.5px; font-weight:600; color:#fff; background:var(--primair); border-radius:999px; padding:0 6px; margin-left:6px; vertical-align:1px; }
+  .hasdesc{ margin-left:6px; font-size:11px; opacity:.6; }
+  .ai-klant{ display:inline; color:var(--primair-donker); }
+  .ai-tag{ font-size:9.5px; font-weight:600; background:#efe7f6; color:#6b3fa0; border-radius:999px; padding:0 5px; margin-left:4px; }
+  .dl{ font-size:11.5px; font-weight:500; }
+  .dl-kort{ color:var(--neer); } .dl-mid{ color:var(--waarschuw); } .dl-ok, .dl-verlopen{ color:var(--muted2); }
   .statuscell{ min-width:150px; }
-  .statusSelect{ font-family:inherit; font-size:11.5px; padding:5px 8px; border-radius:7px;
-    border:1px solid var(--border); background:var(--bg2); color:var(--text); width:100%; cursor:pointer; }
-  .statusSelect:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
-  .statuswho{ font-size:10px; color:var(--dim); margin-top:4px; line-height:1.3; }
+  .statusSelect{ font-size:13px; padding:4px 6px; border-radius:6px; border:1px solid var(--rand-veld); background:#fff; color:var(--tekst); width:100%; cursor:pointer; }
+  .statuswho{ font-size:11px; color:var(--muted2); margin-top:3px; }
+  tr.detail td{ background:#fafbfc; padding:14px 20px; white-space:pre-wrap; font-size:13.5px; line-height:1.55; color:#3b414b; }
+  .det-leeg{ color:var(--muted2); font-style:italic; }
+  .ai-paneel{ white-space:normal; background:#f6f3fb; border:1px solid #e3d9f2; border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+  .ai-paneel .ai-sam{ margin-bottom:8px; }
+  .ai-paneel dl{ display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; margin:0; font-size:12.5px; }
+  .ai-paneel dt{ color:var(--muted2); } .ai-paneel dd{ margin:0; }
+  .ai-paneel .ai-voet{ margin-top:8px; font-size:11px; color:var(--muted2); }
+  .voet{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 20px; font-size:13px; color:var(--muted2); flex-wrap:wrap; }
+  .pager button{ font-size:13px; padding:5px 12px; border-radius:6px; border:1px solid var(--rand-veld); background:#fff; color:var(--tekst); cursor:pointer; margin-left:6px; }
+  .pager button:disabled{ opacity:.45; cursor:default; }
+  .uitleg{ font-size:12px; color:var(--muted2); line-height:1.5; padding:0 20px 14px; }
 
-  .ranklist{ list-style:none; margin:0; padding:0; }
-  .ranklist li{ display:flex; justify-content:space-between; gap:8px; padding:7px 8px; font-size:13px; border-radius:8px; margin-bottom:3px; }
-  .ranklist li span:first-child{ color:var(--sub); }
-  .ranklist li.clickable{ cursor:pointer; }
-  .ranklist li.clickable:hover{ background:rgba(255,255,255,0.04); }
-  .ranklist li.active{ background:rgba(25,157,217,0.12); }
-  .ranklist .cnt{ font-weight:700; color:var(--blauw); }
-  .ranklist li.muted span{ color:var(--dim); }
-  .pill{ display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:11px; background:rgba(255,255,255,0.04); color:var(--sub); border:1px solid rgba(255,255,255,0.08); cursor:pointer; margin:2px 3px 2px 0; }
-  .pill .d{ width:7px; height:7px; border-radius:50%; display:inline-block; }
-  .pill.active{ background:rgba(25,157,217,0.14); color:var(--blauw); border-color:rgba(25,157,217,0.35); }
+  /* waar zit de vraag */
+  .inzicht{ position:sticky; top:20px; }
+  .inzicht h2{ margin:0; font-size:15px; font-weight:600; }
+  .inzicht .blok{ padding:14px 18px; border-top:1px solid var(--scheiding); }
+  .inzicht .blok:first-of-type{ border-top:0; }
+  .inzicht h3{ margin:0 0 8px; font-size:12px; font-weight:500; color:var(--muted2); }
+  .ranglijst{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+  .ranglijst button{ width:100%; display:grid; grid-template-columns:minmax(0,1fr) 54px 28px; gap:8px; align-items:center; border:0; background:transparent; padding:4px 6px; margin:0 -6px; border-radius:6px; cursor:pointer; text-align:left; font-size:13px; color:var(--tekst); }
+  .ranglijst button:hover{ background:var(--hover); }
+  .ranglijst button[aria-pressed="true"]{ background:var(--actief); color:var(--actief-tekst); }
+  .ranglijst .n{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ranglijst .spoor{ height:5px; border-radius:3px; background:var(--balk-leeg); overflow:hidden; }
+  .ranglijst .spoor i{ display:block; height:100%; background:var(--balk); }
+  .ranglijst .c{ text-align:right; font-size:12px; color:var(--muted2); font-variant-numeric:tabular-nums; }
+  .leeglijst{ font-size:12.5px; color:var(--muted2); }
 
-  .footer-row{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--muted); }
-  .pager button{ font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--sub); cursor:pointer; margin-left:6px; }
-  .pager button:disabled{ opacity:.4; cursor:default; }
-  .disclaimer{ font-size:11px; color:var(--dim); margin-top:10px; line-height:1.5; }
-  .loading, .error{ padding:40px; text-align:center; color:var(--muted); }
-  .error{ color:#f0b6cf; background:var(--panel); border:1px solid rgba(233,22,125,0.35); border-radius:14px; text-align:left; }
+  .loading, .error{ padding:48px 32px; text-align:center; color:var(--muted2); }
+  .error{ color:var(--neer); text-align:left; max-width:760px; margin:24px auto; background:#fff; border:1px solid #f0c9c4; border-radius:10px; }
   .error code{ display:block; margin-top:8px; font-size:12px; color:var(--muted); white-space:pre-wrap; }
-  .muted{ color:var(--dim); font-size:11px; }
-  @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .layout,.layout3{grid-template-columns:1fr;} }
+
+  @media (max-width:1239px){
+    main{ grid-template-columns:minmax(0,1fr); }
+    .inzicht{ position:static; }
+  }
+  @media (max-width:640px){
+    .kop, .filters{ padding-left:16px; padding-right:16px; }
+    main{ padding:16px 16px 32px; }
+    .shell{ gap:10px; }
+    .shell .naam, .live{ display:none; }
+    .shell nav{ margin-left:0; overflow-x:auto; }
+    .veld input[type=search]{ width:100%; }
+    .veld.zoek{ flex:1 1 100%; }
+    .segment{ overflow-x:auto; max-width:100%; }
+  }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  
-  <div class="brand">
-    <img id="logoImg" src="logo.png" alt="Profource"
-         onerror="this.remove();var s=document.getElementById('logoSvg');if(s)s.style.display='inline-flex';">
-    <span id="logoSvg" class="wordmark">
-      <svg width="42" height="34" viewBox="0 0 42 34" aria-hidden="true">
-        <polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon>
-        <rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect>
-        <rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect>
-      </svg>
-      <span class="wm-text"><b>pro</b>fource</span>
-    </span>
-    <div class="title-block">
-      <h1>Marktmonitor</h1>
-      <div class="subtitle" id="subtitle">SAP &amp; Oracle · leadradar</div>
+<header class="shell">
+  <div class="logo">P</div>
+  <span class="naam">Marktmonitor</span>
+  <nav>
+    <span class="actief" aria-current="page">Dashboard</span>
+    <a href="bronnen.html">Bronnen</a>
+    <a id="adminLink" href="admin.html" hidden>Beheer</a>
+    <a href="https://mathieu-butenaerts.github.io/leadbeheer/" target="_blank" rel="noopener noreferrer">Leadbeheer ↗</a>
+  </nav>
+  <span class="ruimte"></span>
+  <span class="live" id="liveText">Data laden…</span>
+  <button class="icoonknop" id="refreshBtn" title="Opnieuw laden">Vernieuwen</button>
+  <div class="gebruiker">
+    <button class="initialen" id="initialen" aria-haspopup="true" aria-expanded="false" title="Account">··</button>
+    <div class="menu" id="menu" hidden>
+      <div class="wie" id="wie"></div>
+      <button id="logoutBtn">Uitloggen</button>
     </div>
   </div>
-  <div class="topmeta">
-    <div class="live"><span class="dot"></span><span id="liveText">Live · data laden…</span></div>
-    <a href="bronnen.html" class="refresh-btn" style="text-decoration:none">Bronnen</a>
-    <a id="adminLink" href="admin.html" class="refresh-btn" style="display:none;text-decoration:none">Beheer</a>
-    <a href="https://mathieu-butenaerts.github.io/leadbeheer/" target="_blank" rel="noopener noreferrer" class="refresh-btn" style="text-decoration:none">Leadbeheer</a>
-    <button class="refresh-btn" id="refreshBtn">Vernieuwen</button>
-    <button class="refresh-btn" id="logoutBtn">Uitloggen</button>
-  </div>
-</div>
+</header>
 
-<div id="loading" class="loading">Data wordt geladen...</div>
+<div id="loading" class="loading">Opdrachten laden…</div>
 <div id="errorBox" class="error" style="display:none"></div>
 
 <div id="app" style="display:none">
-
-  <div id="ticker" class="ticker" style="display:none">
-    <div class="lbl">SLUIT BINNENKORT</div>
-    <div class="items" id="tickerItems"></div>
-    <button class="close" id="tickerClose" title="verbergen">&times;</button>
-  </div>
-
-  <div class="cards">
-    <div class="card"><div class="label">Nieuw vandaag</div><div class="value" id="kpiVandaag">-</div><div class="sub">laatste 24 uur (IT)</div><div class="spark" id="sparkVandaag"></div></div>
-    <div class="card"><div class="label">Nieuw deze week</div><div class="value" id="kpiWeek">-</div><div class="sub">laatste 7 dagen (IT)</div><div class="spark" id="sparkWeek"></div></div>
-    <div class="card"><div class="label">Unieke eindklanten</div><div class="value" id="kpiOrgs">-</div><div class="sub">met open IT-opdrachten</div><div class="spark" id="sparkOrgs"></div></div>
-    <div class="card sap"><div class="label">SAP + Oracle</div><div class="value" id="kpiSap">-</div><div class="sub" id="kpiSapNieuw">-</div><div class="spark" id="sparkSap"></div></div>
-  </div>
-
-  <div class="views" id="smartViews"></div>
-
-  <div class="layout">
-    <div class="panel">
-      <h2 id="orgTitle">Top eindklanten <span class="hint">(klik om te filteren)</span></h2>
-      <div class="chart-wrap"><canvas id="orgChart"></canvas></div>
+  <section class="kop">
+    <div class="kruimel"><span>Marktmonitor</span><span>/</span><span>Dashboard</span></div>
+    <div class="kop-rij">
+      <div>
+        <h1>Leads</h1>
+        <div class="onder" id="subtitle">IT-opdrachten</div>
+      </div>
+      <div class="cijfers">
+        <button class="cijfer urgent" data-weergave="urgent" aria-pressed="false"><span class="l">Sluit binnen 7 dagen</span><b class="num" id="kpiUrgent">—</b><span class="s" id="kpiUrgentSub"></span></button>
+        <button class="cijfer" data-weergave="today" aria-pressed="false"><span class="l">Nieuw vandaag</span><b class="num" id="kpiVandaag">—</b><span class="s" id="kpiVandaagSub"></span></button>
+        <button class="cijfer" data-weergave="hot" aria-pressed="false"><span class="l">SAP &amp; Oracle</span><b class="num" id="kpiSap">—</b><span class="s" id="kpiSapSub"></span></button>
+        <button class="cijfer" data-weergave="behandeling" aria-pressed="false"><span class="l">In behandeling</span><b class="num" id="kpiPipe">—</b><span class="s" id="kpiPipeSub"></span></button>
+      </div>
     </div>
-    <div class="panel">
-      <h2>Categorieverdeling</h2>
-      <div class="chart-wrap"><canvas id="catChart"></canvas></div>
-    </div>
-  </div>
+  </section>
 
-  <div class="layout3">
-    <div class="panel">
-      <h2 id="rolesTitle">Meest gevraagde SAP-rollen</h2>
-      <ul class="ranklist" id="sapRoles"></ul>
-      <div class="muted" style="margin-top:8px">Klik een rol om erop te filteren.</div>
+  <section class="filters">
+    <label class="veld zoek">Zoeken<input type="search" id="searchBox" placeholder="Titel, organisatie of nummer" autocomplete="off"></label>
+    <div class="veld">Weergave
+      <div class="segment" id="weergaven" role="group" aria-label="Weergave"></div>
     </div>
-    <div class="panel">
-      <h2>Top gevraagde skills</h2>
-      <ul class="ranklist" id="topSkills"></ul>
-      <div class="muted" style="margin-top:8px">Klik een skill om erop te filteren.</div>
-    </div>
-    <div class="panel">
-      <h2>Snel filteren op categorie</h2>
-      <div id="quickCats"></div>
-    </div>
-  </div>
-
-  <div class="filters">
-    <div><label>Type</label>
+    <label class="veld">Type
       <select id="typeFilter">
         <option value="">Alle IT</option>
         <option value="SAP">SAP</option>
@@ -263,18 +233,11 @@
         <option value="Project &amp; Agile">Project &amp; Agile</option>
         <option value="Overig IT">Overig IT</option>
       </select>
-    </div>
-    <div><label>Soort</label>
-      <select id="soortFilter">
-        <option value="">Alles</option>
-        <option value="Tender/opdracht">Tender / opdracht</option>
-        <option value="Vacature">Vacature</option>
-      </select>
-    </div>
-    <div><label>Bron</label><select id="bronFilter"></select></div>
-    <div><label>Regio</label><select id="regioFilter"></select></div>
-    <div><label>Status</label><select id="statusFilterSel"></select></div>
-    <div><label>Periode</label>
+    </label>
+    <label class="veld">Bron<select id="bronFilter"></select></label>
+    <label class="veld">Regio<select id="regioFilter"></select></label>
+    <label class="veld">Status<select id="statusFilterSel"></select></label>
+    <label class="veld">Periode
       <select id="periodeFilter">
         <option value="">Alle</option>
         <option value="1">Vandaag</option>
@@ -282,67 +245,73 @@
         <option value="7">Deze week</option>
         <option value="31">Deze maand</option>
       </select>
-    </div>
-    <div><label>Sorteer</label>
-      <select id="sortFilter">
-        <option value="deadline-asc">Deadline (eerst sluitend)</option>
-        <option value="score-desc">Sales-score (hoog &rarr; laag)</option>
-        <option value="datum-desc">Nieuwste eerst</option>
-        <option value="organisatie-asc">Organisatie (A-Z)</option>
-        <option value="bron-asc">Bron (A-Z)</option>
+    </label>
+    <label class="veld">Soort
+      <select id="soortFilter">
+        <option value="">Alles</option>
+        <option value="Tender/opdracht">Tender / opdracht</option>
+        <option value="Vacature">Vacature</option>
       </select>
+    </label>
+    <div class="schakels">
+      <label class="schakel"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude</label>
+      <label class="schakel"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
+      <label class="schakel"><input type="checkbox" id="toonNietIt"> Ook niet-IT</label>
     </div>
-    <label class="toggle"><input type="checkbox" id="verbergVerlopen" checked> Verberg verlopen &amp; oude</label>
-    <label class="toggle"><input type="checkbox" id="verbergBureaus" checked> Alleen eindklanten</label>
-    <label class="toggle"><input type="checkbox" id="toonNietIt"> Toon ook niet-IT</label>
-    <div style="flex:1"></div>
-    <button class="csv-btn" id="csvBtn">Exporteer CSV</button>
-    <input type="text" id="searchBox" placeholder="Zoek op titel of organisatie...">
-  </div>
+  </section>
 
-  <div class="chips" id="activeChips"></div>
+  <main>
+    <section class="kaart">
+      <div class="werkbalk">
+        <div class="chips"><b id="resultCount">Opdrachten</b><span id="activeChips" class="chips"></span></div>
+        <div class="rechts">
+          <label class="veld" style="flex-direction:row;align-items:center;gap:6px">Sorteer
+            <select id="sortFilter">
+              <option value="deadline-asc">Deadline (eerst sluitend)</option>
+              <option value="score-desc">Sales-score (hoog &rarr; laag)</option>
+              <option value="datum-desc">Nieuwste eerst</option>
+              <option value="organisatie-asc">Organisatie (A-Z)</option>
+            </select>
+          </label>
+          <button class="icoonknop" id="csvBtn">Exporteer CSV</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th data-key="score">Score</th>
+              <th data-key="titel">Opdracht</th>
+              <th data-key="deadline">Deadline</th>
+              <th class="r">Tarief</th>
+              <th data-key="status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="voet">
+        <span id="pageCount"></span>
+        <div class="pager"><button id="prevBtn">Vorige</button><span id="pageInfo"></span><button id="nextBtn">Volgende</button></div>
+      </div>
+      <div class="uitleg">Klik op een opdracht voor de omschrijving, de AI-inschatting en de notitie (geschikt voor, tarief, opmerking). De sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie; een indicatie, geen garantie.</div>
+    </section>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th data-key="score">Score</th>
-          <th data-key="datum">Datum</th>
-          <th data-key="deadline">Deadline</th>
-          <th>Tarief</th>
-          <th data-key="organisatie">Organisatie</th>
-          <th data-key="titel">Titel</th>
-          <th data-key="categorie">Categorie</th>
-          <th data-key="soort">Soort</th>
-          <th data-key="regio">Regio</th>
-          <th data-key="bron">Bron</th>
-          <th data-key="status">Status</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-  </div>
-
-  <div class="footer-row">
-    <div id="resultCount">-</div>
-    <div class="pager">
-      <button id="prevBtn">Vorige</button>
-      <span id="pageInfo"></span>
-      <button id="nextBtn">Volgende</button>
-    </div>
-  </div>
-  <div class="disclaimer">Sales-score weegt SAP/Oracle/IT-trefwoorden, type organisatie en urgentie: met een deadline telt "sluit binnenkort" zwaarder; zonder deadline loopt de interesse wekelijks af. "Verberg verlopen &amp; oude" haalt gepasseerde sluitingsdata weg, én opdrachten zonder toekomstige deadline ouder dan 3 maanden; "Alleen eindklanten" verbergt bekende tussenpersonen/bureaus. Indicatie, geen garantie.</div>
+    <aside class="kaart inzicht" aria-label="Top eindklanten">
+      <div class="werkbalk"><h2>Top eindklanten</h2><span class="muted">in je selectie · klik om te filteren</span></div>
+      <div class="blok"><ul class="ranglijst" id="topOrgs"></ul></div>
+    </aside>
+  </main>
 </div>
 
 <script>
 /* ===================== state ===================== */
 const state = {
   rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'deadline-asc',
-  prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
+  prevSort: null, skill:'', rol:'', smartView:'', statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
   volledigeHistorie:false,
 };
-let orgChart=null, catChart=null;
 // Omschrijvingen worden pas opgehaald als je een regel openklapt; vooraf laden
 // we alleen welke opdrachten er één hebben (voor het 📄-icoon).
 let BESCHR_HEEFT=new Set();   // "bron|tender_id"
@@ -485,9 +454,9 @@ async function laadVolledigeHistorie(){
   }
 }
 function zetSubtitel(){
-  const n=state.rows.length;
+  const n=relevantRows().length;
   document.getElementById('subtitle').textContent=
-    `SAP & Oracle · leadradar · ${n} ${state.volledigeHistorie?'':'actuele '}regels`;
+    `${n.toLocaleString('nl-NL')} ${state.toonNietIt?'':'IT-'}opdrachten${state.volledigeHistorie?' (volledige historie)':''} · gesorteerd op wat het eerst sluit`;
 }
 
 async function laadOmschrijving(bron, tid){
@@ -631,6 +600,7 @@ function applySmartView(rows){
     case 'urgent': return rows.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7);
     case 'today': return rows.filter(r=>r.isVandaag);
     case 'groot': return rows.filter(r=>r.grootOrg);
+    case 'behandeling': return rows.filter(r=>IN_BEHANDELING.has(r.status));
     default: return rows;
   }
 }
@@ -675,7 +645,7 @@ function sparkline(el, rows, color){
 function renderChips(){
   const chips=[];
   const add=(label,clear)=>chips.push({label,clear});
-  if(state.smartView){ const sv=SMART_VIEWS.find(s=>s.key===state.smartView); add('Weergave: '+(sv?sv.label:state.smartView), ()=>{state.smartView='';}); }
+  if(state.smartView){ const w=WEERGAVEN.find(s=>s.key===state.smartView); add(w?w.label:state.smartView, ()=>{state.smartView='';}); }
   if(state.type) add('Type: '+state.type, ()=>{state.type='';syncSelect('typeFilter','');});
   if(state.soort) add('Soort: '+state.soort, ()=>{state.soort='';syncSelect('soortFilter','');});
   if(state.bron) add('Bron: '+state.bron, ()=>{state.bron='';syncSelect('bronFilter','');});
@@ -694,7 +664,7 @@ function renderChips(){
     el.querySelector('button').onclick=()=>{ c.clear(); state.page=1; render(); };
     wrap.appendChild(el);
   });
-  const clr=document.createElement('span'); clr.className='chip clear'; clr.textContent='Alles wissen';
+  const clr=document.createElement('button'); clr.className='chip clear'; clr.textContent='Wis filters';
   clr.onclick=wisAlles;
   wrap.appendChild(clr);
 }
@@ -706,104 +676,70 @@ function wisAlles(){
   render();
 }
 
-/* ===================== ticker ===================== */
-function renderTicker(){
-  const box=document.getElementById('ticker');
-  if(state.tickerDismissed){ box.style.display='none'; return; }
-  const items=relevantRows().filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=3)
-    .sort((a,b)=>a.dagenTotDeadline-b.dagenTotDeadline).slice(0,8);
-  if(!items.length){ box.style.display='none'; return; }
-  box.style.display='flex';
-  document.getElementById('tickerItems').innerHTML=items.map(r=>{
-    const dag=r.dagenTotDeadline===0?'vandaag':'nog '+r.dagenTotDeadline+'d';
-    const t=esc(r.organisatie+' — '+r.titel);
-    return r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener">${t} <b>· ${dag}</b></a>`:`<a>${t} <b>· ${dag}</b></a>`;
-  }).join('');
+/* ===================== weergaven ===================== */
+// Statussen die betekenen dat iemand met de opdracht bezig is.
+const IN_BEHANDELING = new Set(['Interessant','Contact gelegd','Aanbieding verstuurd','In onderhandeling']);
+const WEERGAVEN = [
+  {key:'', label:'Alles'},
+  {key:'urgent', label:'Sluit < 7 dagen'},
+  {key:'today', label:'Nieuw vandaag'},
+  {key:'hot', label:'SAP & Oracle'},
+  {key:'behandeling', label:'In behandeling'},
+];
+function kiesWeergave(k){ state.smartView=k; state.page=1; render(); }
+function renderWeergaven(){
+  const wrap=document.getElementById('weergaven');
+  wrap.innerHTML=WEERGAVEN.map(w=>`<button data-sv="${w.key}" aria-pressed="${state.smartView===w.key}">${esc(w.label)}</button>`).join('');
+  wrap.querySelectorAll('button').forEach(b=>b.onclick=()=>kiesWeergave(b.dataset.sv));
+  document.querySelectorAll('.cijfer[data-weergave]').forEach(c=>c.setAttribute('aria-pressed', String(state.smartView===c.dataset.weergave)));
 }
 
-/* ===================== smart views ===================== */
-function renderSmartViews(){
-  const wrap=document.getElementById('smartViews');
-  wrap.innerHTML=SMART_VIEWS.map(sv=>`<button class="view-btn ${state.smartView===sv.key?'active':''}" data-sv="${sv.key}">${esc(sv.label)}</button>`).join('');
-  wrap.querySelectorAll('.view-btn').forEach(b=>b.onclick=()=>{
-    const k=b.dataset.sv; state.smartView=(state.smartView===k)?'':k; state.page=1; render();
-  });
-}
-
-/* ===================== render ===================== */
+/* ===================== kerncijfers ===================== */
 function renderKpis(){
   const rel=relevantRows();
+  const urgent=rel.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7);
+  const vandaagSluit=urgent.filter(r=>r.dagenTotDeadline===0).length;
   const vandaag=rel.filter(r=>r.isVandaag);
-  const week=rel.filter(r=>r.isWeek);
-  const open=rel.filter(r=>(r.bron_status||'').toLowerCase()==='open');
-  const orgs=new Set(open.map(r=>r.organisatie)).size;
+  const week=rel.filter(r=>r.isWeek).length;
   const sap=baseRows().filter(r=>r.isSap||r.isOracle);
   const sapNieuw=sap.filter(r=>r.isWeek).length;
-  document.getElementById('kpiVandaag').textContent=vandaag.length;
-  document.getElementById('kpiWeek').textContent=week.length;
-  document.getElementById('kpiOrgs').textContent=orgs;
-  document.getElementById('kpiSap').textContent=sap.length;
-  document.getElementById('kpiSapNieuw').textContent=sapNieuw+' nieuw deze week';
-  sparkline(document.getElementById('sparkVandaag'), rel, '#199DD9');
-  sparkline(document.getElementById('sparkWeek'), rel, '#199DD9');
-  sparkline(document.getElementById('sparkOrgs'), open, '#199DD9');
-  sparkline(document.getElementById('sparkSap'), sap, '#199DD9');
+  const pipe=state.rows.filter(r=>IN_BEHANDELING.has(r.status));
+  const pipeUrgent=pipe.filter(r=>r.dagenTotDeadline!=null && r.dagenTotDeadline>=0 && r.dagenTotDeadline<=7).length;
+  const zet=(id,v)=>{ document.getElementById(id).textContent=v; };
+  zet('kpiUrgent', urgent.length.toLocaleString('nl-NL'));
+  zet('kpiUrgentSub', vandaagSluit ? `${vandaagSluit} sluit vandaag` : 'geen sluit vandaag');
+  zet('kpiVandaag', vandaag.length.toLocaleString('nl-NL'));
+  zet('kpiVandaagSub', `${week.toLocaleString('nl-NL')} deze week`);
+  zet('kpiSap', sap.length.toLocaleString('nl-NL'));
+  zet('kpiSapSub', `${sapNieuw} nieuw deze week`);
+  zet('kpiPipe', pipe.length.toLocaleString('nl-NL'));
+  zet('kpiPipeSub', pipeUrgent ? `${pipeUrgent} sluit binnen 7 dagen` : 'met een status');
 }
-function renderCharts(rows){
-  const oc={}; rows.forEach(r=>oc[r.organisatie]=(oc[r.organisatie]||0)+1);
-  orgTop=Object.entries(oc).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const c1=document.getElementById('orgChart').getContext('2d');
-  if(orgChart) orgChart.destroy();
-  orgChart=new Chart(c1,{type:'bar',data:{labels:orgTop.map(e=>e[0]),datasets:[{data:orgTop.map(e=>e[1]),backgroundColor:'#199DD9',borderRadius:4,maxBarThickness:22}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{x:{beginAtZero:true,ticks:{color:'#8ea2b8',precision:0},grid:{color:'rgba(255,255,255,0.06)'}},y:{ticks:{color:'#cfe0f0',font:{size:11}},grid:{display:false}}},
-      onClick:(evt,els)=>{ if(els.length){ const org=orgTop[els[0].index][0]; state.orgClick=org; state.search=org; document.getElementById('searchBox').value=org; state.page=1; render(); } }}});
-  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
-  const ce=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-  const c2=document.getElementById('catChart').getContext('2d');
-  if(catChart) catChart.destroy();
-  catChart=new Chart(c2,{type:'doughnut',data:{labels:ce.map(e=>e[0]),datasets:[{data:ce.map(e=>e[1]),
-    backgroundColor:ce.map(e=>CAT_COLORS[e[0]]||'#5f7488'),borderColor:'#1b2b3d',borderWidth:2}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#cfe0f0',boxWidth:10,font:{size:10}}}}}});
+
+/* ===================== top eindklanten ===================== */
+function ranglijst(id, rijen, actief, onKies, leeg){
+  const ul=document.getElementById(id);
+  if(!rijen.length){ ul.innerHTML=`<li class="leeglijst">${esc(leeg)}</li>`; return; }
+  const max=Math.max(...rijen.map(r=>r[1]));
+  ul.innerHTML=rijen.map(([n,c])=>`<li><button data-w="${esc(n)}" aria-pressed="${actief===n}" title="Filter op ${esc(n)}">
+    <span class="n">${esc(n)}</span><span class="spoor"><i style="width:${Math.round(c/max*100)}%"></i></span><span class="c">${c}</span></button></li>`).join('');
+  ul.querySelectorAll('button').forEach(b=>b.onclick=()=>onKies(b.dataset.w));
 }
-function renderRoles(){
-  const domein=focusDomein();
-  document.getElementById('rolesTitle').textContent='Meest gevraagde '+domein+'-rollen';
-  const rijen0=baseRows().filter(r=> domein==='Oracle'? r.isOracle : r.isSap);
-  const rc={}; rijen0.forEach(r=>{ const rol=domein==='Oracle'?oracleRol(r.titel):sapRol(r.titel); rc[rol]=(rc[rol]||0)+1; });
-  const rows=Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const ul=document.getElementById('sapRoles');
-  ul.innerHTML = rows.length
-    ? rows.map(([r,c])=>`<li class="clickable ${state.rol===r?'active':''}" data-rol="${esc(r)}"><span>${esc(r)}</span><span class="cnt">${c}</span></li>`).join('')
-    : `<li class="muted"><span>Nog geen ${esc(domein)}-opdrachten gevonden.</span></li>`;
-  ul.querySelectorAll('li[data-rol]').forEach(li=>li.onclick=()=>{
-    const rol=li.dataset.rol; state.rol=(state.rol===rol)?'':rol; state.page=1; render();
+function renderInzichten(rows){
+  // eindklanten: bij brokers de AI-eindklant als die bekend is, onbekende organisaties tellen niet mee
+  const oc={};
+  rows.forEach(r=>{
+    const k=(r.ai && r.ai.eindklant) || r.organisatie;
+    if(k && k!=='-' && !/onbekend|unknown/i.test(k)) oc[k]=(oc[k]||0)+1;
   });
+  ranglijst('topOrgs', Object.entries(oc).sort((a,b)=>b[1]-a[1]).slice(0,10), state.search,
+    org=>{ state.search=state.search===org?'':org; document.getElementById('searchBox').value=state.search; state.page=1; render(); },
+    'Geen opdrachten in deze selectie.');
 }
-function renderSkills(){
-  const rows=relevantRows();
-  const sc=SKILLS.map(([label])=>[label, rows.filter(r=>SKILL_MAP[label].test(r.titel)).length])
-    .filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  const ul=document.getElementById('topSkills');
-  ul.innerHTML = sc.length
-    ? sc.map(([s,c])=>`<li class="clickable ${state.skill===s?'active':''}" data-skill="${esc(s)}"><span>${esc(s)}</span><span class="cnt">${c}</span></li>`).join('')
-    : '<li class="muted"><span>Geen skills herkend.</span></li>';
-  ul.querySelectorAll('li[data-skill]').forEach(li=>li.onclick=()=>{
-    const sk=li.dataset.skill; state.skill=(state.skill===sk)?'':sk; state.page=1; render();
-  });
-}
-function renderQuickCats(){
-  const rows=relevantRows();
-  const cc={}; rows.forEach(r=>cc[r.categorie]=(cc[r.categorie]||0)+1);
-  const wrap=document.getElementById('quickCats');
-  wrap.innerHTML=Object.entries(cc).sort((a,b)=>b[1]-a[1])
-    .map(([c,n])=>`<span class="pill ${state.type===c?'active':''}" data-cat="${esc(c)}"><span class="d" style="background:${CAT_COLORS[c]||'#5f7488'}"></span>${esc(c)} (${n})</span>`).join('');
-  wrap.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
-    const cat=p.dataset.cat; state.type=(state.type===cat)?'':cat;
-    const sel=document.getElementById('typeFilter');
-    sel.value=[...sel.options].some(o=>o.value===cat)?state.type:'';
-    state.page=1; render();
-  });
+function wanneer(r){
+  if(r.leeftijdDagen==null) return '';
+  const d=Math.floor(r.leeftijdDagen);
+  return d<=0 ? 'vandaag' : d===1 ? 'gisteren' : `${d} d geleden`;
 }
 function soortBadge(s){ return s==='Vacature'?'<span class="badge-vac">Vacature</span>':'<span class="badge-tender">Tender</span>'; }
 function fmtDateTime(iso){
@@ -847,22 +783,17 @@ function renderTable(rows){
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
     const key = r.bron+'|'+r.tender_id;
     const oms = BESCHR_HEEFT.has(key) || !!BESCHR_TEKST.get(key);
+    const sub=[esc(r.organisatie)+aiKlant(r), r.regio && r.regio!=='Overig / onbekend' ? esc(r.regio) : '', esc(r.bron), wanneer(r)].filter(Boolean).join(' · ');
     return `
     <tr class="rij" data-i="${i}" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}">
-      <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
-      <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
-      <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
-      <td>${tariefCel(r.bron, r.tender_id)}</td>
-      <td style="color:#eef3f8">${esc(r.organisatie)}${aiKlant(r)}</td>
-      <td class="titelcel" style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${notitieIcoon(r.bron, r.tender_id)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
-      <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
-      <td>${soortBadge(r.soort)}</td>
-      <td style="color:#8ea2b8">${esc(r.regio)}</td>
-      <td style="color:#8ea2b8">${esc(r.bron)}</td>
+      <td><span class="score ${scoreKlasse(r.score)}" title="sales-score">${r.score}</span></td>
+      <td class="titelcel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:`<b class="title-link">${esc(r.titel)}</b>`}${r.isVandaag?'<span class="nieuw">nieuw</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${notitieIcoon(r.bron, r.tender_id)}<span class="sub">${sub}</span></td>
+      <td style="white-space:nowrap">${deadlineCell(r)}</td>
+      <td class="r">${tariefCel(r.bron, r.tender_id)}</td>
       <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="11">${detailHtml(key)}</td></tr>`;
-  }).join('') || '<tr><td colspan="11" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="5">${detailHtml(key)}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--muted2)">Geen opdrachten met deze filters.</td></tr>';
   // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
     tr.onclick=(e)=>{
@@ -889,7 +820,8 @@ function renderTable(rows){
       updateStatus(sel.dataset.bron, sel.dataset.tid, sel.value);
     };
   });
-  document.getElementById('resultCount').textContent=`${rows.length} resultaten`;
+  document.getElementById('resultCount').textContent=`Opdrachten (${rows.length.toLocaleString('nl-NL')})`;
+  document.getElementById('pageCount').textContent=rows.length?`${(start+1).toLocaleString('nl-NL')}–${Math.min(start+state.pageSize, rows.length).toLocaleString('nl-NL')} van ${rows.length.toLocaleString('nl-NL')}`:'';
   document.getElementById('pageInfo').textContent=` ${state.page} / ${totalPages} `;
   document.getElementById('prevBtn').disabled=state.page<=1;
   document.getElementById('nextBtn').disabled=state.page>=totalPages;
@@ -897,13 +829,9 @@ function renderTable(rows){
 function render(){
   const rows=getFiltered(relevantRows());
   window._lastFiltered=rows;
-  renderTicker();
-  renderSmartViews();
+  renderWeergaven();
   renderKpis();
-  renderCharts(rows);
-  renderRoles();
-  renderSkills();
-  renderQuickCats();
+  renderInzichten(rows);
   renderChips();
   renderTable(rows);
 }
@@ -979,7 +907,10 @@ function bindEvents(){
   document.getElementById('verbergBureaus').onchange=e=>{state.verbergBureaus=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('toonNietIt').onchange=e=>{state.toonNietIt=e.target.checked;state.page=1;buildFilterOptions();render();};
   document.getElementById('csvBtn').onclick=exportCsv;
-  document.getElementById('tickerClose').onclick=()=>{state.tickerDismissed=true;renderTicker();};
+  document.querySelectorAll('.cijfer[data-weergave]').forEach(c=>c.onclick=()=>kiesWeergave(state.smartView===c.dataset.weergave?'':c.dataset.weergave));
+  const initialen=document.getElementById('initialen'), menu=document.getElementById('menu');
+  initialen.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; initialen.setAttribute('aria-expanded', String(!menu.hidden)); };
+  document.addEventListener('click', e=>{ if(!menu.hidden && !menu.contains(e.target)){ menu.hidden=true; initialen.setAttribute('aria-expanded','false'); } });
   let t;
   document.getElementById('searchBox').oninput=e=>{clearTimeout(t);t=setTimeout(()=>{state.search=e.target.value.trim();state.page=1;render();},200);};
   document.getElementById('prevBtn').onclick=()=>{if(state.page>1){state.page--;render();}};
@@ -1016,9 +947,9 @@ function init(isRefresh){
   loadData(!state.verbergVerlopen).then(({rows,meta})=>{
     state.rows=rows;
     state.volledigeHistorie=meta.volledig;
-    const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL'):'-';
+    const upd=meta.lastUpdated?new Date(meta.lastUpdated).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-';
     zetSubtitel();
-    document.getElementById('liveText').textContent='Live · bijgewerkt '+upd;
+    document.getElementById('liveText').textContent='Bijgewerkt '+upd;
     buildFilterOptions();
     document.getElementById('loading').style.display='none';
     document.getElementById('errorBox').style.display='none';
@@ -1032,9 +963,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   const profile = await requireUser();   // redirects to login.html if not signed in / blocked
   if (!profile) return;
   currentUserEmail = profile.email;
+  const delen = (profile.email || '').split('@')[0].split(/[._-]+/).filter(Boolean);
+  document.getElementById('initialen').textContent = delen.length ? (delen.length > 1 ? delen[0][0] + delen[delen.length-1][0] : delen[0].slice(0,2)).toUpperCase() : '?';
+  document.getElementById('wie').textContent = profile.email || '';
 
   if (profile.role === 'admin') {
-    document.getElementById('adminLink').style.display = 'inline-block';
+    document.getElementById('adminLink').hidden = false;
   }
   document.getElementById('logoutBtn').onclick = logout;
 
@@ -1050,7 +984,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   setupRealtime();
   koppelNotities(document.getElementById('tableBody'), werkNotitieIcoonBij);
-  flappyMat.koppel(document.querySelector('.brand'));
+  flappyMat.koppel(document.querySelector('.shell .logo'));
   init(false);
 });
 </script>
