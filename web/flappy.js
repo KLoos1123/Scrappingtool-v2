@@ -22,7 +22,9 @@
     { id:'mat',     naam:'Mat',      src:'mat.png',     prijs:0 },
     { id:'p4',      naam:'Overloper', src:'persoon4.png', euro:5 },   // grap: niet te koop met credits
     { id:'p3',      naam:'Luckyluuk', src:'persoon3.png', prijs:50, bonus:2 },   // geluksvogel: dubbele credits
+    { id:'p5',      naam:'Collega 5', src:'persoon5.png', prijs:100 },
     { id:'p2',      naam:'Markkie',   src:'persoon2.png', prijs:200 },
+    { id:'p6',      naam:'Collega 6', src:'persoon6.png', prijs:300 },
   ];
   const BEELDEN = {};
   PERSONAGES.forEach(p => {
@@ -81,7 +83,7 @@
         .fm-doos canvas{ width:min(400px, calc(92vh * 2 / 3)); }
         .fm-zij{ width:270px; }
         .fm-winkel .fm-rij{ grid-template-columns:repeat(2, 1fr); }
-        .fm-ranglijst ol{ max-height:300px; }
+        .fm-ranglijst ol{ max-height:210px; }
       }
       .fm-winkel{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
         box-shadow:0 10px 30px rgba(0,0,0,.3); }
@@ -281,7 +283,7 @@
       ctx.textAlign = 'center';
     }
     if(spel.fase === 'start'){
-      paneel(B/2, 150, 300, 120);
+      paneel(B/2, 162, 310, 150);
       tekst('Flappy Mat', B/2, 140, 34, '#2f5fa8');
       tekst('Tik, klik of spatie om te vliegen', B/2, 172, 15, '#5f656e');
       tekst('Pak de gouden munten: +' + MUNT_WAARDE + ' credits', B/2, 222, 13, '#b8860b');
