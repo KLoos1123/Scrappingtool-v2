@@ -13,6 +13,8 @@
   const ZWAARTE = 1500, FLAP = -430;       // px/s² en px/s
   const SNELHEID = 150, GAT = 165, BREEDTE = 66, AFSTAND = 230;
   const HOOFD_B = 44, HOOFD_H = 63;
+  const MUNT_WAARDE = 3, MUNT_R = 13;      // gouden P-munten tussen de pijpen
+  const MEDAILLES = [ [100,'Platina medaille','#9fd8e6'], [50,'Gouden medaille','#e3b23c'], [25,'Zilveren medaille','#b9c0c9'], [10,'Bronzen medaille','#c58a4f'] ];
 
   // Personages in de winkel. Een personage verschijnt pas als zijn foto laadt,
   // dus een nieuw gezicht toevoegen = foto in web/ zetten + regel hieronder.
@@ -44,7 +46,7 @@
   function huidigBeeld(){ const img = BEELDEN[keuze]; return img && img.naturalWidth ? img : BEELDEN.mat; }
 
   function nieuwSpel(){
-    spel = { fase:'start', y:H/2 - 40, v:0, pijpen:[], score:0, afstand:0, wiebel:0 };
+    spel = { fase:'start', y:H/2 - 40, v:0, pijpen:[], munten:[], score:0, gepakt:0, afstand:0, wiebel:0, flits:0 };
   }
 
   function bouwOverlay(){
@@ -78,6 +80,7 @@
         .fm-doos{ flex-direction:row; align-items:flex-start; }
         .fm-doos canvas{ width:min(400px, calc(92vh * 2 / 3)); }
         .fm-zij{ width:270px; }
+        .fm-winkel .fm-rij{ grid-template-columns:repeat(2, 1fr); }
         .fm-ranglijst ol{ max-height:300px; }
       }
       .fm-winkel{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
@@ -176,25 +179,37 @@
     }
     spel.v += ZWAARTE * dt;
     spel.y += spel.v * dt;
-    // pijpen verschuiven en bijmaken
-    spel.afstand += SNELHEID * dt;
-    spel.pijpen.forEach(p => p.x -= SNELHEID * dt);
+    // pijpen en munten verschuiven en bijmaken; het tempo loopt op met de score
+    const tempo = SNELHEID * (1 + Math.min(0.6, spel.score * 0.015));
+    spel.afstand += tempo * dt;
+    spel.flits = Math.max(0, spel.flits - dt);
+    spel.pijpen.forEach(p => p.x -= tempo * dt);
+    spel.munten.forEach(m => m.x -= tempo * dt);
     spel.pijpen = spel.pijpen.filter(p => p.x > -BREEDTE);
+    spel.munten = spel.munten.filter(m => m.x > -MUNT_R && !m.weg);
     const laatste = spel.pijpen[spel.pijpen.length - 1];
     if(!laatste || laatste.x < B - AFSTAND){
-      const marge = 70;
-      spel.pijpen.push({ x:B + 10, gat:marge + Math.random() * (H - GROND - GAT - marge * 2), geteld:false });
+      const marge = 70, hoogte = GAT - Math.min(35, spel.score * 1.2);   // gat wordt langzaam kleiner
+      const gat = marge + Math.random() * (H - GROND - hoogte - marge * 2);
+      spel.pijpen.push({ x:B + 10, gat, hoogte, geteld:false });
+      // munt net achter deze pijp (nog buiten beeld), ongeveer op hoogte van het gat
+      if(spel.pijpen.length > 1 && Math.random() < 0.55)
+        spel.munten.push({ x:B + 10 + BREEDTE + (AFSTAND - BREEDTE) / 2, y:gat + hoogte / 2 + (Math.random() - 0.5) * 50 });
     }
     // score en botsingen (iets kleinere hitbox: het is een hoofd, geen vierkant)
     const hx = B * 0.3, kx = HOOFD_B * 0.36, ky = HOOFD_H * 0.4;
     for(const p of spel.pijpen){
       if(!p.geteld && p.x + BREEDTE < hx - kx){ p.geteld = true; spel.score++; }
       const binnenX = hx + kx > p.x && hx - kx < p.x + BREEDTE;
-      const binnenGat = spel.y - ky > p.gat && spel.y + ky < p.gat + GAT;
+      const binnenGat = spel.y - ky > p.gat && spel.y + ky < p.gat + p.hoogte;
       if(binnenX && !binnenGat) return einde();
+    }
+    for(const m of spel.munten){
+      if(Math.hypot(m.x - hx, m.y - spel.y) < MUNT_R + kx){ m.weg = true; spel.gepakt++; spel.flits = 0.35; }
     }
     if(spel.y + ky > H - GROND || spel.y - ky < 0) return einde();
   }
+  function medaille(score){ return MEDAILLES.find(m => score >= m[0]); }
 
   function einde(){
     spel.fase = 'over';
@@ -202,7 +217,7 @@
     spel.v = Math.max(spel.v, 0);
     if(spel.score > beste){ beste = spel.score; bewaar('flappyMatBest', beste); spel.record = true; }
     const p = PERSONAGES.find(x => x.id === keuze);
-    spel.verdiend = spel.score * ((p && p.bonus) || 1);
+    spel.verdiend = (spel.score + spel.gepakt * MUNT_WAARDE) * ((p && p.bonus) || 1);
     credits += spel.verdiend; bewaar('flappyMatCredits', credits);
     gespeeld++; bewaar('flappyMatGespeeld', gespeeld);
     renderWinkel();
@@ -211,11 +226,20 @@
 
   function teken(){
     // lucht
+    // lucht: van dag naar avond naarmate je verder komt (vol donker vanaf 40 punten)
+    const nacht = Math.min(1, spel.score / 40);
     const lucht = ctx.createLinearGradient(0, 0, 0, H);
-    lucht.addColorStop(0, '#cfe0f5'); lucht.addColorStop(1, '#eef3fa');
+    lucht.addColorStop(0, meng('#cfe0f5', '#1c2747', nacht)); lucht.addColorStop(1, meng('#eef3fa', '#6a4f7a', nacht));
     ctx.fillStyle = lucht; ctx.fillRect(0, 0, B, H);
+    if(nacht > 0.5){
+      ctx.fillStyle = `rgba(255,255,255,${(nacht - 0.5) * 1.6})`;
+      for(let i = 0; i < 28; i++){
+        const x = ((i * 89 - spel.afstand * 0.05) % B + B) % B, y = (i * 53) % (H - GROND - 120);
+        ctx.fillRect(x, y, i % 3 ? 1.5 : 2.5, i % 3 ? 1.5 : 2.5);
+      }
+    }
     // wolkjes, langzaam meeschuivend
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.fillStyle = `rgba(255,255,255,${0.85 - nacht * 0.6})`;
     for(let i = 0; i < 4; i++){
       const x = ((i * 137 - spel.afstand * 0.25) % (B + 120) + B + 120) % (B + 120) - 60, y = 70 + i * 95;
       ctx.beginPath(); ctx.ellipse(x, y, 34, 14, 0, 0, Math.PI * 2); ctx.ellipse(x + 26, y - 8, 24, 13, 0, 0, Math.PI * 2); ctx.fill();
@@ -223,8 +247,9 @@
     // pijpen in de kleuren van de bronnenpagina
     for(const p of spel.pijpen){
       pijp(p.x, 0, p.gat, true);
-      pijp(p.x, p.gat + GAT, H - GROND - p.gat - GAT, false);
+      pijp(p.x, p.gat + p.hoogte, H - GROND - p.gat - p.hoogte, false);
     }
+    for(const m of spel.munten) munt(m.x, m.y + Math.sin(spel.wiebel * 4 + m.x / 40) * 3);
     // grond
     ctx.fillStyle = '#d9c9a3'; ctx.fillRect(0, H - GROND, B, GROND);
     ctx.fillStyle = '#7fb069'; ctx.fillRect(0, H - GROND, B, 12);
@@ -250,23 +275,52 @@
     // teksten
     ctx.textAlign = 'center';
     if(spel.fase !== 'start') tekst(String(spel.score), B/2, 70, 44, '#fff', true);
+    if(spel.fase === 'vliegen' && spel.gepakt){
+      ctx.textAlign = 'right';
+      tekst('● ' + spel.gepakt, B - 16, 34, 18, spel.flits ? '#fff3c4' : '#e3b23c', true);
+      ctx.textAlign = 'center';
+    }
     if(spel.fase === 'start'){
       paneel(B/2, 150, 300, 120);
       tekst('Flappy Mat', B/2, 140, 34, '#2f5fa8');
       tekst('Tik, klik of spatie om te vliegen', B/2, 172, 15, '#5f656e');
+      tekst('Pak de gouden munten: +' + MUNT_WAARDE + ' credits', B/2, 222, 13, '#b8860b');
       if(beste) tekst('Beste: ' + beste, B/2, 196, 14, '#5f656e');
     }
     if(spel.fase === 'over'){
-      paneel(B/2, 245, 290, 150);
-      tekst('Game over', B/2, 222, 30, '#bf3b2c');
-      tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 256, 17, '#262b33');
-      const extra = spel.verdiend > spel.score ? ' (Lucky ×2)' : '';
-      tekst(spel.record ? `Nieuw record! +${spel.verdiend} credits${extra}` : `+${spel.verdiend} credits${extra}`, B/2, 282, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
-      tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, 306, 13, '#7a8089');
-      if(online.plek) tekst('#' + online.plek + ' op de ranglijst', B/2, 340, 15, '#262b33', false);
+      const med = medaille(spel.score);
+      const extra = (spel.gepakt ? ` · ${spel.gepakt} munt${spel.gepakt > 1 ? 'en' : ''}` : '') + (spel.verdiend > spel.score + spel.gepakt * MUNT_WAARDE ? ' · Lucky ×2' : '');
+      const onder = (extra ? 306 : 286) + (med ? 40 : 0) + (online.plek ? 22 : 0) + 16;
+      paneel(B/2, (172 + onder) / 2, 320, onder - 172);
+      tekst('Game over', B/2, 200, 30, '#bf3b2c');
+      tekst('Score ' + spel.score + ' · Beste ' + beste, B/2, 234, 17, '#262b33');
+      tekst(`${spel.record ? 'Nieuw record! ' : ''}+${spel.verdiend} credits`, B/2, 260, 15, spel.record ? '#2f8a4e' : '#2f5fa8');
+      if(extra) tekst(extra.slice(3), B/2, 280, 13, '#5f656e');
+      let y = extra ? 306 : 286;
+      if(med){
+        ctx.beginPath(); ctx.arc(B/2 - 52, y + 6, 15, 0, Math.PI * 2); ctx.fillStyle = med[2]; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.stroke();
+        ctx.textAlign = 'left'; tekst(med[1], B/2 - 30, y + 12, 15, '#262b33'); ctx.textAlign = 'center';
+        y += 40;
+      }
+      if(online.plek) { tekst('#' + online.plek + ' op de ranglijst', B/2, y, 14, '#262b33'); y += 22; }
+      tekst('Tik of spatie: opnieuw · Esc: sluiten', B/2, y, 12, '#7a8089');
     }
   }
 
+  function munt(x, y){
+    ctx.beginPath(); ctx.arc(x, y, MUNT_R, 0, Math.PI * 2);
+    ctx.fillStyle = '#e3b23c'; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#b8860b'; ctx.stroke();
+    ctx.font = "700 14px 'IBM Plex Sans', system-ui, sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#7a5a00'; ctx.fillText('P', x, y + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+  function meng(a, b, t){
+    const n = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const [x, y] = [n(a), n(b)];
+    return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')';
+  }
   function pijp(x, y, h, boven){
     if(h <= 0) return;
     ctx.fillStyle = '#4a78c2'; ctx.fillRect(x, y, BREEDTE, h);
