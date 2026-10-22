@@ -5,7 +5,11 @@ Twee modi:
      logt hij in op mijn.freelance.nl en gebruikt de `search`-GraphQL. Die geeft
      meer velden dan de publieke API: reactietermijn (deadline), tarief en uren.
   2. Publiek (fallback): zonder inlog laadt hij www.freelance.nl en bevraagt de
-     publieke `publicSearch`-GraphQL. Minder velden (geen deadline/tarief).
+     publieke `publicSearch`-GraphQL. Minder velden: geen deadlineveld (het type
+     PublicAssignment kent alleen id, title, place, hoursFrom/To, status,
+     publishAt, rateFrom/To, description en viewsCount; ook de publieke
+     detailpagina toont geen reactietermijn). Wel de omschrijving (HTML), waar
+     de deadline vaak in staat; run.py/deadlines.py haalt 'm daaruit.
 
 De site blokkeert kale requests (WAF geeft 403), daarom draait alles binnen een
 echte browsercontext.
@@ -38,6 +42,7 @@ query PublicSearch($query: SearchQueryInput!, $sortMethod: String!, $limit: Int!
         id
         status
         publishAt
+        description
       }
     }
   }
@@ -233,6 +238,9 @@ def _uit_public(a):
         "publicatiedatum": a.get("publishAt"),
         "locatie": a.get("place") or None,
         "uren_per_week": _uren(a),
+        # publiek geen deadlineveld; de omschrijving bevat 'm vaak wel als tekst
+        # ("Deadline: 13-08-2026 om 13:00") en voedt de tekst-fallback in run.py
+        "omschrijving": a.get("description") or None,
         "url": _url(aid, titel),
     }
 
@@ -314,5 +322,5 @@ def haal_op():
                 # NOOIT de volledige exception loggen: een Playwright-request-fout
                 # bevat de request-headers incl. auth-cookies/tokens. Alleen het type.
                 print(f"  ingelogd poging {poging + 1} mislukt ({type(e).__name__})")
-        print("  val terug op publiek (geen omschrijvingen)")
+        print("  val terug op publiek (geen deadlineveld)")
     return _publiek()

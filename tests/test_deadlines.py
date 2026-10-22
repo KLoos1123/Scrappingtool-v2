@@ -17,6 +17,7 @@ class HaalDeadline(unittest.TestCase):
             "Reageren kan tot en met 11 augustus 2026.": "2026-08-11",
             "Aanbieden tot 03/09/2026 Maximum uurtarief": "2026-09-03",
             "Deadline indienen van cv en motivatie : maandag 10 augustus": "2026-08-10",
+            "Deadline aanleveren cv's: donderdag 22 oktober": "2026-10-22",
         }
         for tekst, verwacht in gevallen.items():
             with self.subTest(tekst=tekst):

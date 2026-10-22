@@ -2,10 +2,13 @@
 
 Publieke lijst op de homepage (article.job), server-side gerenderd op een
 Salesforce-achtergrond. Per aanvraag: datum (h5), titel + /aanvragen/{id}-
-link, organisatie (li.org) en een SRQ-aanvraagnummer.
+link, organisatie (li.org) en een SRQ-aanvraagnummer. De sluitingsdatum
+staat alleen op de detailpagina (h5 "Sluitingsdatum <strong>...</strong>").
 """
 
 import re
+from concurrent.futures import ThreadPoolExecutor
+import requests
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
@@ -69,6 +72,20 @@ def _uit_artikel(art):
     }
 
 
+def _deadline(url):
+    """Sluitingsdatum van de detailpagina, of None."""
+    try:
+        r = requests.get(url, headers={"User-Agent": UA}, timeout=20)
+        r.raise_for_status()
+    except Exception:
+        return None
+    for h5 in BeautifulSoup(r.text, "lxml").select("h5"):
+        if h5.get_text(strip=True).lower().startswith("sluitingsdatum"):
+            sterk = h5.find("strong")
+            return _iso(sterk.get_text(strip=True)) if sterk else None
+    return None
+
+
 def haal_op():
     """Wordt aangeroepen door run.py. Geeft een lijst dicts terug."""
     rijen = []
@@ -94,5 +111,11 @@ def haal_op():
 
         browser.close()
 
-    print(f"  {len(rijen)} aanvragen gevonden")
+    # deadline van de detailpagina's, een paar tegelijk
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for rij, deadline in zip(rijen, pool.map(_deadline, [r["url"] for r in rijen])):
+            rij["deadline"] = deadline
+
+    print(f"  {len(rijen)} aanvragen gevonden, "
+          f"{sum(1 for r in rijen if r['deadline'])} met deadline")
     return rijen

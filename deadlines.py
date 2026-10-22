@@ -16,7 +16,7 @@ from datums import MAANDEN
 # rond de jaarwisseling" telt niet, "Deadline:", "Deadline 8 aug." en "Deadline
 # inschrijven:" wel.
 _SLEUTEL = re.compile(
-    r"\bdeadline\b(?=\s*(?:[:\-–]|\d|voor\b|inschrijv|indien|aanbied|reacties?\b|cv))"
+    r"\bdeadline\b(?=\s*(?:[:\-–]|\d|voor\b|inschrijv|indien|aanbied|aanlever|reacties?\b|cv))"
     r"|\bsluitings?(?:datum|termijn)\b"
     r"|\breageren\s+(?:kan\s+)?(?:tot(?:\s+en\s+met)?|t/m|vóór|voor|uiterlijk)"
     r"|\buiterlijk\s+(?:reageren|aanbieden|inschrijven|indienen)\b"
