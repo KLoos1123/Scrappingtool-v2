@@ -150,3 +150,33 @@ def sync_verrijkingen(rijen):
             raise RuntimeError(f"verrijkingen-sync mislukt ({resp.status_code}): {resp.text[:500]}")
         n += len(chunk)
     return n
+
+
+def sync_tarieven(rijen):
+    """rijen: zoals tarieven.verzamel() ze teruggeeft. Overschrijft bestaande
+    tarieven. Geeft het aantal gesyncte rijen terug."""
+    nu = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    payload = [
+        {
+            "bron": r["bron"],
+            "tender_id": str(r["tender_id"]),
+            "tarief": r["tarief"],
+            "tarief_min": r.get("tarief_min"),
+            "tarief_max": r.get("tarief_max"),
+            "herkomst": r.get("herkomst"),
+            "gevonden_op": nu,
+        }
+        for r in rijen
+    ]
+    if not payload:
+        return 0
+
+    url = f"{SUPABASE_URL}/rest/v1/tarieven"
+    headers = _headers({"Prefer": "resolution=merge-duplicates"})
+    n = 0
+    for chunk in _chunks(payload, BATCH):
+        resp = requests.post(url, headers=headers, json=chunk, timeout=60)
+        if not resp.ok:
+            raise RuntimeError(f"tarieven-sync mislukt ({resp.status_code}): {resp.text[:500]}")
+        n += len(chunk)
+    return n

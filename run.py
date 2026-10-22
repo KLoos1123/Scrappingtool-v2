@@ -18,6 +18,7 @@ import db
 import datums
 import verrijking
 import beschrijvingen
+import tarieven
 import sheets_writer
 import supabase_sync
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
@@ -146,6 +147,18 @@ def main():
         print(f"  Supabase-sync MISLUKT: {e}")
         traceback.print_exc()
         mislukt.append("Supabase")
+
+    # Tarieven uit de omschrijvingen (en anders de AI-verrijking), alleen ter
+    # info in het dashboard. Telt niet mee als mislukte bron: de tabel bestaat
+    # pas na supabase/notities_tarieven.sql.
+    print(f"\n=== tarieven ===")
+    try:
+        gevonden = tarieven.verzamel()
+        print(f"  {len(gevonden)} tarieven gevonden")
+        if supabase_sync._configured():
+            print(f"  {supabase_sync.sync_tarieven(gevonden)} tarieven gesynct")
+    except Exception as e:
+        print(f"  tarieven MISLUKT: {e}")
  
     print(f"\n=== export ===")
     alle = db.alle_rijen()

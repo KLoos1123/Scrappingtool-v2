@@ -123,6 +123,10 @@
   .num{ font-size:10px; color:var(--dim); margin-top:2px; }
   .nieuw{ font-size:9px; background:var(--indigo); color:#fff; padding:2px 7px; border-radius:999px; margin-left:6px; }
   .weg{ font-size:9px; background:rgba(255,255,255,0.07); color:var(--muted); padding:2px 7px; border-radius:999px; margin-left:6px; }
+  tr.rij{ cursor:pointer; }
+  tr.rij:hover td{ background:rgba(25,157,217,0.06); }
+  tr.rij.open td{ background:rgba(25,157,217,0.10); }
+  tr.detail td{ background:var(--bg2); padding:12px 16px; }
   .meer{ display:block; margin:12px auto 0; }
   .loading, .error{ padding:30px; text-align:center; color:var(--muted); }
   .error{ color:#f0b6cf; background:var(--panel); border:1px solid rgba(233,22,125,0.35); border-radius:14px; text-align:left; }
@@ -182,6 +186,7 @@
 
 <script src="auth.js"></script>
 <script src="marktlogica.js"></script>
+<script src="notities.js"></script>
 <script>
 // Alle bronnen die run.py scrapet (BRON in scrapers/*.py), zodat ook een bron
 // zonder enige rij in Supabase zichtbaar blijft. Nieuwe bronnen verschijnen
@@ -330,7 +335,7 @@ function renderBronnen(){
 // Zelfde filters als het dashboard (index.html), per opengeklapte bron. De
 // trefwoorden, categorie, regio en sales-score komen uit marktlogica.js.
 const FILTER_START = {
-  type:'', soort:'', regio:'', statusFilter:'', periode:'', sort:'score-desc', zoek:'', org:'',
+  type:'', soort:'', regio:'', statusFilter:'', periode:'', sort:'deadline-asc', zoek:'', org:'',
   verbergVerlopen:true, verbergBureaus:true, toonNietIt:false,
 };
 
@@ -373,7 +378,7 @@ const TYPE_OPTIES=[['','Alle IT'],['SAP','SAP'],['Oracle','Oracle'],['Data & BI'
   ['Development','Development'],['Security','Security'],['Functioneel & Beheer','Functioneel & Beheer'],['Project & Agile','Project & Agile'],['Overig IT','Overig IT']];
 const SOORT_OPTIES=[['','Alles'],['Tender/opdracht','Tender / opdracht'],['Vacature','Vacature']];
 const PERIODE_OPTIES=[['','Alle'],['1','Vandaag'],['3','Laatste 3 dagen'],['7','Deze week'],['31','Deze maand']];
-const SORT_OPTIES=[['score-desc','Sales-score (hoog → laag)'],['datum-desc','Nieuwste eerst'],['deadline-asc','Deadline (eerst sluitend)'],['organisatie-asc','Organisatie (A-Z)']];
+const SORT_OPTIES=[['deadline-asc','Deadline (eerst sluitend)'],['score-desc','Sales-score (hoog → laag)'],['datum-desc','Nieuwste eerst'],['organisatie-asc','Organisatie (A-Z)']];
 function opties(lijst, gekozen){
   return lijst.map(([v,l])=>`<option value="${esc(v)}"${v===gekozen?' selected':''}>${esc(l)}</option>`).join('');
 }
@@ -408,7 +413,7 @@ async function renderDetail(bron){
     <div class="orgs"></div>
     <div class="telregel"><span class="telling"></span><button class="wis" style="display:none">Filters wissen</button></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Score</th><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Categorie</th><th>Regio</th><th>Deadline</th><th>Status</th></tr></thead>
+      <thead><tr><th>Score</th><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Categorie</th><th>Regio</th><th>Deadline</th><th>Tarief</th><th>Status</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <button class="btn meer" style="display:none">Meer tonen</button>`;
@@ -517,17 +522,30 @@ function vulTabel(bron){
     const titel=esc(r.titel);
     const klant=r.ai && r.ai.eindklant && r.ai.eindklant.toLowerCase()!==r.organisatie.toLowerCase()
       ? `<div class="ai-klant">→ ${esc(r.ai.eindklant)}<span class="ai-tag">AI</span></div>` : '';
-    return `<tr>
+    return `<tr class="rij" data-tid="${esc(r.tender_id)}">
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td class="nowrap">${fmtDateTime(ms(r._eerstGezien))}</td>
-      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${notitieIcoon(r.bron, r.tender_id)}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td>${esc(r.organisatie)}${klant}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${esc(r.regio)}${r.locatie?`<div class="num">${esc(r.locatie)}</div>`:''}</td>
       <td class="nowrap">${deadlineCel(r)}</td>
+      <td>${tariefCel(r.bron, r.tender_id)}</td>
       <td>${statusCel(r)}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="8" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
+    </tr>
+    <tr class="detail" style="display:none"><td colspan="9"></td></tr>`;
+  }).join('') || '<tr><td colspan="9" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
+  // klik op een rij klapt de notitie open/dicht (links blijven gewoon werken)
+  body.querySelectorAll('tbody tr.rij').forEach(tr=>{
+    tr.onclick=e=>{
+      if(e.target.closest('a')) return;
+      const det=tr.nextElementSibling;
+      const open=det.style.display!=='none';
+      if(!open) det.firstElementChild.innerHTML=notitieHtml(bron, tr.dataset.tid);
+      det.style.display=open?'none':'table-row';
+      tr.classList.toggle('open', !open);
+    };
+  });
   const verborgen=d.rijen.length-rijen.length;
   body.querySelector('.telling').textContent=
     `${nl(Math.min(d.toon,rijen.length))} van ${nl(rijen.length)} aanvragen`+(verborgen?` · ${nl(verborgen)} verborgen door filters`:'');
@@ -535,16 +553,32 @@ function vulTabel(bron){
   body.querySelector('.meer').style.display=rijen.length>d.toon?'block':'none';
 }
 
+// Na opslaan alleen het 💬-icoon in die rij bijwerken, zodat de notitie open blijft.
+function werkNotitieIcoonBij(bron, tid){
+  const div=bronDiv(bron);
+  const tr=div && [...div.querySelectorAll('tr.rij')].find(t=>t.dataset.tid===tid);
+  if(!tr) return;
+  const cel=tr.querySelector('td.titel');
+  cel.querySelector('.notitie-icoon')?.remove();
+  const icoon=notitieIcoon(bron, tid);
+  if(!icoon) return;
+  const voor=cel.querySelector('.weg') || cel.querySelector('.num');
+  if(voor) voor.insertAdjacentHTML('beforebegin', icoon); else cel.insertAdjacentHTML('beforeend', icoon);
+}
+
 function exportCsv(bron){
   const d=state.detail.get(bron);
   if(!d) return;
   const rows=d.laatsteSelectie||[];
   const schoon=s=>String(s??'').replace(/[;\n\r]/g,',');
-  const header=['Score','Eerst gezien','Deadline','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Online','URL'];
+  const header=['Score','Eerst gezien','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Online','Geschikt voor','Tarief (notitie)','Opmerking','URL'];
   const lines=[header.join(';')];
-  rows.forEach(r=>lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(r.organisatie),
-    schoon(r.ai && r.ai.eindklant), schoon(r.titel), r.categorie, r.soort, r.regio, r.bron, schoon(r.status),
-    isOnline(r)?'ja':'nee', schoon(r.url)].join(';')));
+  rows.forEach(r=>{
+    const n=NOTITIES.get(`${r.bron}|${r.tender_id}`)||{}, t=TARIEVEN.get(`${r.bron}|${r.tender_id}`);
+    lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(t&&t.tarief), schoon(r.organisatie),
+      schoon(r.ai && r.ai.eindklant), schoon(r.titel), r.categorie, r.soort, r.regio, r.bron, schoon(r.status),
+      isOnline(r)?'ja':'nee', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking), schoon(r.url)].join(';'));
+  });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download=`marktmonitor-${bron}.csv`; a.click();
@@ -554,10 +588,11 @@ function exportCsv(bron){
 /* ===================== verversen ===================== */
 async function ververs(){
   const btn=document.getElementById('refreshBtn');
+  if(bezigMetNotitie()) return; // niet verversen terwijl iemand een notitie typt
   btn.disabled=true;
   document.getElementById('liveText').textContent='Live · verversen…';
   try{
-    await laadOverzicht();
+    await Promise.all([laadOverzicht(), laadNotitiesEnTarieven()]);
     // opengeklapte bronnen opnieuw ophalen; filters blijven staan
     await Promise.all([...state.open].map(b=>laadDetail(b).catch(()=>state.detail.delete(b))));
     [...state.detail.keys()].forEach(b=>{ if(!state.open.has(b)) state.detail.delete(b); });
@@ -576,7 +611,7 @@ async function ververs(){
   if(!me) return; // requireUser heeft al doorgestuurd
   if(me.role==='admin') document.getElementById('adminLink').style.display='';
   try{
-    await laadOverzicht();
+    await Promise.all([laadOverzicht(), laadNotitiesEnTarieven()]);
   }catch(err){
     document.getElementById('loading').outerHTML=`<div class="error">Kon de bronnen niet laden: ${esc(err.message||err)}</div>`;
     return;
@@ -586,6 +621,8 @@ async function ververs(){
   renderKpis();
   renderBronnen();
   document.getElementById('refreshBtn').onclick=ververs;
+  koppelNotities(document.getElementById('bronnen'), werkNotitieIcoonBij);
+  volgNotities(null); // notities van collega's bijhouden; zichtbaar bij de volgende render
   setInterval(ververs, 5*60000);
 })();
 </script>

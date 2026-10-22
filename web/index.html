@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
 <script src="marktlogica.js"></script>
+<script src="notities.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -283,9 +284,9 @@
     </div>
     <div><label>Sorteer</label>
       <select id="sortFilter">
+        <option value="deadline-asc">Deadline (eerst sluitend)</option>
         <option value="score-desc">Sales-score (hoog &rarr; laag)</option>
         <option value="datum-desc">Nieuwste eerst</option>
-        <option value="deadline-asc">Deadline (eerst sluitend)</option>
         <option value="organisatie-asc">Organisatie (A-Z)</option>
         <option value="bron-asc">Bron (A-Z)</option>
       </select>
@@ -307,6 +308,7 @@
           <th data-key="score">Score</th>
           <th data-key="datum">Datum</th>
           <th data-key="deadline">Deadline</th>
+          <th>Tarief</th>
           <th data-key="organisatie">Organisatie</th>
           <th data-key="titel">Titel</th>
           <th data-key="categorie">Categorie</th>
@@ -334,7 +336,7 @@
 <script>
 /* ===================== state ===================== */
 const state = {
-  rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'score-desc',
+  rows: [], type:'', soort:'', bron:'', regio:'', periode:'', search:'', sort:'deadline-asc',
   prevSort: null, skill:'', rol:'', smartView:'', tickerDismissed:false, statusFilter:'',
   verbergBureaus:true, verbergVerlopen:true, toonNietIt:false, page:1, pageSize:50,
   volledigeHistorie:false,
@@ -453,6 +455,7 @@ async function loadData(volledig){
     laadTenders(volledig),
     fetchAll('beschrijvingen', 'bron, tender_id').catch(()=>[]),
     fetchAll('verrijkingen', 'bron, tender_id, eindklant, eindklant_zekerheid, senioriteit, modules').catch(()=>[]),
+    laadNotitiesEnTarieven(),
   ]);
   BESCHR_HEEFT = new Set(sleutels.map(b=>`${b.bron}|${b.tender_id}`));
   BESCHR_TEKST = new Map();
@@ -544,7 +547,8 @@ function aiKlant(r){
 }
 function detailHtml(key){
   const leeg='<span class="det-leeg">Nog geen omschrijving opgeslagen voor deze opdracht.</span>';
-  const ai=aiPaneel(AI_DETAIL.get(key));
+  const [bron, tid]=[key.slice(0, key.indexOf('|')), key.slice(key.indexOf('|')+1)];
+  const ai=notitieHtml(bron, tid)+aiPaneel(AI_DETAIL.get(key));
   if(BESCHR_TEKST.has(key)){ const t=BESCHR_TEKST.get(key); return ai + (t ? sanitizeDescription(t) : leeg); }
   return ai + (BESCHR_HEEFT.has(key) ? '<span class="det-leeg">Omschrijving laden…</span>' : leeg);
 }
@@ -847,16 +851,17 @@ function renderTable(rows){
       <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
       <td style="white-space:nowrap;color:#cfe0f0">${esc(fmtDate(r.datum))}</td>
       <td style="white-space:nowrap;color:#cfe0f0">${deadlineCell(r)}</td>
+      <td>${tariefCel(r.bron, r.tender_id)}</td>
       <td style="color:#eef3f8">${esc(r.organisatie)}${aiKlant(r)}</td>
-      <td style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td class="titelcel" style="max-width:320px">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titel)}</a>`:esc(r.titel)}${oms?'<span class="hasdesc" title="omschrijving beschikbaar">📄</span>':''}${notitieIcoon(r.bron, r.tender_id)}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${r.nummer?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
       <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
       <td>${soortBadge(r.soort)}</td>
       <td style="color:#8ea2b8">${esc(r.regio)}</td>
       <td style="color:#8ea2b8">${esc(r.bron)}</td>
       <td>${statusCell(r)}</td>
     </tr>
-    <tr class="detail" id="det-${i}" style="display:none"><td colspan="10">${detailHtml(key)}</td></tr>`;
-  }).join('') || '<tr><td colspan="10" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
+    <tr class="detail" id="det-${i}" style="display:none"><td colspan="11">${detailHtml(key)}</td></tr>`;
+  }).join('') || '<tr><td colspan="11" style="padding:24px;color:#5f7690">Geen resultaten met deze filters.</td></tr>';
   // klik op een rij klapt de omschrijving open/dicht (links en het statusveld blijven werken)
   document.querySelectorAll('#tableBody tr.rij').forEach(tr=>{
     tr.onclick=(e)=>{
@@ -872,7 +877,7 @@ function renderTable(rows){
         cel.innerHTML='<span class="det-leeg">Omschrijving laden…</span>';
         Promise.all([laadOmschrijving(bron, tid), laadAiDetail(bron, tid)])
           .then(()=>{ if(cel.isConnected) cel.innerHTML=detailHtml(key); })
-          .catch(err=>{ if(cel.isConnected) cel.innerHTML='<span class="det-leeg">Omschrijving kon niet geladen worden: '+esc(err.message||err)+'</span>'; });
+          .catch(err=>{ if(cel.isConnected) cel.innerHTML=notitieHtml(bron, tid)+'<span class="det-leeg">Omschrijving kon niet geladen worden: '+esc(err.message||err)+'</span>'; });
       }
     };
   });
@@ -902,16 +907,30 @@ function render(){
   renderTable(rows);
 }
 
+// Na opslaan alleen het 💬-icoon in die rij bijwerken, zodat de open detailrij blijft staan.
+function werkNotitieIcoonBij(bron, tid){
+  const tr=[...document.querySelectorAll('#tableBody tr.rij')].find(t=>t.dataset.bron===bron && t.dataset.tid===tid);
+  if(!tr) return;
+  const cel=tr.querySelector('.titelcel');
+  cel.querySelector('.notitie-icoon')?.remove();
+  const icoon=notitieIcoon(bron, tid);
+  if(!icoon) return;
+  const na=cel.querySelector('.hasdesc') || cel.querySelector('a.title-link');
+  if(na) na.insertAdjacentHTML('afterend', icoon); else cel.insertAdjacentHTML('afterbegin', icoon);
+}
+
 /* ===================== CSV export ===================== */
 function exportCsv(){
   const rows=window._lastFiltered||getFiltered(relevantRows());
-  const header=['Score','Datum','Deadline','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door'];
+  const header=['Score','Datum','Deadline','Tarief','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Status gewijzigd door','Geschikt voor','Tarief (notitie)','Opmerking'];
+  const schoon=v=>String(v||'').replace(/[;\n\r]/g,',');
   const lines=[header.join(';')];
   rows.forEach(r=>{
-    lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', r.organisatie,
+    const n=NOTITIES.get(`${r.bron}|${r.tender_id}`)||{}, t=TARIEVEN.get(`${r.bron}|${r.tender_id}`);
+    lines.push([r.score, fmtDate(r.datum), r._deadline?fmtDate(r.deadline):'', schoon(t&&t.tarief), r.organisatie,
       String((r.ai && r.ai.eindklant) || '').replace(/;/g,','),
       String(r.titel).replace(/;/g,','), r.categorie, r.soort, r.regio, r.bron,
-      r.status||'', r.status_gewijzigd_door||''].join(';'));
+      r.status||'', r.status_gewijzigd_door||'', schoon(n.geschikt_voor), schoon(n.tarief), schoon(n.opmerking)].join(';'));
   });
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
@@ -1004,6 +1023,7 @@ function init(isRefresh){
     document.getElementById('errorBox').style.display='none';
     document.getElementById('app').style.display='block';
     render();
+    volgNotities(render);
   }).catch(showError);
 }
 // window.addEventListener('DOMContentLoaded',()=>{bindEvents();init(false);});
@@ -1019,6 +1039,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   bindEvents();
   setupRealtime();
+  koppelNotities(document.getElementById('tableBody'), werkNotitieIcoonBij);
   init(false);
 });
 </script>
