@@ -101,11 +101,9 @@ def _iso(tekst):
 def _deadline(acf):
     """Sluitingsdatum uit het kopje van post_content, anders valid_through."""
     m = re.search(r"Sluitingsdatum:\s*</b>\s*([^<\n]+)", acf.get("post_content") or "")
-    if m and _iso(m.group(1)):
-        return _iso(m.group(1))
-    vt = acf.get("valid_through") or ""
-    # '2900-01-01' is hun plaatshouder voor 'doorlopend'
-    return vt if vt and vt < "2100" else None
+    datum = (_iso(m.group(1)) if m else None) or acf.get("valid_through") or ""
+    # '01-01-2900' is hun plaatshouder voor 'doorlopend'
+    return datum if datum and datum < "2100" else None
 
 
 def _oms(acf):
