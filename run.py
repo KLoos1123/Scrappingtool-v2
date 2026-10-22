@@ -16,6 +16,7 @@ MAX_MISLUKT = 3
  
 import db
 import datums
+import deadlines
 import verrijking
 import beschrijvingen
 import tarieven
@@ -88,6 +89,11 @@ def main():
     if not alles:
         print("\nNiets opgehaald, database niet aangepast.")
         sys.exit(1)
+
+    # Bronnen zonder deadlineveld zetten 'm vaak wel in de omschrijving.
+    aangevuld = deadlines.vul_aan(alles)
+    if aangevuld:
+        print(f"\n  {aangevuld} deadlines aangevuld uit de omschrijving")
  
     print(f"\n=== database ===")
     nieuw, totaal = db.opslaan(alles)
@@ -95,6 +101,10 @@ def main():
     gecorrigeerd = db.normaliseer_bestaande_datums()
     if gecorrigeerd:
         print(f"  {len(gecorrigeerd)} oudere tekstdatums omgezet naar ISO")
+    uit_tekst = db.deadlines_uit_omschrijving(deadlines.haal_deadline)
+    if uit_tekst:
+        print(f"  {len(uit_tekst)} oudere deadlines aangevuld uit de omschrijving")
+    gecorrigeerd += uit_tekst
     for r in db.per_bron():
         print(f"  {r['bron']}: {r['aantal']}")
  
