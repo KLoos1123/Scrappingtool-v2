@@ -126,22 +126,15 @@
   .naar{ font-size:14px; font-weight:500; margin-top:4px; }
 
   /* aanvragen van de gekozen bron */
-  /* uitklaprij onder de gekozen bron: cijferstrook + alle aanvragen */
-  .uitklap{ border-bottom:1px solid var(--rand); background:#f7f9fc; box-shadow:inset 3px 0 0 var(--primair); padding:14px 20px 18px; display:flex; flex-direction:column; gap:12px; }
-  .uitklap .detail{ position:static; display:flex; flex-wrap:wrap; align-items:center; gap:14px 28px; }
-  .uitklap .strook-naam{ display:flex; align-items:center; gap:10px; min-width:0; margin-right:auto; }
-  .uitklap .strook-naam a, .uitklap .strook-naam span{ font-size:13px; }
-  .uitklap .strook-cijfers{ display:flex; gap:24px; flex-wrap:wrap; }
-  .uitklap .strook-cijfers div{ display:flex; flex-direction:column; gap:2px; }
-  .uitklap .strook-cijfers span{ font-size:11px; color:var(--muted2); white-space:nowrap; }
-  .uitklap .strook-cijfers b{ font-size:18px; font-weight:500; }
-  .uitklap .mini{ display:flex; flex-direction:column; gap:3px; }
-  .uitklap .mini .staven, .uitklap .mini .daglabels{ display:grid; grid-template-columns:repeat(7,18px); gap:4px; height:auto; }
-  .uitklap .mini .staven{ height:40px; align-items:end; }
-  .uitklap .mini .staaf{ gap:0; }
-  .uitklap .mini .staaf span{ display:none; }
-  .uitklap .mini .daglabels span{ font-size:10px; }
-  .uitklap .let-op{ flex-basis:100%; }
+  /* uitklaprij onder de gekozen bron: alle aanvragen van die bron */
+  .uitklap{ border-bottom:1px solid var(--rand); background:#f7f9fc; box-shadow:inset 3px 0 0 var(--primair); padding:10px 20px 14px; }
+  .akop{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; min-width:0; }
+  .akop #aBron{ font-size:12px; color:var(--muted2); }
+  .akop #aBron .let{ color:var(--waarschuw); }
+  .aanvragen .sluit{ width:28px; height:28px; font-size:16px; }
+  /* vaste hoogte met eigen scroll, zodat de andere bronnen in beeld blijven */
+  .uitklap .aanvragen .scroll{ max-height:440px; overflow:auto; }
+  .uitklap .arij.kopregel{ position:sticky; top:0; z-index:1; }
   .uitklap .aanvragen{ background:#fff; border:1px solid var(--rand); border-radius:8px; overflow:hidden; }
   .uitklap .aanvragen .werkbalk{ padding:10px 14px; }
   .uitklap .arij{ padding-left:14px; padding-right:14px; }
@@ -153,13 +146,13 @@
   .aanvragen .segment{ height:34px; }
   .aanvragen .telregel{ font-size:12px; color:var(--muted2); }
   .atabel{ min-width:900px; }
-  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 104px 118px 130px 120px 24px; gap:16px; align-items:center; padding:11px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 96px 112px 120px 110px 20px; gap:14px; align-items:center; padding:7px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
   .arij.kopregel{ padding:10px 20px; }
   .arij.data:hover{ background:var(--hover); }
   .arij.open{ background:var(--gekozen); }
   .atitel{ min-width:0; }
-  .atitel a{ font-weight:500; }
-  .atitel small{ display:block; font-size:12px; color:#8a9099; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .atitel a{ font-weight:500; font-size:13.5px; }
+  .atitel small{ display:block; font-size:11.5px; color:#8a9099; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .atitel .weg{ font-size:11px; color:var(--muted2); background:var(--kopregel); border:1px solid var(--rand); border-radius:999px; padding:0 7px; margin-left:6px; }
   .atitel .nieuw{ font-size:11px; color:#fff; background:var(--primair); border-radius:999px; padding:0 7px; margin-left:6px; }
   .dl small{ display:block; font-size:11px; font-weight:500; }
@@ -245,10 +238,10 @@
   </section>
 </main>
 <div id="bewaar" hidden>
-  <div class="detail" id="detail"></div>
+  <div id="detail"></div>
   <section class="aanvragen" id="aanvragen">
     <div class="werkbalk">
-      <div><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span></div>
+      <div class="akop"><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span> <span id="aBron"></span></div>
       <div class="bediening">
         <input type="search" id="aZoek" placeholder="Zoek titel, organisatie, plaats of nummer" autocomplete="off" aria-label="Zoek in aanvragen">
         <div class="segment" role="group" aria-label="Welke aanvragen">
@@ -261,6 +254,7 @@
           <option value="titel">Titel A-Z</option>
         </select>
         <a class="dashlink" id="aDash" href="index.html">Met alle filters in het dashboard →</a>
+        <button class="sluit" id="aSluit" aria-label="Inklappen" title="Inklappen">×</button>
       </div>
     </div>
     <div class="scroll"><div class="atabel" id="aTabel"></div></div>
@@ -454,30 +448,13 @@ function renderTabel(){
 }
 
 function renderDetail(){
-  const paneel = document.getElementById('detail');
+  // de cijfers staan al in de regel van de bron; hier alleen domein en een eventuele melding
   const b = state.bronnen.find(x => x.code === state.gekozen);
-  if(!b){ paneel.innerHTML = ''; return; }
-  const tot7 = state.bronnen.reduce((a, x) => a + x.n7, 0);
+  const plek = document.getElementById('aBron');
+  if(!b){ plek.innerHTML = ''; return; }
   const geen = b.status !== 'ok', [sub] = subregel(b);
-  const max = Math.max(1, ...b.dagen);
-  const vandaag = new Date(); vandaag.setHours(12,0,0,0);
-  const labels = b.dagen.map((_, i) => WEEKDAG[new Date(vandaag.getTime() - (6 - i) * DAG).getDay()]);
-  const domeinLink = b.domein && !b.domein.includes(' ') ? `<a href="https://${esc(b.domein)}" target="_blank" rel="noopener">${esc(b.domein)} ↗</a>` : `<span class="grijs">${esc(b.domein)}</span>`;
-  paneel.innerHTML = `
-    <div class="strook-naam">${domeinLink}</div>
-    <div class="strook-cijfers">
-      <div><span>Nieuw 7 dagen</span><b class="num">${nl(b.n7)}</b></div>
-      <div><span>vs vorige week</span><b class="num ${geen ? 'grijs' : trendKlas(b.trend)}" title="vorige week: ${nl(b.vorige7)}">${geen ? '—' : trendTekst(b.trend)}</b></div>
-      <div><span>Marktaandeel 7d</span><b class="num">${pct(tot7 ? b.n7 / tot7 * 100 : 0)}</b></div>
-      <div><span>Nu open</span><b class="num">${nl(b.open)}</b></div>
-    </div>
-    <div class="mini" title="Nieuwe opdrachten per dag: ${b.dagen.map((v, i) => labels[i] + ' ' + v).join(', ')}">
-      <div class="staven">${b.dagen.map((v, i) => `<div class="staaf${i === 6 ? ' vandaag' : ''}"><span class="num">${v}</span><i style="height:${Math.max(2, Math.round(v / max * 38))}px"></i></div>`).join('')}</div>
-      <div class="daglabels">${labels.map(l => `<span>${l}</span>`).join('')}</div>
-    </div>
-    <button class="sluit" id="sluit" aria-label="Inklappen" title="Inklappen">×</button>
-    ${geen ? `<span class="let-op">${esc(sub)}: cijfers zijn mogelijk onvolledig.</span>` : ''}`;
-  document.getElementById('sluit').onclick = e => { e.stopPropagation(); state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
+  const domein = b.domein && !b.domein.includes(' ') ? `<a href="https://${esc(b.domein)}" target="_blank" rel="noopener">${esc(b.domein)} ↗</a>` : '';
+  plek.innerHTML = [domein, geen ? `<span class="let">${esc(sub)}: cijfers mogelijk onvolledig</span>` : ''].filter(Boolean).join(' · ');
 }
 
 
@@ -590,6 +567,7 @@ document.querySelectorAll('[data-open]').forEach(knop => knop.onclick = () => {
 document.getElementById('aSort').onchange = e => { av.sort = e.target.value; renderAanvragen(); };
 document.getElementById('aMeer').onclick = () => { av.toon += TOON_PER_KEER; renderAanvragen(); };
 koppelNotities(document.getElementById('aanvragen'), werkNotitieIcoonBij);
+document.getElementById('aSluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
 flappyMat.koppel(document.querySelector('.shell .logo'));
 
 function render(){ renderKop(); renderTabel(); renderDetail(); toonAanvragen(); }
