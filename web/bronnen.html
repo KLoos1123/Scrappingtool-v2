@@ -16,9 +16,13 @@
     --op:#2f8a4e; --neer:#bf3b2c; --waarschuw:#8a6a2a; --waarschuw-bg:#fbf3e3;
     --rand:#d9dde3; --rand-veld:#c9ced6; --scheiding:#e8ebef; --kopregel:#f6f7f9;
     --actief:#e9eef8; --actief-tekst:#2d56a0; --gekozen:#eef2fa; --hover:#f4f6fb;
+    /* namen die notities.js (gedeeld met het dashboard) verwacht */
+    --border:var(--rand-veld); --bg2:#ffffff; --text:var(--tekst); --sub:var(--muted); --dim:#8a9099;
+    --blauw:var(--primair); --blauw-l:var(--primair-donker);
     color-scheme: light;
   }
   *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
   body{ margin:0; background:var(--pagina); color:var(--tekst); font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
   a{ color:var(--primair); text-decoration:none; }
   a:hover{ color:var(--primair-donker); text-decoration:underline; }
@@ -121,6 +125,37 @@
   .daglabels span{ text-align:center; font-size:11px; color:var(--muted2); }
   .let-op{ font-size:13px; color:var(--waarschuw); background:var(--waarschuw-bg); padding:10px 12px; border-radius:6px; }
   .naar{ font-size:14px; font-weight:500; margin-top:4px; }
+
+  /* aanvragen van de gekozen bron */
+  .onder-main{ padding:0 32px 40px; }
+  main{ padding-bottom:16px !important; }
+  .aanvragen .werkbalk{ flex-wrap:wrap; }
+  .aanvragen .bediening{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .aanvragen input[type=search]{ font:inherit; font-size:14px; height:34px; padding:0 12px; border:1px solid var(--rand-veld); border-radius:6px; width:240px; outline:none; color:var(--tekst); }
+  .aanvragen input[type=search]:focus{ border-color:var(--primair); box-shadow:0 0 0 2px rgba(47,95,168,.15); }
+  .aanvragen select{ font:inherit; font-size:14px; height:34px; padding:0 8px; border:1px solid var(--rand-veld); border-radius:6px; background:#fff; color:var(--tekst); }
+  .aanvragen .segment{ height:34px; }
+  .aanvragen .telregel{ font-size:12px; color:var(--muted2); }
+  .atabel{ min-width:900px; }
+  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 104px 118px 130px 120px 24px; gap:16px; align-items:center; padding:11px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .arij.kopregel{ padding:10px 20px; }
+  .arij.data:hover{ background:var(--hover); }
+  .arij.open{ background:var(--gekozen); }
+  .atitel{ min-width:0; }
+  .atitel a{ font-weight:500; }
+  .atitel small{ display:block; font-size:12px; color:#8a9099; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .atitel .weg{ font-size:11px; color:var(--muted2); background:var(--kopregel); border:1px solid var(--rand); border-radius:999px; padding:0 7px; margin-left:6px; }
+  .atitel .nieuw{ font-size:11px; color:#fff; background:var(--primair); border-radius:999px; padding:0 7px; margin-left:6px; }
+  .dl small{ display:block; font-size:11px; font-weight:500; }
+  .dl .kort{ color:var(--neer); } .dl .mid{ color:var(--waarschuw); } .dl .ver{ color:var(--muted2); }
+  .wstatus{ font-size:12px; padding:2px 8px; border-radius:999px; background:var(--kopregel); border:1px solid var(--rand); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; max-width:100%; }
+  .adetail td, .adetail{ background:#fafbfc; }
+  .adetail{ padding:12px 20px 4px; border-bottom:1px solid var(--scheiding); }
+  .aanvragen .notitie{ background:#fff; border-color:var(--rand); }
+  .aanvragen .notitie-opslaan{ color:#fff; }
+  .meer{ display:block; margin:14px auto; font-size:14px; font-weight:500; padding:8px 16px; border-radius:6px; border:1px solid var(--rand-veld); background:#fff; color:var(--primair); cursor:pointer; }
+  .meer:hover{ background:var(--hover); }
+  .dashlink{ font-size:13px; font-weight:500; white-space:nowrap; }
   .laden, .fout{ padding:48px 32px; text-align:center; color:var(--muted2); }
   .fout{ color:var(--neer); }
 
@@ -129,8 +164,11 @@
     .detail{ position:static; }
   }
   @media (max-width:640px){
+    .aanvragen input[type=search]{ width:100%; }
+    .aanvragen .bediening{ width:100%; }
     .kop, .filters{ padding-left:16px; padding-right:16px; }
     main{ padding:16px 16px 32px; }
+    .onder-main{ padding:0 16px 32px; }
     .shell nav{ margin-left:0; }
     .shell .naam{ display:none; }
     .veld input[type=search]{ width:100%; }
@@ -192,8 +230,31 @@
   </section>
   <aside class="kaart detail" id="detail" hidden></aside>
 </main>
+<div class="onder-main">
+  <section class="kaart aanvragen" id="aanvragen" hidden>
+    <div class="werkbalk">
+      <div><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span></div>
+      <div class="bediening">
+        <input type="search" id="aZoek" placeholder="Zoek titel, organisatie, plaats of nummer" autocomplete="off" aria-label="Zoek in aanvragen">
+        <div class="segment" role="group" aria-label="Welke aanvragen">
+          <button data-open="1" aria-pressed="true">Nu open</button>
+          <button data-open="0" aria-pressed="false">Alles</button>
+        </div>
+        <select id="aSort" aria-label="Sorteren">
+          <option value="deadline">Deadline eerst</option>
+          <option value="nieuw">Nieuwste eerst</option>
+          <option value="titel">Titel A-Z</option>
+        </select>
+        <a class="dashlink" id="aDash" href="index.html">Met alle filters in het dashboard →</a>
+      </div>
+    </div>
+    <div class="scroll"><div class="atabel" id="aTabel"></div></div>
+    <button class="meer" id="aMeer" hidden>Meer tonen</button>
+  </section>
+</div>
 
 <script src="auth.js"></script>
+<script src="notities.js"></script>
 <script>
 // Alle bronnen die run.py scrapet (BRON in scrapers/*.py), met een leesbare naam
 // en het domein waar de scraper leest. Een nieuwe bron verschijnt vanzelf zodra
@@ -240,9 +301,12 @@ function trendVan(nu, vorig){ return vorig ? Math.round((nu - vorig) / vorig * 1
 function begin(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
 
 // PostgREST geeft max 1000 rijen per call: eerst het totaal, dan parallel de rest.
-async function haalAlles(select){
-  const pagina = (from, metTelling) => supabase.from('tenders').select(select, metTelling ? {count:'exact'} : undefined)
-    .order('bron', {ascending:true}).order('tender_id', {ascending:true}).range(from, from + PAGINA - 1);
+async function haalAlles(select, bron){
+  const pagina = (from, metTelling) => {
+    let q = supabase.from('tenders').select(select, metTelling ? {count:'exact'} : undefined);
+    if(bron) q = q.eq('bron', bron);
+    return q.order('bron', {ascending:true}).order('tender_id', {ascending:true}).range(from, from + PAGINA - 1);
+  };
   const rijenVan = res => { if(res.error) throw new Error(res.error.message); return res.data || []; };
   const eerste = await pagina(0, true);
   let uit = rijenVan(eerste);
@@ -359,7 +423,7 @@ function renderTabel(){
   tabel.querySelectorAll('.data').forEach(rij => {
     const kies = () => {
       state.gekozen = state.gekozen === rij.dataset.code ? null : rij.dataset.code;
-      renderTabel(); renderDetail();
+      renderTabel(); renderDetail(); toonAanvragen();
       // onder 1240px staat het detail onder de tabel: breng het in beeld
       if(state.gekozen && window.innerWidth < 1240) document.getElementById('detail').scrollIntoView({behavior:'smooth', block:'start'});
     };
@@ -394,15 +458,134 @@ function renderDetail(){
       <div class="staven">${b.dagen.map((v, i) => `<div class="staaf${i === 6 ? ' vandaag' : ''}"><span class="num">${v}</span><i style="height:${Math.max(2, Math.round(v / max * 96))}px"></i></div>`).join('')}</div>
       <div class="daglabels">${labels.map(l => `<span>${l}</span>`).join('')}</div>
       ${geen ? `<span class="let-op">${esc(sub)}: cijfers zijn mogelijk onvolledig.</span>` : ''}
-      <a class="naar" href="index.html?bron=${encodeURIComponent(b.code)}">Bekijk opdrachten van ${esc(b.naam)} →</a>
+      <a class="naar" href="#aanvragen" id="naarLijst">Bekijk opdrachten van ${esc(b.naam)} →</a>
     </div>`;
-  document.getElementById('sluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); };
+  document.getElementById('naarLijst').onclick = e => { e.preventDefault(); document.getElementById('aanvragen').scrollIntoView({behavior:'smooth', block:'start'}); };
+  document.getElementById('sluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
 }
 
-function render(){ renderKop(); renderTabel(); renderDetail(); }
+
+/* ===================== aanvragen van de gekozen bron ===================== */
+const TOON_PER_KEER = 100;
+const AANVRAGEN = new Map();   // bron -> rijen
+const av = { open:true, zoek:'', sort:'deadline', toon:TOON_PER_KEER, bron:null, opengeklapt:new Set() };
+
+function isOnline(r){ const t = ms(r.laatst_gezien); return t != null && state.laatsteRun != null && t >= state.laatsteRun - RUN_MARGE; }
+function datumKort(t){ return t == null ? '—' : new Date(t).toLocaleDateString('nl-NL', {day:'numeric', month:'short', year:'2-digit'}); }
+
+async function laadAanvragen(bron){
+  const rijen = await haalAlles('bron, tender_id, nummer, titel, organisatie, locatie, deadline, publicatiedatum, eerst_gezien, laatst_gezien, url, status', bron);
+  AANVRAGEN.set(bron, rijen);
+}
+
+async function toonAanvragen(){
+  const kaart = document.getElementById('aanvragen');
+  const b = state.bronnen.find(x => x.code === state.gekozen);
+  kaart.hidden = !b;
+  if(!b) return;
+  if(av.bron !== b.code){
+    // nieuwe bron: filters terug naar de standaard; zonder recente data direct alles tonen
+    av.bron = b.code; av.zoek = ''; av.toon = TOON_PER_KEER; av.opengeklapt.clear();
+    av.open = b.status === 'ok';
+    document.getElementById('aZoek').value = '';
+    document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String((k.dataset.open === '1') === av.open)));
+  }
+  document.getElementById('aTitel').textContent = `Aanvragen van ${b.naam}`;
+  document.getElementById('aDash').href = `index.html?bron=${encodeURIComponent(b.code)}`;
+  if(!AANVRAGEN.has(b.code)){
+    document.getElementById('aTabel').innerHTML = '<div class="laden">Aanvragen laden…</div>';
+    document.getElementById('aTelling').textContent = '';
+    try{ await laadAanvragen(b.code); }
+    catch(err){ document.getElementById('aTabel').innerHTML = `<div class="fout">Kon de aanvragen niet laden: ${esc(err.message || err)}</div>`; return; }
+    if(state.gekozen !== b.code) return;
+  }
+  renderAanvragen();
+}
+
+function gefilterdeAanvragen(){
+  const q = av.zoek.trim().toLowerCase();
+  const rijen = (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOnline(r))
+    && (!q || [r.titel, r.organisatie, r.locatie, r.nummer].some(v => String(v || '').toLowerCase().includes(q))));
+  const nu = Date.now();
+  const dl = r => { const t = ms(r.deadline); return t == null ? Infinity : (t < nu - DAG ? Infinity - 1 : t); };
+  const sorteer = {
+    deadline: (a, b) => dl(a) - dl(b) || (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
+    nieuw: (a, b) => (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
+    titel: (a, b) => String(a.titel || '').localeCompare(String(b.titel || ''), 'nl'),
+  }[av.sort];
+  return rijen.sort(sorteer);
+}
+
+function deadlineCel(r){
+  const t = ms(r.deadline);
+  if(t == null) return '<span class="grijs">—</span>';
+  const dagen = Math.floor((begin(t) - begin(Date.now())) / DAG);
+  const [klas, tekst] = dagen < 0 ? ['ver', 'verlopen'] : dagen === 0 ? ['kort', 'sluit vandaag'] : dagen <= 7 ? ['kort', `nog ${dagen} d`] : dagen <= 21 ? ['mid', `nog ${dagen} d`] : ['ver', `nog ${dagen} d`];
+  return `${datumKort(t)}<small class="${klas}">${tekst}</small>`;
+}
+
+function renderAanvragen(){
+  const alle = AANVRAGEN.get(av.bron) || [];
+  const rijen = gefilterdeAanvragen();
+  document.getElementById('aTelling').textContent = `${nl(Math.min(av.toon, rijen.length))} van ${nl(rijen.length)}` + (rijen.length !== alle.length ? ` · ${nl(alle.length)} totaal` : '');
+  const nu = Date.now();
+  const kop = `<div class="arij kopregel"><span>Aanvraag</span><span>Eerst gezien</span><span>Deadline</span><span class="r">Tarief</span><span>Status</span><span></span></div>`;
+  const regels = rijen.slice(0, av.toon).map(r => {
+    const eg = ms(r.eerst_gezien), sleutel = `${r.tender_id}`;
+    const titel = esc(r.titel || '(zonder titel)');
+    const sub = [r.organisatie, r.locatie, r.nummer && r.nummer !== r.tender_id ? r.nummer : null].filter(Boolean).map(esc).join(' · ');
+    const open = av.opengeklapt.has(sleutel);
+    return `<div class="arij data${open ? ' open' : ''}" data-tid="${esc(r.tender_id)}" tabindex="0" role="button" aria-expanded="${open}" aria-label="${titel}: notitie">
+        <div class="atitel">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>` : `<b>${titel}</b>`}${eg != null && nu - eg < DAG ? '<span class="nieuw">nieuw</span>' : ''}${isOnline(r) ? '' : '<span class="weg">offline</span>'}${notitieIcoon(r.bron, r.tender_id)}<small>${sub || '&nbsp;'}</small></div>
+        <span class="num">${datumKort(eg)}</span>
+        <span class="dl num">${deadlineCel(r)}</span>
+        <span class="r">${tariefCel(r.bron, r.tender_id)}</span>
+        <span>${r.status ? `<span class="wstatus" title="${esc(r.status)}">${esc(r.status)}</span>` : '<span class="grijs">—</span>'}</span>
+        <span aria-hidden="true" class="grijs">${open ? '▴' : '▾'}</span>
+      </div>${open ? `<div class="adetail">${notitieHtml(r.bron, r.tender_id)}</div>` : ''}`;
+  }).join('');
+  const tabel = document.getElementById('aTabel');
+  tabel.innerHTML = kop + (regels || '<div class="leeg">Geen aanvragen met deze filters.</div>');
+  tabel.querySelectorAll('.arij.data').forEach(rij => {
+    const wissel = () => {
+      const tid = rij.dataset.tid;
+      if(av.opengeklapt.has(tid)) av.opengeklapt.delete(tid); else av.opengeklapt.add(tid);
+      renderAanvragen();
+    };
+    rij.onclick = e => { if(!e.target.closest('a')) wissel(); };
+    rij.onkeydown = e => { if((e.key === 'Enter' || e.key === ' ') && e.target === rij){ e.preventDefault(); wissel(); } };
+  });
+  document.getElementById('aMeer').hidden = rijen.length <= av.toon;
+}
+
+// Na opslaan van een notitie alleen het icoon in die regel bijwerken (de notitie blijft open).
+function werkNotitieIcoonBij(bron, tid){
+  const rij = [...document.querySelectorAll('#aTabel .arij.data')].find(x => x.dataset.tid === tid);
+  if(!rij) return;
+  const cel = rij.querySelector('.atitel');
+  cel.querySelector('.notitie-icoon')?.remove();
+  cel.querySelector('small').insertAdjacentHTML('beforebegin', notitieIcoon(bron, tid));
+}
+
+document.getElementById('aZoek').oninput = e => { av.zoek = e.target.value; av.toon = TOON_PER_KEER; renderAanvragen(); };
+document.querySelectorAll('[data-open]').forEach(knop => knop.onclick = () => {
+  av.open = knop.dataset.open === '1'; av.toon = TOON_PER_KEER;
+  document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String(k === knop)));
+  renderAanvragen();
+});
+document.getElementById('aSort').onchange = e => { av.sort = e.target.value; renderAanvragen(); };
+document.getElementById('aMeer').onclick = () => { av.toon += TOON_PER_KEER; renderAanvragen(); };
+koppelNotities(document.getElementById('aanvragen'), werkNotitieIcoonBij);
+
+function render(){ renderKop(); renderTabel(); renderDetail(); toonAanvragen(); }
 
 async function ververs(){
-  try{ await laad(); render(); }
+  if(bezigMetNotitie()) return; // niet verversen terwijl iemand een notitie typt
+  try{
+    await Promise.all([laad(), laadNotitiesEnTarieven()]);
+    AANVRAGEN.clear();
+    render();
+  }
   catch(err){ console.error('verversen mislukt', err); } // stil: de oude cijfers blijven staan
 }
 
@@ -430,7 +613,7 @@ function initialenVan(email){
   initialen.textContent = initialenVan(me.email);
   document.getElementById('wie').textContent = me.email || '';
   try{
-    await laad();
+    await Promise.all([laad(), laadNotitiesEnTarieven()]);
   }catch(err){
     document.getElementById('tabel').innerHTML = `<div class="fout">Kon de bronnen niet laden: ${esc(err.message || err)}</div>`;
     document.getElementById('onder').textContent = 'Laden mislukt';
@@ -439,6 +622,7 @@ function initialenVan(email){
   // standaard de grootste bron open, zoals in het ontwerp
   state.gekozen = zichtbareBronnen()[0]?.code || null;
   render();
+  volgNotities(null); // notities van collega's bijhouden; zichtbaar bij de volgende weergave
   setInterval(ververs, 5 * 60000);
 })();
 </script>
