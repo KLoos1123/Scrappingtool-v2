@@ -77,12 +77,34 @@
 
   .bron-body{ display:none; border-top:1px solid var(--border); padding:16px 18px 18px; background:var(--bg2); }
   .bron.open .bron-body{ display:block; }
-  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
-  .toolbar input[type=search]{ flex:1; min-width:220px; font-family:inherit; font-size:13px; padding:8px 12px; border-radius:8px;
-    border:1px solid var(--border); background:var(--panel); color:var(--text); }
-  .toolbar input[type=search]:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
-  .toolbar label{ font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px; cursor:pointer; }
-  .toolbar .telling{ font-size:12px; color:var(--muted); margin-left:auto; }
+  .filters{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+  .filters label{ font-size:11px; color:var(--muted); margin-right:6px; }
+  .filters .spacer{ flex:1; }
+  .filters select, .filters input[type=search]{ font-family:'IBM Plex Sans',sans-serif; font-size:12px; padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+  .filters input[type=search]{ min-width:220px; padding:8px 12px; }
+  .filters select:focus, .filters input:focus{ outline:2px solid var(--blauw); outline-offset:1px; }
+  .toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); cursor:pointer; }
+  .toggle input{ accent-color:var(--blauw); }
+  .csv-btn{ font-size:12px; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; font-family:inherit; }
+  .csv-btn:hover{ border-color:var(--blauw); color:var(--text); }
+  .telregel{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .wis{ font-size:11px; padding:3px 10px; border-radius:999px; cursor:pointer; background:rgba(233,22,125,0.14); color:var(--magenta); border:1px solid rgba(233,22,125,0.3); font-family:inherit; }
+  .score{ display:inline-block; min-width:42px; text-align:center; padding:3px 8px; border-radius:8px; font-weight:700; font-size:12px; }
+  .s-hot{ background:rgba(233,22,125,0.18); color:var(--magenta); border:1px solid rgba(233,22,125,0.4); }
+  .s-warm{ background:rgba(25,157,217,0.18); color:#5ab6e6; border:1px solid rgba(25,157,217,0.4); }
+  .s-cool{ background:rgba(255,255,255,0.06); color:var(--muted); border:1px solid rgba(255,255,255,0.12); }
+  .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; margin-left:6px; }
+  .badge-sap{ background:rgba(25,157,217,0.16); color:var(--blauw); border:1px solid rgba(25,157,217,0.35); }
+  .badge-oracle{ background:rgba(233,22,125,0.16); color:var(--magenta); border:1px solid rgba(233,22,125,0.35); }
+  .cat{ display:inline-block; padding:3px 9px; border-radius:8px; font-size:11px; background:rgba(255,255,255,0.06); white-space:nowrap; }
+  .ai-klant{ font-size:11px; color:#9fc4ec; margin-top:3px; }
+  .ai-tag{ font-size:9px; background:rgba(131,0,125,0.35); color:#f0c6ec; padding:1px 6px; border-radius:999px; margin-left:5px; }
+  .dl{ font-size:10px; font-weight:700; margin-top:2px; }
+  .dl-kort{ color:var(--magenta); }
+  .dl-mid{ color:var(--blauw); }
+  .dl-ok{ color:var(--blauw-l); }
+  .dl-verlopen{ color:var(--muted); }
+  .wstatus{ display:inline-block; font-size:11.5px; padding:3px 8px; border-left:3px solid; border-radius:6px; background:rgba(255,255,255,0.04); white-space:nowrap; }
   .orgs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
   .pill{ font-size:11px; padding:4px 11px; border-radius:999px; cursor:pointer; background:rgba(255,255,255,0.04);
     color:var(--sub); border:1px solid rgba(255,255,255,0.08); font-family:inherit; }
@@ -159,6 +181,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="marktlogica.js"></script>
 <script>
 // Alle bronnen die run.py scrapet (BRON in scrapers/*.py), zodat ook een bron
 // zonder enige rij in Supabase zichtbaar blijft. Nieuwe bronnen verschijnen
@@ -166,7 +189,6 @@
 const BEKENDE_BRONNEN = ['mercell','flextender','hero','striive','freelance.nl','ns','stedin',
   'tenderned','inhuurdesk-regio','gelderland','flexwestbrabant','magnit','stedin-vms',
   'opdrachtoverheid','harveynash','portofrotterdam','staffingms','heart'];
-const VACATURE_BRONNEN = new Set(['ns','stedin']);
 
 const UUR = 3600000;
 const RUN_MARGE = 2*UUR;       // rijen binnen 2 uur van de nieuwste run horen bij die run
@@ -205,9 +227,9 @@ function relatief(t){
 function nl(n){ return Number(n).toLocaleString('nl-NL'); }
 
 // PostgREST geeft max 1000 rijen per call: eerst het totaal, dan parallel de rest.
-async function haalAlles(select, filter, orderVelden){
+async function haalAlles(tabel, select, filter, orderVelden){
   const pagina=(from, metTelling)=>{
-    let q=supabase.from('tenders').select(select, metTelling?{count:'exact'}:undefined);
+    let q=supabase.from(tabel).select(select, metTelling?{count:'exact'}:undefined);
     if(filter) q=filter(q);
     orderVelden.forEach(([veld,asc])=>{ q=q.order(veld,{ascending:asc, nullsFirst:false}); });
     return q.range(from, from+PAGINA-1);
@@ -225,7 +247,7 @@ async function haalAlles(select, filter, orderVelden){
 
 /* ===================== overzicht per bron ===================== */
 async function laadOverzicht(){
-  const rijen=await haalAlles('bron, eerst_gezien, laatst_gezien', null, [['bron',true],['tender_id',true]]);
+  const rijen=await haalAlles('tenders', 'bron, eerst_gezien, laatst_gezien', null, [['bron',true],['tender_id',true]]);
   let laatsteRun=null;
   rijen.forEach(r=>{ const t=ms(r.laatst_gezien); if(t!=null && (laatsteRun==null || t>laatsteRun)) laatsteRun=t; });
 
@@ -305,6 +327,13 @@ function renderBronnen(){
 }
 
 /* ===================== aanvragen per bron ===================== */
+// Zelfde filters als het dashboard (index.html), per opengeklapte bron. De
+// trefwoorden, categorie, regio en sales-score komen uit marktlogica.js.
+const FILTER_START = {
+  type:'', soort:'', regio:'', statusFilter:'', periode:'', sort:'score-desc', zoek:'', org:'',
+  verbergVerlopen:true, verbergBureaus:true, toonNietIt:false,
+};
+
 async function toggleBron(bron){
   if(state.open.has(bron)){ state.open.delete(bron); }
   else { state.open.add(bron); }
@@ -316,21 +345,37 @@ async function toggleBron(bron){
 function bronDiv(bron){
   return [...document.querySelectorAll('#bronnen .bron')].find(d=>d.dataset.bron===bron);
 }
+function standaardOnline(bron){
+  // bij een bron die niet live is staat er niets 'online', dan direct alles tonen
+  return state.bronnen.find(b=>b.bron===bron)?.status==='live';
+}
 
 async function laadDetail(bron){
-  const rijen=await haalAlles(
-    'bron, tender_id, nummer, titel, organisatie, locatie, deadline, publicatiedatum, eerst_gezien, laatst_gezien, url',
-    q=>q.eq('bron', bron),
-    [['eerst_gezien',false],['tender_id',true]]);
-  const vorig=state.detail.get(bron);
-  state.detail.set(bron, {
-    rijen,
-    zoek: vorig?.zoek||'',
-    // bij een bron die niet live is staat er niets 'online', dan direct alles tonen
-    alleenOnline: vorig?.alleenOnline ?? (state.bronnen.find(b=>b.bron===bron)?.status==='live'),
-    org: vorig?.org||'',
-    toon: TOON_PER_KEER,
+  const [rijen, ai]=await Promise.all([
+    haalAlles('tenders', '*', q=>q.eq('bron', bron), [['eerst_gezien',false],['tender_id',true]]),
+    haalAlles('verrijkingen', 'bron, tender_id, eindklant, eindklant_zekerheid, senioriteit, modules',
+      q=>q.eq('bron', bron), [['tender_id',true]]).catch(()=>[]),
+  ]);
+  const aiMap=new Map(ai.map(a=>[String(a.tender_id), a]));
+  const verrijkt=rijen.map(r=>{
+    const v=verrijkRij(r, aiMap.get(String(r.tender_id))||null);
+    v._laatst=ms(r.laatst_gezien);
+    v._eerstGezien=r.eerst_gezien;
+    return v;
   });
+  const vorig=state.detail.get(bron);
+  state.detail.set(bron, vorig
+    ? {...vorig, rijen:verrijkt, toon:TOON_PER_KEER}
+    : {...FILTER_START, alleenOnline:standaardOnline(bron), rijen:verrijkt, toon:TOON_PER_KEER});
+}
+
+const TYPE_OPTIES=[['','Alle IT'],['SAP','SAP'],['Oracle','Oracle'],['Data & BI','Data & BI'],['Cloud & Infra','Cloud & Infra'],
+  ['Development','Development'],['Security','Security'],['Functioneel & Beheer','Functioneel & Beheer'],['Project & Agile','Project & Agile'],['Overig IT','Overig IT']];
+const SOORT_OPTIES=[['','Alles'],['Tender/opdracht','Tender / opdracht'],['Vacature','Vacature']];
+const PERIODE_OPTIES=[['','Alle'],['1','Vandaag'],['3','Laatste 3 dagen'],['7','Deze week'],['31','Deze maand']];
+const SORT_OPTIES=[['score-desc','Sales-score (hoog → laag)'],['datum-desc','Nieuwste eerst'],['deadline-asc','Deadline (eerst sluitend)'],['organisatie-asc','Organisatie (A-Z)']];
+function opties(lijst, gekozen){
+  return lijst.map(([v,l])=>`<option value="${esc(v)}"${v===gekozen?' selected':''}>${esc(l)}</option>`).join('');
 }
 
 async function renderDetail(bron){
@@ -345,37 +390,99 @@ async function renderDetail(bron){
   }
   const d=state.detail.get(bron);
   body.innerHTML=`
-    <div class="toolbar">
-      <input type="search" class="zoek" placeholder="Zoek op titel, organisatie, locatie of nummer…" value="${esc(d.zoek)}">
-      <label><input type="checkbox" class="online" ${d.alleenOnline?'checked':''}> alleen nu online</label>
-      <span class="telling"></span>
+    <div class="filters">
+      <div><label>Type</label><select data-f="type">${opties(TYPE_OPTIES, d.type)}</select></div>
+      <div><label>Soort</label><select data-f="soort">${opties(SOORT_OPTIES, d.soort)}</select></div>
+      <div><label>Regio</label><select data-f="regio"></select></div>
+      <div><label>Status</label><select data-f="statusFilter"></select></div>
+      <div><label>Periode</label><select data-f="periode">${opties(PERIODE_OPTIES, d.periode)}</select></div>
+      <div><label>Sorteer</label><select data-f="sort">${opties(SORT_OPTIES, d.sort)}</select></div>
+      <label class="toggle"><input type="checkbox" data-f="verbergVerlopen"${d.verbergVerlopen?' checked':''}> Verberg verlopen &amp; oude</label>
+      <label class="toggle"><input type="checkbox" data-f="verbergBureaus"${d.verbergBureaus?' checked':''}> Alleen eindklanten</label>
+      <label class="toggle"><input type="checkbox" data-f="toonNietIt"${d.toonNietIt?' checked':''}> Toon ook niet-IT</label>
+      <label class="toggle"><input type="checkbox" data-f="alleenOnline"${d.alleenOnline?' checked':''}> Alleen nu online</label>
+      <div class="spacer"></div>
+      <button class="csv-btn">Exporteer CSV</button>
+      <input type="search" class="zoek" placeholder="Zoek op titel, organisatie of nummer…" value="${esc(d.zoek)}">
     </div>
     <div class="orgs"></div>
+    <div class="telregel"><span class="telling"></span><button class="wis" style="display:none">Filters wissen</button></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Locatie</th><th>Gepubliceerd</th><th>Deadline</th><th>Laatst gezien</th></tr></thead>
+      <thead><tr><th>Score</th><th>Eerst gezien</th><th>Titel</th><th>Organisatie</th><th>Categorie</th><th>Regio</th><th>Deadline</th><th>Status</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <button class="btn meer" style="display:none">Meer tonen</button>`;
+  const opnieuw=()=>{ d.toon=TOON_PER_KEER; vulTabel(bron); };
+  body.querySelectorAll('select[data-f]').forEach(sel=>sel.onchange=()=>{ d[sel.dataset.f]=sel.value; opnieuw(); });
+  body.querySelectorAll('input[type=checkbox][data-f]').forEach(cb=>cb.onchange=()=>{ d[cb.dataset.f]=cb.checked; opnieuw(); });
   const zoek=body.querySelector('.zoek');
   let timer=null;
-  zoek.oninput=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ d.zoek=zoek.value; d.toon=TOON_PER_KEER; vulTabel(bron); },150); };
-  body.querySelector('.online').onchange=e=>{ d.alleenOnline=e.target.checked; d.toon=TOON_PER_KEER; vulTabel(bron); };
+  zoek.oninput=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ d.zoek=zoek.value; opnieuw(); },200); };
+  body.querySelector('.csv-btn').onclick=()=>exportCsv(bron);
+  body.querySelector('.wis').onclick=()=>{
+    Object.assign(d, FILTER_START, {verbergVerlopen:false, verbergBureaus:false, toonNietIt:true, alleenOnline:false});
+    renderDetail(bron);
+  };
   body.querySelector('.meer').onclick=()=>{ d.toon+=TOON_PER_KEER; vulTabel(bron); };
   vulTabel(bron);
 }
 
-function gefilterd(d, metOrg){
-  const z=d.zoek.trim().toLowerCase();
+function isOnline(r){
+  return r._laatst!=null && state.laatsteRun!=null && r._laatst>=state.laatsteRun-RUN_MARGE;
+}
+// Basis zoals relevantRows() in het dashboard: verlopen/oud, bureaus, niet-IT en online.
+function basisRijen(d){
   return d.rijen.filter(r=>{
+    if(d.verbergVerlopen && (r.verlopen || r.verouderd)) return false;
+    if(d.verbergBureaus && r.isBureau) return false;
+    if(!d.toonNietIt && !r.isIt) return false;
     if(d.alleenOnline && !isOnline(r)) return false;
-    if(metOrg && d.org && (r.organisatie||'(onbekend)')!==d.org) return false;
-    if(z && ![r.titel,r.organisatie,r.locatie,r.nummer].some(v=>(v||'').toLowerCase().includes(z))) return false;
     return true;
   });
 }
-function isOnline(r){
-  const t=ms(r.laatst_gezien);
-  return t!=null && state.laatsteRun!=null && t>=state.laatsteRun-RUN_MARGE;
+function gefilterd(d, metOrg){
+  let rows=basisRijen(d);
+  if(d.type) rows=rows.filter(r=>r.categorie===d.type);
+  if(d.soort) rows=rows.filter(r=>r.soort===d.soort);
+  if(d.regio) rows=rows.filter(r=>r.regio===d.regio);
+  if(d.statusFilter) rows=rows.filter(r=> d.statusFilter==='__leeg__' ? !r.status : r.status===d.statusFilter);
+  if(d.periode){
+    const max=parseInt(d.periode,10);
+    rows=rows.filter(r=>{ const dg=recencyDagen(r); return dg!==null && dg<=max; });
+  }
+  const q=d.zoek.trim().toLowerCase();
+  if(q) rows=rows.filter(r=>r.titel.toLowerCase().includes(q)||r.organisatie.toLowerCase().includes(q)
+    ||String(r.nummer).toLowerCase().includes(q)||r.locatie.toLowerCase().includes(q)
+    ||(r.ai && [r.ai.eindklant||'', ...(r.ai.modules||[])].join(' ').toLowerCase().includes(q)));
+  if(metOrg && d.org) rows=rows.filter(r=>r.organisatie===d.org);
+  return rows;
+}
+function sorteer(rows, sort){
+  const [veld,dir]=sort.split('-');
+  const waarde=r=>veld==='score'?r.score:veld==='datum'?(r.datum||-Infinity):veld==='deadline'?(r._deadline||Infinity):String(r[veld]||'').toLowerCase();
+  return rows.slice().sort((a,b)=>{
+    const av=waarde(a), bv=waarde(b);
+    if(av<bv) return dir==='asc'?-1:1;
+    if(av>bv) return dir==='asc'?1:-1;
+    return b.score-a.score;
+  });
+}
+function vulSelect(sel, leeg, teller, gekozen, extra){
+  sel.innerHTML=`<option value="">${leeg}</option>`+
+    Object.entries(teller).sort((a,b)=>b[1]-a[1]).map(([v,c])=>`<option value="${esc(v)}">${esc(v)} (${nl(c)})</option>`).join('')+(extra||'');
+  sel.value=gekozen;
+  if(sel.value!==gekozen) sel.value='';
+}
+function deadlineCel(r){
+  if(r._deadline==null) return '<span class="muted">—</span>';
+  const dg=r.dagenTotDeadline;
+  const [cls,lbl]=dg<0?['dl-verlopen','verlopen']:dg===0?['dl-kort','sluit vandaag']:dg<=7?['dl-kort',`nog ${dg} d`]:dg<=21?['dl-mid',`nog ${dg} d`]:['dl-ok',`nog ${dg} d`];
+  return `${fmtDate(r.deadline)}<div class="dl ${cls}">${lbl}</div>`;
+}
+function statusCel(r){
+  if(!r.status) return '<span class="muted">—</span>';
+  const kleur=STATUS_COLORS[r.status]||'#5f7488';
+  return `<span class="wstatus" style="border-left-color:${kleur}">${esc(r.status)}</span>`;
 }
 
 function vulTabel(bron){
@@ -384,9 +491,17 @@ function vulTabel(bron){
   if(!div || !d) return;
   const body=div.querySelector('.bron-body');
 
+  // regio- en statusopties tellen op de basisselectie, zoals het dashboard
+  const basis=basisRijen(d);
+  const rc={}, sc={}; let leeg=0;
+  basis.forEach(r=>{ rc[r.regio]=(rc[r.regio]||0)+1; if(r.status) sc[r.status]=(sc[r.status]||0)+1; else leeg++; });
+  vulSelect(body.querySelector('select[data-f=regio]'), "Alle regio's", rc, d.regio);
+  vulSelect(body.querySelector('select[data-f=statusFilter]'), 'Alle statussen', sc, d.statusFilter,
+    `<option value="__leeg__"${d.statusFilter==='__leeg__'?' selected':''}>Geen status (${nl(leeg)})</option>`);
+
   // organisaties binnen deze broker als snelfilter (top 12 van de huidige selectie)
   const teller=new Map();
-  gefilterd(d, false).forEach(r=>{ const o=r.organisatie||'(onbekend)'; teller.set(o,(teller.get(o)||0)+1); });
+  gefilterd(d, false).forEach(r=>teller.set(r.organisatie,(teller.get(r.organisatie)||0)+1));
   const top=[...teller.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
   if(d.org && !teller.has(d.org)) d.org='';
   const orgs=body.querySelector('.orgs');
@@ -396,24 +511,44 @@ function vulTabel(bron){
     : '';
   orgs.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ d.org=p.dataset.org; d.toon=TOON_PER_KEER; vulTabel(bron); });
 
-  const rijen=gefilterd(d, true);
-  const nu=Date.now();
+  const rijen=sorteer(gefilterd(d, true), d.sort);
+  d.laatsteSelectie=rijen;
   body.querySelector('tbody').innerHTML=rijen.slice(0,d.toon).map(r=>{
-    const eg=ms(r.eerst_gezien), lg=ms(r.laatst_gezien);
-    const nieuw=eg!=null && nu-eg<24*UUR;
-    const titel=esc(r.titel||'(zonder titel)');
+    const titel=esc(r.titel);
+    const klant=r.ai && r.ai.eindklant && r.ai.eindklant.toLowerCase()!==r.organisatie.toLowerCase()
+      ? `<div class="ai-klant">→ ${esc(r.ai.eindklant)}<span class="ai-tag">AI</span></div>` : '';
     return `<tr>
-      <td class="nowrap">${fmtDateTime(eg)}</td>
-      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${nieuw?'<span class="nieuw">NIEUW</span>':''}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
-      <td>${esc(r.organisatie||'—')}</td>
-      <td>${esc(r.locatie||'—')}</td>
-      <td class="nowrap">${fmtDate(r.publicatiedatum)}</td>
-      <td class="nowrap">${fmtDate(r.deadline)}</td>
-      <td class="nowrap">${fmtDateTime(lg)}</td>
+      <td><span class="score ${scoreKlasse(r.score)}">${r.score}</span></td>
+      <td class="nowrap">${fmtDateTime(ms(r._eerstGezien))}</td>
+      <td class="titel">${r.url?`<a class="title-link" href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>`:titel}${r.isVandaag?'<span class="nieuw">NIEUW</span>':''}${r.isSap?'<span class="badge badge-sap">SAP</span>':''}${r.isOracle?'<span class="badge badge-oracle">Oracle</span>':''}${isOnline(r)?'':'<span class="weg">offline</span>'}${r.nummer&&r.nummer!==r.tender_id?`<div class="num">${esc(r.nummer)}</div>`:''}</td>
+      <td>${esc(r.organisatie)}${klant}</td>
+      <td><span class="cat" style="color:${CAT_COLORS[r.categorie]||'#8ea2b8'}">${esc(r.categorie)}</span></td>
+      <td>${esc(r.regio)}${r.locatie?`<div class="num">${esc(r.locatie)}</div>`:''}</td>
+      <td class="nowrap">${deadlineCel(r)}</td>
+      <td>${statusCel(r)}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
-  body.querySelector('.telling').textContent=`${nl(Math.min(d.toon,rijen.length))} van ${nl(rijen.length)} aanvragen`;
+  }).join('') || '<tr><td colspan="8" class="muted" style="padding:20px">Geen aanvragen met deze filters.</td></tr>';
+  const verborgen=d.rijen.length-rijen.length;
+  body.querySelector('.telling').textContent=
+    `${nl(Math.min(d.toon,rijen.length))} van ${nl(rijen.length)} aanvragen`+(verborgen?` · ${nl(verborgen)} verborgen door filters`:'');
+  body.querySelector('.wis').style.display=verborgen?'':'none';
   body.querySelector('.meer').style.display=rijen.length>d.toon?'block':'none';
+}
+
+function exportCsv(bron){
+  const d=state.detail.get(bron);
+  if(!d) return;
+  const rows=d.laatsteSelectie||[];
+  const schoon=s=>String(s??'').replace(/[;\n\r]/g,',');
+  const header=['Score','Eerst gezien','Deadline','Organisatie','Eindklant (AI)','Titel','Categorie','Soort','Regio','Bron','Status','Online','URL'];
+  const lines=[header.join(';')];
+  rows.forEach(r=>lines.push([r.score, fmtDateTime(ms(r._eerstGezien)), r._deadline?fmtDate(r.deadline):'', schoon(r.organisatie),
+    schoon(r.ai && r.ai.eindklant), schoon(r.titel), r.categorie, r.soort, r.regio, r.bron, schoon(r.status),
+    isOnline(r)?'ja':'nee', schoon(r.url)].join(';')));
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`marktmonitor-${bron}.csv`; a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ===================== verversen ===================== */
