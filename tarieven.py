@@ -117,42 +117,121 @@ def uit_bron(rij):
     return uit_ai(rij)
 
 
+# ---------------------------------------------------------------- uren per week
+
+_U = r"(\d{1,2})"
+_UTOT = r"\s*(?:-|–|/|tot|à)\s*"
+_PER_WEEK = r"\s*(?:uur|uren|u)\b\.?\s*(?:per\s*(?:week|wk)\b|p/w|p\.w\.|/\s*(?:week|wk)\b|in\s+de\s+week\b)"
+_UREN_BEREIK = re.compile(_U + _UTOT + _U + _PER_WEEK, re.I)
+_UREN_ENKEL = re.compile(r"(?<![\d/-])" + _U + _PER_WEEK, re.I)
+# "Uren per week: 32 / 40", "Aantal uur per week: 16", "Uren: 36", "Inzet: 24-32"
+_UREN_LABEL = re.compile(r"(?:uren\s+per\s+week|uur\s+per\s+week|aantal\s+uren|uren|inzet|omvang)\s*:\s*"
+                         + _U + r"(?:" + _UTOT + _U + r")?(?!\s*(?:maanden|weken|jaar|%|-\d))", re.I)
+MIN_UREN, MAX_UREN = 4, 40
+
+
+def _uren_tekst(lo, hi):
+    return f"{lo}–{hi} u/w" if lo != hi else f"{lo} u/w"
+
+
+def _uren_resultaat(lo, hi):
+    lo, hi = int(lo), int(hi if hi is not None else lo)
+    if lo > hi:
+        lo, hi = hi, lo
+    if not (MIN_UREN <= lo <= hi <= MAX_UREN):
+        return None
+    return {"uren": _uren_tekst(lo, hi), "uren_min": lo, "uren_max": hi}
+
+
+def haal_uren(tekst):
+    """Uren per week uit de omschrijving: {"uren": "32–40 u/w", "uren_min": 32,
+    "uren_max": 40} of None."""
+    t = _platte_tekst(tekst)
+    if not t:
+        return None
+    for patroon, bereik in ((_UREN_BEREIK, True), (_UREN_ENKEL, False), (_UREN_LABEL, None)):
+        for m in patroon.finditer(t):
+            if bereik is True:
+                uit = _uren_resultaat(m.group(1), m.group(2))
+            elif bereik is False:
+                uit = _uren_resultaat(m.group(1), None)
+            else:
+                uit = _uren_resultaat(m.group(1), m.group(2))
+            if uit:
+                return uit
+    return None
+
+
+def uren_uit_bron(rij):
+    """Uren die de scraper als veld meegeeft (freelance.nl: uren_per_week "32-40")."""
+    m = re.match(r"\s*(\d{1,2}|\?)\s*-\s*(\d{1,2}|\?)\s*$", str(rij.get("uren_per_week") or ""))
+    if not m:
+        return None
+    lo, hi = (None if x == "?" else x for x in m.groups())
+    if lo is None and hi is None:
+        return None
+    return _uren_resultaat(lo or hi, hi or lo)
+
+
+def uren_uit_ai(data):
+    lo, hi = (data or {}).get("uren_per_week_min"), (data or {}).get("uren_per_week_max")
+    lo = lo if isinstance(lo, (int, float)) else None
+    hi = hi if isinstance(hi, (int, float)) else None
+    if lo is None and hi is None:
+        return None
+    return _uren_resultaat(lo if lo is not None else hi, hi if hi is not None else lo)
+
+
 def verzamel(rijen=()):
-    """Tarieven voor alle opdrachten met een omschrijving of AI-verrijking in
-    tenders.db, plus de rijen van deze run die zelf een tarief meegeven (zoals
-    freelance.nl). Geeft dicts met bron, tender_id, tarief, tarief_min,
-    tarief_max, herkomst ('bron', 'tekst' of 'ai')."""
+    """Tarief en uren per week voor alle opdrachten met een omschrijving of
+    AI-verrijking in tenders.db, plus de rijen van deze run die het zelf als veld
+    meegeven (zoals freelance.nl). Geeft dicts met bron, tender_id, tarief,
+    tarief_min, tarief_max, herkomst ('bron', 'tekst' of 'ai'; van het tarief) en
+    uren, uren_min, uren_max. Tarief of uren kan ontbreken (None)."""
     conn = sqlite3.connect(DB)
-    uit = {}
+    tarief, uren = {}, {}
     try:
         for bron, tid, data in conn.execute("SELECT bron, tender_id, data FROM verrijkingen"):
             try:
-                gevonden = uit_ai(json.loads(data))
+                d = json.loads(data)
             except (TypeError, ValueError):
-                gevonden = None
-            if gevonden:
-                uit[(bron, str(tid))] = {**gevonden, "herkomst": "ai"}
+                continue
+            if uit_ai(d):
+                tarief[(bron, str(tid))] = {**uit_ai(d), "herkomst": "ai"}
+            if uren_uit_ai(d):
+                uren[(bron, str(tid))] = uren_uit_ai(d)
     except sqlite3.OperationalError:
         pass  # tabel bestaat nog niet
     try:
         for bron, tid, oms in conn.execute("SELECT bron, tender_id, omschrijving FROM beschrijvingen"):
+            k = (bron, str(tid))
             gevonden = haal_tarief(oms)
             # een bedrag uit de tekst wint; "marktconform" alleen als de AI niets vond
-            if gevonden and (gevonden["tarief"] != "marktconform" or (bron, str(tid)) not in uit):
-                uit[(bron, str(tid))] = {**gevonden, "herkomst": "tekst"}
+            if gevonden and (gevonden["tarief"] != "marktconform" or k not in tarief):
+                tarief[k] = {**gevonden, "herkomst": "tekst"}
+            u = haal_uren(oms)
+            if u:
+                uren[k] = u
     except sqlite3.OperationalError:
         pass
     conn.close()
-    # een tariefveld van de bron zelf is het betrouwbaarst en wint altijd
+    # velden van de bron zelf zijn het betrouwbaarst en winnen altijd
     for r in rijen:
-        gevonden = uit_bron(r)
-        if gevonden and r.get("bron") and r.get("tender_id") is not None:
-            uit[(r["bron"], str(r["tender_id"]))] = {**gevonden, "herkomst": "bron"}
-    return [{"bron": b, "tender_id": t, **v} for (b, t), v in uit.items()]
+        if not r.get("bron") or r.get("tender_id") is None:
+            continue
+        k = (r["bron"], str(r["tender_id"]))
+        if uit_bron(r):
+            tarief[k] = {**uit_bron(r), "herkomst": "bron"}
+        if uren_uit_bron(r):
+            uren[k] = uren_uit_bron(r)
+    leeg_t = {"tarief": None, "tarief_min": None, "tarief_max": None, "herkomst": None}
+    leeg_u = {"uren": None, "uren_min": None, "uren_max": None}
+    return [{"bron": b, "tender_id": t, **tarief.get((b, t), leeg_t), **uren.get((b, t), leeg_u)}
+            for (b, t) in sorted(set(tarief) | set(uren))]
 
 
 if __name__ == "__main__":
     from collections import Counter
     rijen = verzamel()
-    print(f"{len(rijen)} tarieven gevonden")
+    print(f"{sum(1 for r in rijen if r['tarief'])} tarieven, {sum(1 for r in rijen if r['uren'])} met uren")
     print(Counter(r["bron"] for r in rijen).most_common())

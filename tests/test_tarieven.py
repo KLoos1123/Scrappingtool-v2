@@ -1,6 +1,6 @@
 import unittest
 
-from tarieven import haal_tarief, uit_ai, uit_bron
+from tarieven import haal_tarief, haal_uren, uit_ai, uit_bron, uren_uit_bron
 
 
 class HaalTarief(unittest.TestCase):
@@ -45,6 +45,33 @@ class HaalTarief(unittest.TestCase):
         self.assertEqual(uit_bron({"tarief_min": 80, "tarief_max": 100})["tarief"], "€ 80 – 100 /uur")
         self.assertIsNone(uit_bron({"tarief_min": None, "tarief_max": None}))
         self.assertIsNone(uit_bron({}))
+
+
+class HaalUren(unittest.TestCase):
+    def test_uren(self):
+        gevallen = {   # letterlijk uit omschrijvingen
+            "Inzet: bij voorkeur 36–40 uur per week": "36–40 u/w",
+            "24 / 36 uur per week €50 / €70": "24–36 u/w",
+            "Uren: 16 tot 32 uur per week - Tarief": "16–32 u/w",
+            "Start: 16 nov 2026, 36 uur/week.": "36 u/w",
+            "Uren per week: 32 / 40 Startdatum": "32–40 u/w",
+            "Aantal uur per week: 16 Functie-omschrijving": "16 u/w",
+            "Amersfoort | 40 uur p/w | Start": "40 u/w",
+        }
+        for tekst, verwacht in gevallen.items():
+            with self.subTest(tekst=tekst):
+                self.assertEqual(haal_uren(tekst)["uren"], verwacht)
+
+    def test_geen_uren(self):
+        for tekst in [None, "", "Opdrachtduur: 6 maanden", "8 uur per dag", "Inzet: 1 FTE",
+                      "Beschikbaarheid in uren per week", "Reacties voor 12 uur 's middags"]:
+            with self.subTest(tekst=tekst):
+                self.assertIsNone(haal_uren(tekst))
+
+    def test_uit_bron(self):
+        self.assertEqual(uren_uit_bron({"uren_per_week": "32-40"})["uren"], "32–40 u/w")
+        self.assertEqual(uren_uit_bron({"uren_per_week": "?-36"})["uren"], "36 u/w")
+        self.assertIsNone(uren_uit_bron({"uren_per_week": "?-?"}))
 
 
 if __name__ == "__main__":

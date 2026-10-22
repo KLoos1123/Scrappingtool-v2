@@ -153,17 +153,23 @@ def sync_verrijkingen(rijen):
 
 
 def sync_tarieven(rijen):
-    """rijen: zoals tarieven.verzamel() ze teruggeeft. Overschrijft bestaande
-    tarieven. Geeft het aantal gesyncte rijen terug."""
+    """rijen: zoals tarieven.verzamel() ze teruggeeft (tarief en/of uren).
+    Overschrijft bestaande rijen. Geeft het aantal gesyncte rijen terug.
+
+    Zonder supabase/uren.sql kent de tabel nog geen uren-kolommen en moet het
+    tarief gevuld zijn; dan sturen we alleen de tarieven, zonder uren."""
     nu = datetime.now(timezone.utc).isoformat(timespec="seconds")
     payload = [
         {
             "bron": r["bron"],
             "tender_id": str(r["tender_id"]),
-            "tarief": r["tarief"],
+            "tarief": r.get("tarief"),
             "tarief_min": r.get("tarief_min"),
             "tarief_max": r.get("tarief_max"),
             "herkomst": r.get("herkomst"),
+            "uren": r.get("uren"),
+            "uren_min": r.get("uren_min"),
+            "uren_max": r.get("uren_max"),
             "gevonden_op": nu,
         }
         for r in rijen
@@ -173,10 +179,21 @@ def sync_tarieven(rijen):
 
     url = f"{SUPABASE_URL}/rest/v1/tarieven"
     headers = _headers({"Prefer": "resolution=merge-duplicates"})
-    n = 0
-    for chunk in _chunks(payload, BATCH):
-        resp = requests.post(url, headers=headers, json=chunk, timeout=60)
-        if not resp.ok:
-            raise RuntimeError(f"tarieven-sync mislukt ({resp.status_code}): {resp.text[:500]}")
-        n += len(chunk)
-    return n
+
+    def stuur(rijen_):
+        n = 0
+        for chunk in _chunks(rijen_, BATCH):
+            resp = requests.post(url, headers=headers, json=chunk, timeout=60)
+            if not resp.ok:
+                raise RuntimeError(f"tarieven-sync mislukt ({resp.status_code}): {resp.text[:500]}")
+            n += len(chunk)
+        return n
+
+    try:
+        return stuur(payload)
+    except RuntimeError as e:
+        if "uren" not in str(e) and "tarief" not in str(e):
+            raise
+        print("  tabel tarieven kent nog geen uren (voer supabase/uren.sql uit); alleen tarieven gesynct")
+        oud = [{k: v for k, v in r.items() if not k.startswith("uren")} for r in payload if r["tarief"]]
+        return stuur(oud)

@@ -164,9 +164,10 @@ def main():
     print(f"\n=== tarieven ===")
     try:
         gevonden = tarieven.verzamel(alles)
-        print(f"  {len(gevonden)} tarieven gevonden")
+        print(f"  {sum(1 for r in gevonden if r['tarief'])} tarieven en "
+              f"{sum(1 for r in gevonden if r['uren'])} keer uren gevonden")
         if supabase_sync._configured():
-            print(f"  {supabase_sync.sync_tarieven(gevonden)} tarieven gesynct")
+            print(f"  {supabase_sync.sync_tarieven(gevonden)} rijen gesynct")
     except Exception as e:
         print(f"  tarieven MISLUKT: {e}")
  
