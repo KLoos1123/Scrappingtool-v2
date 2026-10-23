@@ -598,5 +598,17 @@
     });
   }
 
-  window.flappyMat = { koppel, open };
+  // voor de andere easter egg (Snake): credits bijschrijven in dezelfde pot, ook online
+  async function geefCredits(n){
+    if(!(n > 0)) return;
+    try{ if(!online.klaar && !online.fout) await startOnline(); }catch(e){}
+    credits += n; bewaar('flappyMatCredits', credits);
+    renderWinkel();
+    bewaarOnline();
+  }
+  function personages(){
+    return PERSONAGES.filter(p => p.beschikbaar || p.id === 'mat').map(p => ({ id:p.id, naam:p.naam, src:p.src }));
+  }
+
+  window.flappyMat = { koppel, open, geefCredits, personages, keuze:() => keuze };
 })();
