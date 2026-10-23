@@ -164,7 +164,10 @@ def haal_uren(tekst):
 
 def uren_uit_bron(rij):
     """Uren die de scraper als veld meegeeft (freelance.nl: uren_per_week "32-40")."""
-    m = re.match(r"\s*(\d{1,2}|\?)\s*-\s*(\d{1,2}|\?)\s*$", str(rij.get("uren_per_week") or ""))
+    tekst = str(rij.get("uren_per_week") or "")
+    if re.match(r"\s*\d{1,2}\s*$", tekst):            # één getal: "36"
+        return _uren_resultaat(int(tekst), None)
+    m = re.match(r"\s*(\d{1,2}|\?)\s*-\s*(\d{1,2}|\?)\s*$", tekst)
     if not m:
         return None
     lo, hi = (None if x == "?" else x for x in m.groups())
