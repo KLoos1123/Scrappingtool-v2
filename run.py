@@ -4,6 +4,9 @@ zodat je het in GitHub Actions ziet.
 """
 import os
 import csv
+import html
+import json
+import re
 import sys
 import subprocess
 import traceback
@@ -75,10 +78,27 @@ def exporteer(rijen, bestand):
     print(f"  {bestand}: {len(rijen)} rijen")
  
  
+def schoon_rij(r):
+    """Kleine opschoning die voor alle bronnen geldt: witruimte en HTML-entiteiten
+    in de titel, een plaatsnaam achteraan de titel die al in locatie staat
+    ("Projectleider | Den Haag"), en plaatshouder-deadlines (2900-01-01)."""
+    t = r.get("titel")
+    if isinstance(t, str):
+        t = re.sub(r"[\s\u00a0\u200b]+", " ", html.unescape(t)).strip()
+        plaats = re.split(r" - | \(|,", r.get("locatie") or "")[0].strip()
+        if plaats and len(t) > len(plaats) + 5:
+            t = re.sub(r"\s+[|\-–]\s*" + re.escape(plaats) + r"$", "", t, flags=re.I)
+        r["titel"] = t
+    if (r.get("deadline") or "") >= "2100":
+        r["deadline"] = None
+    return r
+
+
 def main():
     startmoment = datetime.now(timezone.utc) - timedelta(seconds=5)
     alles = []
     mislukt = []
+    leeg = []
  
     for scraper in SCRAPERS:
         naam = scraper.BRON
@@ -88,7 +108,10 @@ def main():
             for r in rijen:
                 r["bron"] = naam
                 datums.normaliseer_rij(r)
+                schoon_rij(r)
             print(f"  {len(rijen)} rijen opgehaald")
+            if not rijen:
+                leeg.append(naam)
             alles.extend(rijen)
         except Exception as e:
             print(f"  MISLUKT: {e}")
@@ -105,6 +128,16 @@ def main():
         print(f"\n  {aangevuld} deadlines aangevuld uit de omschrijving")
  
     print(f"\n=== database ===")
+    hersteld = []
+    if os.path.exists("herstel.json"):
+        # eenmalig opgebouwd uit oude snapshots; idempotent, vult alleen lege velden
+        with open("herstel.json", encoding="utf-8") as f:
+            hersteld = db.herstel(json.load(f))
+        if hersteld:
+            print(f"  {len(hersteld)} tenders hersteld uit eerdere snapshots (herstel.json)")
+    aangevuld = db.vul_aan_uit_db(alles)
+    if aangevuld:
+        print(f"  {aangevuld} lege velden aangevuld met eerder bewaarde waarden")
     nieuw, totaal = db.opslaan(alles)
     print(f"  {nieuw} nieuw, {totaal} totaal")
     gecorrigeerd = db.normaliseer_bestaande_datums()
@@ -114,6 +147,11 @@ def main():
     if uit_tekst:
         print(f"  {len(uit_tekst)} oudere deadlines aangevuld uit de omschrijving")
     gecorrigeerd += uit_tekst
+    onzin = db.wis_onzin_deadlines()
+    if onzin:
+        print(f"  {len(onzin)} plaatshouder-deadlines (2100+) leeggemaakt")
+    gecorrigeerd += onzin + hersteld
+
     for r in db.per_bron():
         print(f"  {r['bron']}: {r['aantal']}")
  
@@ -151,9 +189,12 @@ def main():
     # status/status_gewijzigd_door/status_gewijzigd_op kolommen aan.
     print(f"\n=== supabase ===")
     try:
-        al_in_run = {(r["bron"], str(r.get("tender_id"))) for r in alles}
-        extra = [r for r in gecorrigeerd if (r["bron"], str(r["tender_id"])) not in al_in_run]
-        n_tenders = supabase_sync.sync_tenders(alles + extra)
+        # rijen van deze run, aangevuld/overschreven met wat de database daarna corrigeerde
+        per_sleutel = {(r["bron"], str(r.get("tender_id"))): r for r in alles}
+        for r in gecorrigeerd:
+            k = (r["bron"], str(r["tender_id"]))
+            per_sleutel[k] = {**per_sleutel.get(k, {}), **r}
+        n_tenders = supabase_sync.sync_tenders(list(per_sleutel.values()))
         print(f"  {n_tenders} tenders gesynct")
         n_oms = supabase_sync.sync_beschrijvingen(met_oms)
         print(f"  {n_oms} omschrijvingen gesynct")
@@ -197,6 +238,8 @@ def main():
     print(f"\n=== dashboard ===")
     subprocess.run(["python", "dashboard.py"], check=True)
  
+    if leeg:
+        print(f"\nLET OP: {len(leeg)} bron(nen) leverden 0 rijen: {', '.join(leeg)}")
     if mislukt:
         melding = f"Mislukte bronnen ({len(mislukt)}): {', '.join(mislukt)}"
         print(f"\n{melding}")

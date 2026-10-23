@@ -93,13 +93,18 @@ def opslaan(rijen):
                  eerst_gezien, laatst_gezien)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT (bron, tender_id) DO UPDATE SET
-                titel         = excluded.titel,
-                organisatie   = excluded.organisatie,
-                status        = excluded.status,
-                deadline      = excluded.deadline,
-                locatie       = excluded.locatie,
-                url           = excluded.url,
-                laatst_gezien = excluded.laatst_gezien
+                -- een leeg veld in deze run wist geen eerder gevonden waarde
+                -- (bv. freelance.nl valt bij een captcha terug op publieke data
+                -- zonder organisatie en deadline)
+                nummer          = COALESCE(excluded.nummer, tenders.nummer),
+                titel           = COALESCE(excluded.titel, tenders.titel),
+                organisatie     = COALESCE(excluded.organisatie, tenders.organisatie),
+                status          = COALESCE(excluded.status, tenders.status),
+                deadline        = COALESCE(excluded.deadline, tenders.deadline),
+                publicatiedatum = COALESCE(tenders.publicatiedatum, excluded.publicatiedatum),
+                locatie         = COALESCE(excluded.locatie, tenders.locatie),
+                url             = COALESCE(excluded.url, tenders.url),
+                laatst_gezien   = excluded.laatst_gezien
             """,
             waarden + [nu, nu],
         )
@@ -109,6 +114,66 @@ def opslaan(rijen):
     conn.close()
 
     return na - voor, na
+
+
+AANVULBAAR = ["nummer", "titel", "organisatie", "deadline", "publicatiedatum", "locatie", "url"]
+
+
+def vul_aan_uit_db(rijen):
+    """Vult lege velden van de rijen uit deze run aan met wat er al bewaard is,
+    zodat ook Supabase (dat deze rijen krijgt) geen waarden kwijtraakt.
+    Geeft het aantal aangevulde velden terug."""
+    conn = verbind()
+    aangevuld = 0
+    for r in rijen:
+        if not any(r.get(v) in (None, "") for v in AANVULBAAR):
+            continue
+        oud = conn.execute("SELECT * FROM tenders WHERE bron = ? AND tender_id = ?",
+                           (r.get("bron"), str(r.get("tender_id")))).fetchone()
+        if not oud:
+            continue
+        for v in AANVULBAAR:
+            if r.get(v) in (None, "") and oud[v] not in (None, ""):
+                r[v] = oud[v]
+                aangevuld += 1
+    conn.close()
+    return aangevuld
+
+
+def herstel(waarden):
+    """Vult lege velden van bewaarde tenders met eerder bekende waarden
+    (herstel.json, eenmalig opgebouwd uit oude snapshots in git). Idempotent:
+    geeft alleen de rijen terug die echt veranderen, zodat run.py ze naar
+    Supabase kan sturen."""
+    conn = verbind()
+    gewijzigd = []
+    for h in waarden:
+        oud = conn.execute("SELECT * FROM tenders WHERE bron = ? AND tender_id = ?",
+                           (h["bron"], str(h["tender_id"]))).fetchone()
+        if not oud:
+            continue
+        vul = {v: h[v] for v in AANVULBAAR if h.get(v) not in (None, "") and oud[v] in (None, "")}
+        if not vul:
+            continue
+        conn.execute(f"UPDATE tenders SET {', '.join(f'{v} = ?' for v in vul)} WHERE bron = ? AND tender_id = ?",
+                     [*vul.values(), h["bron"], str(h["tender_id"])])
+        gewijzigd.append({**dict(oud), **vul})
+    conn.commit()
+    conn.close()
+    return gewijzigd
+
+
+def wis_onzin_deadlines():
+    """'2900-01-01' en dergelijke zijn plaatshouders voor 'doorlopend': leeg maken."""
+    conn = verbind()
+    rijen = [dict(r) for r in conn.execute("SELECT * FROM tenders WHERE deadline >= '2100'")]
+    if rijen:
+        conn.execute("UPDATE tenders SET deadline = NULL WHERE deadline >= '2100'")
+        conn.commit()
+    conn.close()
+    for r in rijen:
+        r["deadline"] = None
+    return rijen
 
 
 def normaliseer_bestaande_datums():
