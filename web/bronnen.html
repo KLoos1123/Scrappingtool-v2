@@ -80,7 +80,7 @@
   .werkbalk span{ font-size:12px; color:var(--muted2); }
   .scroll{ overflow-x:auto; }
   .tabel{ min-width:820px; }
-  .rij{ display:grid; grid-template-columns:minmax(170px,1.4fr) minmax(140px,1.2fr) 90px 110px 80px 80px; gap:16px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .rij{ display:grid; grid-template-columns:minmax(170px,1.6fr) minmax(130px,1fr) 96px 104px 76px 88px 72px; gap:16px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
   .kopregel{ background:var(--kopregel); padding:10px 20px; font-size:12px; font-weight:500; color:#5a606a; }
   .kopregel button{ font-size:12px; font-weight:500; padding:0; border:0; background:transparent; cursor:pointer; display:flex; gap:4px; align-items:center; color:#5a606a; white-space:nowrap; }
   .kopregel button.r{ justify-content:flex-end; }
@@ -92,10 +92,16 @@
   .bron b{ font-weight:500; color:var(--actief-tekst); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .bron small{ font-size:12px; color:#8a9099; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .bron small.let{ color:var(--waarschuw); }
-  .aandeel{ display:flex; align-items:center; gap:10px; }
-  .aandeel .spoor{ flex:1; height:6px; border-radius:3px; background:var(--balk-leeg); overflow:hidden; }
-  .aandeel .spoor i{ display:block; height:100%; background:var(--balk); border-radius:3px; }
-  .aandeel span{ font-size:12px; color:#5a606a; width:40px; text-align:right; }
+  /* bijgewerkt: stip + moment van de laatste levering */
+  .bijgewerkt{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); white-space:nowrap; }
+  .bijgewerkt i{ width:8px; height:8px; border-radius:50%; flex:none; background:var(--op); }
+  .bijgewerkt.st-delay i{ background:#d39b2a; } .bijgewerkt.st-delay{ color:var(--waarschuw); }
+  .bijgewerkt.st-stale i, .bijgewerkt.st-leeg i{ background:#c3c8d0; } .bijgewerkt.st-stale{ color:var(--waarschuw); } .bijgewerkt.st-leeg{ color:var(--muted2); }
+  /* klein aandeelbalkje onder het aantal nieuw */
+  .hoofd .mini{ display:block; width:56px; height:3px; margin:5px 0 0 auto; border-radius:2px; background:var(--balk-leeg); overflow:hidden; }
+  .hoofd .mini b{ display:block; height:100%; background:var(--balk-licht); border-radius:2px; margin-left:auto; }
+  .nieuwlabel{ display:inline-block; font-size:11px; font-weight:600; color:var(--primair); background:var(--actief); border-radius:10px; padding:1px 8px; }
+  .snel{ font-weight:600; color:var(--neer); }
   .r{ text-align:right; }
   .hoofd{ font-size:16px; font-weight:600; }
   .klein{ font-size:13px; font-weight:500; }
@@ -146,8 +152,18 @@
   .aanvragen .segment{ height:34px; }
   .aanvragen .telregel{ font-size:12px; color:var(--muted2); }
   .atabel{ min-width:900px; }
-  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 96px 112px 120px 110px 20px; gap:14px; align-items:center; padding:7px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
+  .arij{ display:grid; grid-template-columns:minmax(260px,2.6fr) 116px 132px 150px 120px 20px; gap:14px; align-items:center; padding:7px 20px; border-bottom:1px solid var(--scheiding); font-size:14px; }
   .arij.kopregel{ padding:10px 20px; }
+  /* filterkop: per kolom sorteren (klik op het label) en filteren (keuzelijst eronder) */
+  .filterkop{ align-items:start; }
+  .filterkop .kcel{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .filterkop .kcel.r{ align-items:flex-end; }
+  .filterkop .kcel > button, .filterkop .kcel > span{ font-size:12px; font-weight:500; color:#5a606a; border:0; background:transparent; padding:0; cursor:pointer; display:flex; gap:4px; white-space:nowrap; }
+  .filterkop .kcel > span{ cursor:default; }
+  .filterkop .kcel > button[aria-sort]:not([aria-sort="none"]){ color:var(--tekst); }
+  .aanvragen .filterkop select{ height:26px; font-size:12px; padding:0 4px; width:100%; max-width:240px; color:var(--muted); }
+  .aanvragen .filterkop select.aan{ border-color:var(--primair); background:var(--actief); color:var(--actief-tekst); font-weight:500; }
+  .wisfilters{ font-size:12px; color:var(--primair); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; }
   .arij.data:hover{ background:var(--hover); }
   .arij.open{ background:var(--gekozen); }
   .atitel{ min-width:0; }
@@ -241,7 +257,7 @@
   <div id="detail"></div>
   <section class="aanvragen" id="aanvragen">
     <div class="werkbalk">
-      <div class="akop"><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span> <span id="aBron"></span></div>
+      <div class="akop"><b id="aTitel">Aanvragen</b> <span class="telregel" id="aTelling"></span> <button class="wisfilters" id="aWis" hidden>filters wissen</button> <span id="aBron"></span></div>
       <div class="bediening">
         <input type="search" id="aZoek" placeholder="Zoek titel, organisatie, plaats of nummer" autocomplete="off" aria-label="Zoek in aanvragen">
         <div class="segment" role="group" aria-label="Welke aanvragen">
@@ -252,6 +268,7 @@
           <option value="deadline">Deadline eerst</option>
           <option value="nieuw">Nieuwste eerst</option>
           <option value="titel">Titel A-Z</option>
+          <option value="tarief">Hoogste tarief</option>
         </select>
         <a class="dashlink" id="aDash" href="index.html">Met alle filters in het dashboard →</a>
         <button class="sluit" id="aSluit" aria-label="Inklappen" title="Inklappen">×</button>
@@ -303,14 +320,13 @@ const VERTRAAGD_GRENS = 36*3600000; // daarna telt een bron als 'geen recente da
 const PAGINA = 1000;
 const WEEKDAG = ['zo','ma','di','wo','do','vr','za'];
 const KOLOMMEN = [
-  ['Bron','naam','l'], ['Aandeel','aandeel','l'], [null,'hoofd','r'],
-  ['vs vorige week','trend','r'], ['Nu open','open','r'], ['Totaal','totaal','r'],
+  ['Bron','naam','l'], ['Bijgewerkt','bijgewerkt','l'], [null,'hoofd','r'],
+  ['vs vorige week','trend','r'], ['Nu open','open','r'], ['Sluit ≤ 7d','snel','r'], ['Totaal','totaal','r'],
 ];
 
 const state = { bronnen:[], laatsteRun:null, zoek:'', periode:'7d', actueel:false, sort:'hoofd', richting:-1, gekozen:null };
 
 const nl = n => Number(n).toLocaleString('nl-NL');
-const pct = x => `${x.toFixed(1).replace('.', ',')}%`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ms = iso => { if(!iso) return null; const t = new Date(iso).getTime(); return isNaN(t) ? null : t; };
 function trendTekst(p){ return p > 0 ? `+${p}%` : p < 0 ? `−${Math.abs(p)}%` : '0%'; }
@@ -337,13 +353,13 @@ async function haalAlles(select, bron){
 }
 
 async function laad(){
-  const rijen = await haalAlles('bron, eerst_gezien, laatst_gezien');
+  const rijen = await haalAlles('bron, eerst_gezien, laatst_gezien, deadline');
   const nu = Date.now(), vandaag = begin(nu);
   let laatsteRun = null;
   rijen.forEach(r => { const t = ms(r.laatst_gezien); if(t != null && (laatsteRun == null || t > laatsteRun)) laatsteRun = t; });
 
   const leeg = code => ({ code, naam:(BRONNEN[code]||[code])[0], domein:(BRONNEN[code]||[])[1] || '',
-    totaal:0, open:0, n24:0, dagen:[0,0,0,0,0,0,0], vorige7:0, laatst:null });
+    totaal:0, open:0, snel:0, n24:0, dagen:[0,0,0,0,0,0,0], vorige7:0, laatst:null });
   const per = new Map(Object.keys(BRONNEN).map(c => [c, leeg(c)]));
   rijen.forEach(r => {
     if(!r.bron) return;
@@ -351,7 +367,11 @@ async function laad(){
     const b = per.get(r.bron), eg = ms(r.eerst_gezien), lg = ms(r.laatst_gezien);
     b.totaal++;
     if(lg != null && (b.laatst == null || lg > b.laatst)) b.laatst = lg;
-    if(lg != null && laatsteRun != null && lg >= laatsteRun - RUN_MARGE) b.open++;
+    if(lg != null && laatsteRun != null && lg >= laatsteRun - RUN_MARGE){
+      b.open++;
+      const dl = ms(r.deadline);
+      if(dl != null && dl >= nu && dl - nu <= 7 * DAG) b.snel++;   // open en sluit binnen een week
+    }
     if(eg == null) return;
     if(nu - eg < DAG) b.n24++;
     // kalenderdagen: index 6 is vandaag, 0 is zes dagen terug; daarvoor de week ervoor
@@ -370,11 +390,15 @@ async function laad(){
   state.laatsteRun = laatsteRun;
 }
 
-function subregel(b){
-  if(b.status === 'stale') return ['Geen recente data', true];
-  if(b.status === 'delay') return ['Laatste update ontbreekt', true];
-  if(b.status === 'leeg') return ['Nog geen data', true];
-  return [b.domein, false];
+function subregel(b){ return [b.domein || b.code, false]; }
+// "vandaag 12:53", "gisteren 18:02", "18 okt" (met stip in de kleur van de status)
+function bijgewerkt(b){
+  if(b.status === 'leeg' || b.laatst == null) return ['leeg', 'Nog geen data', 'Deze bron heeft nog niets aangeleverd'];
+  const d = new Date(b.laatst), tijd = d.toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+  const dagen = Math.round((begin(Date.now()) - begin(b.laatst)) / DAG);
+  const wanneer = dagen === 0 ? `vandaag ${tijd}` : dagen === 1 ? `gisteren ${tijd}` : d.toLocaleDateString('nl-NL', {day:'numeric', month:'short'});
+  const uitleg = { ok:'Leverde aanvragen in de laatste run', delay:'Ontbrak in de laatste run', stale:'Al langer geen aanvragen meer geleverd' }[b.status];
+  return [b.status, b.status === 'ok' ? wanneer : (b.status === 'delay' ? 'Ontbrak · ' : 'Sinds ') + wanneer, uitleg];
 }
 function hoofdwaarde(b){ return state.periode === '24u' ? b.n24 : b.n7; }
 
@@ -402,8 +426,8 @@ function zichtbareBronnen(){
   const q = state.zoek.trim().toLowerCase();
   const lijst = state.bronnen.filter(b => (!state.actueel || b.status === 'ok')
     && (!q || b.naam.toLowerCase().includes(q) || b.domein.toLowerCase().includes(q) || b.code.includes(q)));
-  const sleutel = { naam:b => b.naam.toLowerCase(), aandeel:hoofdwaarde, hoofd:hoofdwaarde,
-    trend:b => (b.status === 'ok' ? b.trend : -Infinity), open:b => b.open, totaal:b => b.totaal };
+  const sleutel = { naam:b => b.naam.toLowerCase(), bijgewerkt:b => b.laatst || 0, hoofd:hoofdwaarde,
+    trend:b => (b.status === 'ok' && b.vorige7 ? b.trend : -Infinity), open:b => b.open, snel:b => b.snel, totaal:b => b.totaal };
   const k = sleutel[state.sort], richting = state.sort === 'naam' ? -state.richting : state.richting;
   return lijst.sort((a, b) => { const x = k(a), y = k(b); return (x > y ? 1 : x < y ? -1 : 0) * richting || b.totaal - a.totaal; });
 }
@@ -411,7 +435,6 @@ function zichtbareBronnen(){
 function renderTabel(){
   const lijst = zichtbareBronnen();
   const maxHoofd = Math.max(1, ...state.bronnen.map(hoofdwaarde));
-  const totHoofd = state.bronnen.reduce((a, b) => a + hoofdwaarde(b), 0);
   document.getElementById('telling').textContent = `Bronnen (${lijst.length})`;
   const kop = KOLOMMEN.map(([label, k, uitlijn]) => {
     const tekst = label || (state.periode === '24u' ? 'Nieuw 24u' : 'Nieuw 7d');
@@ -421,12 +444,17 @@ function renderTabel(){
   }).join('');
   const rijen = lijst.map(b => {
     const [sub, let_] = subregel(b), h = hoofdwaarde(b), geen = b.status !== 'ok';
+    const [bStatus, bTekst, bUitleg] = bijgewerkt(b);
+    const trend = geen ? '<span class="grijs">—</span>'
+      : (state.periode !== '24u' && !b.vorige7 && b.n7) ? '<span class="nieuwlabel" title="Vorige week nog geen aanvragen">nieuw</span>'
+      : `<span class="${trendKlas(b.trend)}">${trendTekst(b.trend)}</span>`;
     return `<div class="rij data${state.gekozen === b.code ? ' gekozen' : ''}" data-code="${esc(b.code)}" tabindex="0" role="button" aria-label="${esc(b.naam)}, details">
       <div class="bron"><b>${esc(b.naam)}</b><small class="${let_ ? 'let' : ''}">${esc(sub)}</small></div>
-      <div class="aandeel"><div class="spoor"><i style="width:${(h / maxHoofd * 100).toFixed(1)}%"></i></div><span class="num">${h ? pct(h / totHoofd * 100) : '—'}</span></div>
-      <span class="r hoofd num">${h ? nl(h) : '—'}</span>
-      <span class="r klein num ${geen ? 'grijs' : trendKlas(b.trend)}">${geen ? '—' : trendTekst(b.trend)}</span>
+      <div class="bijgewerkt st-${bStatus}" title="${esc(bUitleg)}"><i aria-hidden="true"></i>${esc(bTekst)}</div>
+      <span class="r hoofd num">${h ? nl(h) : '—'}${h ? `<i class="mini" aria-hidden="true"><b style="width:${Math.max(6, h / maxHoofd * 100).toFixed(0)}%"></b></i>` : ''}</span>
+      <span class="r klein num">${trend}</span>
       <span class="r num">${b.open ? nl(b.open) : '—'}</span>
+      <span class="r num">${b.snel ? `<span class="snel" title="Open aanvragen met een deadline binnen 7 dagen (klik om ze te tonen)">${nl(b.snel)}</span>` : '<span class="grijs">—</span>'}</span>
       <span class="r num grijs">${nl(b.totaal)}</span>
     </div>${state.gekozen === b.code ? '<div class="uitklap" id="uitklap"></div>' : ''}`;
   }).join('');
@@ -444,8 +472,11 @@ function renderTabel(){
     renderTabel();
   });
   tabel.querySelectorAll('.data').forEach(rij => {
-    const kies = () => {
-      state.gekozen = state.gekozen === rij.dataset.code ? null : rij.dataset.code;
+    const kies = e => {
+      // klik op het rode 'Sluit ≤ 7d'-getal: open de bron meteen met dat filter
+      const snel = e && e.target.closest && e.target.closest('.snel');
+      state.gekozen = state.gekozen === rij.dataset.code && !snel ? null : rij.dataset.code;
+      state.startFilter = snel ? { deadline:'7' } : null;
       renderTabel(); renderDetail(); toonAanvragen();
       // de gekozen bron bovenaan in beeld, met zijn aanvragen eronder
       if(state.gekozen) document.querySelector('#tabel .data.gekozen')?.scrollIntoView({behavior:'smooth', block:'start'});
@@ -469,7 +500,16 @@ function renderDetail(){
 /* ===================== aanvragen van de gekozen bron ===================== */
 const TOON_PER_KEER = 100;
 const AANVRAGEN = new Map();   // bron -> rijen
-const av = { open:true, zoek:'', sort:'deadline', toon:TOON_PER_KEER, bron:null, opengeklapt:new Set() };
+const av = { open:true, zoek:'', sort:'deadline', omgekeerd:false, toon:TOON_PER_KEER, bron:null, opengeklapt:new Set(), f:{} };
+const GEEN_FILTERS = { org:'', gezien:'', deadline:'', tarief:'', status:'' };
+av.f = { ...GEEN_FILTERS };
+// tarief en kenmerken komen uit notities.js (TARIEVEN, NOTITIES)
+function tariefVan(r){ return (typeof TARIEVEN !== 'undefined' && TARIEVEN.get(notitieSleutel(r.bron, r.tender_id))) || null; }
+function heeftTarief(r){
+  const n = typeof NOTITIES !== 'undefined' && NOTITIES.get(notitieSleutel(r.bron, r.tender_id));
+  const t = tariefVan(r);
+  return !!((n && n.tarief) || (t && t.tarief));
+}
 
 function isOnline(r){ const t = ms(r.laatst_gezien); return t != null && state.laatsteRun != null && t >= state.laatsteRun - RUN_MARGE; }
 function datumKort(t){ return t == null ? '—' : new Date(t).toLocaleDateString('nl-NL', {day:'numeric', month:'short', year:'2-digit'}); }
@@ -484,11 +524,13 @@ async function toonAanvragen(){
   if(!b) return;
   if(av.bron !== b.code){
     // nieuwe bron: filters terug naar de standaard; zonder recente data direct alles tonen
-    av.bron = b.code; av.zoek = ''; av.toon = TOON_PER_KEER; av.opengeklapt.clear();
+    av.bron = b.code; av.zoek = ''; av.toon = TOON_PER_KEER; av.opengeklapt.clear(); av.f = { ...GEEN_FILTERS };
     av.open = b.status === 'ok';
     document.getElementById('aZoek').value = '';
     document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String((k.dataset.open === '1') === av.open)));
   }
+  if(state.startFilter){ av.f = { ...GEEN_FILTERS, ...state.startFilter }; av.open = true; state.startFilter = null;
+    document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String(k.dataset.open === '1'))); }
   document.getElementById('aTitel').textContent = `Aanvragen`;
   document.getElementById('aDash').href = `index.html?bron=${encodeURIComponent(b.code)}`;
   if(!AANVRAGEN.has(b.code)){
@@ -501,18 +543,74 @@ async function toonAanvragen(){
   renderAanvragen();
 }
 
-function gefilterdeAanvragen(){
+// basis: open/alles en zoeken; de kolomfilters komen daarbovenop (zo blijven de keuzelijsten gevuld)
+function basisAanvragen(){
   const q = av.zoek.trim().toLowerCase();
-  const rijen = (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOnline(r))
+  return (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOnline(r))
     && (!q || [r.titel, r.organisatie, r.locatie, r.nummer].some(v => String(v || '').toLowerCase().includes(q))));
+}
+function voldoet(r, f, nu){
+  if(f.org && (r.organisatie || '') !== f.org) return false;
+  if(f.status && (r.status || '') !== f.status) return false;
+  if(f.gezien){
+    const eg = ms(r.eerst_gezien);
+    const grens = f.gezien === 'vandaag' ? begin(nu) : nu - Number(f.gezien) * DAG;
+    if(eg == null || eg < grens) return false;
+  }
+  if(f.deadline){
+    const t = ms(r.deadline), vandaag = begin(nu);
+    if(f.deadline === 'geen'){ if(t != null) return false; }
+    else if(f.deadline === 'verlopen'){ if(t == null || t >= vandaag) return false; }
+    else if(t == null || t < vandaag || t > nu + Number(f.deadline) * DAG) return false;
+  }
+  if(f.tarief){
+    const t = tariefVan(r);
+    if(f.tarief === 'met' && !heeftTarief(r)) return false;
+    if(f.tarief === 'zzp' && !(t && t.contractvorm === 'ZZP mogelijk')) return false;
+    if(f.tarief === 'deta' && !(t && t.contractvorm === 'Alleen detachering')) return false;
+  }
+  return true;
+}
+function gefilterdeAanvragen(){
   const nu = Date.now();
+  const rijen = basisAanvragen().filter(r => voldoet(r, av.f, nu));
   const dl = r => { const t = ms(r.deadline); return t == null ? Infinity : (t < nu - DAG ? Infinity - 1 : t); };
+  const tariefWaarde = r => { const t = tariefVan(r); return t ? (t.tarief_max || t.tarief_min || 0) : 0; };
   const sorteer = {
     deadline: (a, b) => dl(a) - dl(b) || (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
     nieuw: (a, b) => (ms(b.eerst_gezien) || 0) - (ms(a.eerst_gezien) || 0),
     titel: (a, b) => String(a.titel || '').localeCompare(String(b.titel || ''), 'nl'),
+    tarief: (a, b) => tariefWaarde(b) - tariefWaarde(a) || dl(a) - dl(b),
   }[av.sort];
-  return rijen.sort(sorteer);
+  rijen.sort(sorteer);
+  return av.omgekeerd ? rijen.reverse() : rijen;
+}
+function filterActief(){ return Object.values(av.f).some(Boolean); }
+
+// kopregel met per kolom een sorteerknop en een keuzelijst
+function filterKop(){
+  const basis = basisAanvragen();
+  const telling = veld => { const m = new Map(); basis.forEach(r => { const v = r[veld] || ''; if(v) m.set(v, (m.get(v) || 0) + 1); }); return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'nl')); };
+  const opties = (sleutel, lijst) => `<select data-af="${sleutel}" class="${av.f[sleutel] ? 'aan' : ''}" aria-label="Filter">`
+    + lijst.map(([waarde, label]) => `<option value="${esc(waarde)}"${av.f[sleutel] === waarde ? ' selected' : ''}>${esc(label)}</option>`).join('') + '</select>';
+  const orgs = telling('organisatie');
+  const orgLijst = [['', `Alle organisaties (${orgs.length})`], ...orgs.slice(0, 80).map(([o, n]) => [o, `${o} (${n})`])];
+  if(av.f.org && !orgs.some(([o]) => o === av.f.org)) orgLijst.push([av.f.org, av.f.org]);
+  const statussen = telling('status');
+  const statusLijst = [['', 'Alle statussen'], ...statussen.map(([s_, n]) => [s_, `${s_} (${n})`])];
+  const knop = (sleutel, label, standaardOmgekeerd) => {
+    const actief = av.sort === sleutel;
+    const pijl = actief ? (av.omgekeerd ? '↑' : '↓') : '';
+    return `<button data-asort="${sleutel}" aria-sort="${actief ? (av.omgekeerd ? 'ascending' : 'descending') : 'none'}">${label}<span aria-hidden="true">${pijl}</span></button>`;
+  };
+  return `<div class="arij kopregel filterkop">
+    <div class="kcel">${knop('titel', 'Aanvraag')}${opties('org', orgLijst)}</div>
+    <div class="kcel">${knop('nieuw', 'Eerst gezien')}${opties('gezien', [['', 'Altijd'], ['vandaag', 'Vandaag'], ['7', 'Laatste 7 dagen'], ['30', 'Laatste 30 dagen']])}</div>
+    <div class="kcel">${knop('deadline', 'Deadline')}${opties('deadline', [['', 'Alle deadlines'], ['7', 'Binnen 7 dagen'], ['21', 'Binnen 3 weken'], ['geen', 'Zonder deadline'], ['verlopen', 'Verlopen']])}</div>
+    <div class="kcel r">${knop('tarief', 'Tarief')}${opties('tarief', [['', 'Alles'], ['met', 'Met tarief'], ['zzp', 'ZZP mogelijk'], ['deta', 'Alleen detachering']])}</div>
+    <div class="kcel"><span>Status</span>${opties('status', statusLijst)}</div>
+    <span></span>
+  </div>`;
 }
 
 function deadlineCel(r){
@@ -528,7 +626,8 @@ function renderAanvragen(){
   const rijen = gefilterdeAanvragen();
   document.getElementById('aTelling').textContent = `${nl(Math.min(av.toon, rijen.length))} van ${nl(rijen.length)}` + (rijen.length !== alle.length ? ` · ${nl(alle.length)} totaal` : '');
   const nu = Date.now();
-  const kop = `<div class="arij kopregel"><span>Aanvraag</span><span>Eerst gezien</span><span>Deadline</span><span class="r">Tarief</span><span>Status</span><span></span></div>`;
+  const kop = filterKop();
+  document.getElementById('aWis').hidden = !filterActief();
   const regels = rijen.slice(0, av.toon).map(r => {
     const eg = ms(r.eerst_gezien), sleutel = `${r.tender_id}`;
     const titel = esc(r.titel || '(zonder titel)');
@@ -545,6 +644,17 @@ function renderAanvragen(){
   }).join('');
   const tabel = document.getElementById('aTabel');
   tabel.innerHTML = kop + (regels || '<div class="leeg">Geen aanvragen met deze filters.</div>');
+  tabel.querySelectorAll('[data-af]').forEach(sel => sel.onchange = () => {
+    av.f[sel.dataset.af] = sel.value; av.toon = TOON_PER_KEER; renderAanvragen();
+    tabel.querySelector(`[data-af="${sel.dataset.af}"]`)?.focus();
+  });
+  tabel.querySelectorAll('[data-asort]').forEach(k => k.onclick = () => {
+    if(av.sort === k.dataset.asort) av.omgekeerd = !av.omgekeerd;
+    else { av.sort = k.dataset.asort; av.omgekeerd = false; }
+    const sel = document.getElementById('aSort');
+    if([...sel.options].some(o => o.value === av.sort)) sel.value = av.sort;
+    renderAanvragen();
+  });
   tabel.querySelectorAll('.arij.data').forEach(rij => {
     const wissel = () => {
       const tid = rij.dataset.tid;
@@ -572,7 +682,8 @@ document.querySelectorAll('[data-open]').forEach(knop => knop.onclick = () => {
   document.querySelectorAll('[data-open]').forEach(k => k.setAttribute('aria-pressed', String(k === knop)));
   renderAanvragen();
 });
-document.getElementById('aSort').onchange = e => { av.sort = e.target.value; renderAanvragen(); };
+document.getElementById('aSort').onchange = e => { av.sort = e.target.value; av.omgekeerd = false; renderAanvragen(); };
+document.getElementById('aWis').onclick = () => { av.f = { ...GEEN_FILTERS }; av.toon = TOON_PER_KEER; renderAanvragen(); };
 document.getElementById('aMeer').onclick = () => { av.toon += TOON_PER_KEER; renderAanvragen(); };
 koppelNotities(document.getElementById('aanvragen'), werkNotitieIcoonBij);
 document.getElementById('aSluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
