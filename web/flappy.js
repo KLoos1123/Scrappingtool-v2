@@ -75,6 +75,21 @@
     ['volhouder',   '🔁', '25 potjes gespeeld',      () => gespeeld >= 25],
     ['verzamelaar', '👥', 'Alle personages gekocht', () => PERSONAGES.every(p => p.euro || gekocht.includes(p.id))],
   ];
+  // prestaties die je in Snake haalt (snake.js meldt ze via flappyMat.snakePrestaties)
+  const SNAKE_PRESTATIES = [
+    ['snake10',   '🐍', 'Snake: 10 collega\'s in één slang',  s => s.verzameld >= 10],
+    ['snake25',   '🐉', 'Snake: 25 punten',                    s => s.score >= 25],
+    ['snakealle', '🌈', 'Snake: iedere collega verzameld',     s => s.alle],
+  ];
+  const ALLE_PRESTATIES = PRESTATIES.concat(SNAKE_PRESTATIES);
+  function snakePrestaties(stats){
+    const nieuw = SNAKE_PRESTATIES.filter(([id, , , test]) => !behaald.includes(id) && test(stats || {}));
+    if(!nieuw.length) return [];
+    nieuw.forEach(([id]) => behaald.push(id));
+    bewaar('flappyMatPrestaties', behaald);
+    renderExtra();
+    return nieuw.map(([, icoon, naam]) => icoon + ' ' + naam);
+  }
   function controleerPrestaties(){
     const s = spel || {};
     const nieuw = PRESTATIES.filter(([id, , , test]) => !behaald.includes(id) && test(s));
@@ -108,7 +123,8 @@
     dood:  () => piep(300, 0.45, 'sawtooth', 0.06, 60),
   };
   // online: { id, naam } zodra de gebruiker bekend is; fout: tabel ontbreekt of geen toegang
-  const online = { id:null, naam:'', klaar:false, fout:false, lijst:[], plek:null };
+  const online = { id:null, naam:'', klaar:false, fout:false, lijst:[], plek:null, snakeBeste:0 };
+  let rangTab = 'flappy', snakeData = null;   // ranglijst-tab in Flappy: 'flappy' of 'snake'
 
   function lees(sleutel, standaard){
     try{ const v = localStorage.getItem(sleutel); return v == null ? standaard : JSON.parse(v); }catch(e){ return standaard; }
@@ -140,6 +156,10 @@
       .fm-zij{ display:flex; flex-direction:column; gap:10px; width:min(400px, 92vw); }
       .fm-ranglijst{ background:#fff; border-radius:12px; padding:10px 12px; font-family:'IBM Plex Sans',system-ui,sans-serif; color:#262b33;
         box-shadow:0 10px 30px rgba(0,0,0,.3); font-size:13px; }
+      .fm-tabs{ display:flex; gap:4px; }
+      .fm-tabs button{ font:inherit; font-size:12px; font-weight:600; border:0; background:#f3f6fb; color:#5f656e; border-radius:6px; padding:3px 9px; cursor:pointer; }
+      .fm-tabs button.aan{ background:#2f5fa8; color:#fff; }
+      .fm-tabs button:focus-visible{ outline:2px solid #2f5fa8; outline-offset:2px; }
       .fm-ranglijst ol{ list-style:none; margin:0; padding:0; max-height:100px; overflow:auto; }
       .fm-ranglijst li{ display:grid; grid-template-columns:22px 22px 1fr auto; gap:8px; align-items:center; padding:3px 4px; border-radius:6px; }
       .fm-ranglijst li.ik{ background:#eef2fa; font-weight:600; }
@@ -198,6 +218,13 @@
     zetGeluid();
     knopGeluid.addEventListener('click', () => { geluid = !geluid; bewaar('flappyMatGeluid', geluid); zetGeluid(); GELUID.punt(); knopGeluid.blur(); });
     overlay.addEventListener('pointerdown', e => { if(e.target === overlay) sluit(); });
+    overlay.querySelector('.fm-ranglijst').addEventListener('click', e => {
+      const tab = e.target.closest('[data-tab]');
+      if(!tab) return;
+      rangTab = tab.dataset.tab;
+      renderRanglijst();
+      if(rangTab === 'snake') snakeRanglijst().then(d => { snakeData = d; renderRanglijst(); });
+    });
     overlay.querySelector('.fm-winkel').addEventListener('click', e => {
       const knop = e.target.closest('button[data-id]');
       if(!knop) return;
@@ -505,8 +532,8 @@
     const voortgang = u.doel && !uitdaging.klaar ? ` (${Math.min(uitdaging.potjes, u.doel)}/${u.doel})` : '';
     el.innerHTML = `<div class="fm-extra-kop"><b>Uitdaging van vandaag</b><span class="fm-credits">+${u.beloning}</span></div>
       <div class="fm-uitdaging${uitdaging.klaar ? ' klaar' : ''}"><span class="vink">${uitdaging.klaar ? '✓' : '○'}</span><span>${u.tekst}${voortgang}${uitdaging.klaar ? ' · gehaald' : ''}</span></div>
-      <div class="fm-extra-kop"><b>Prestaties</b><span>${behaald.length}/${PRESTATIES.length}</span></div>
-      <div class="fm-badges">${PRESTATIES.map(([id, icoon, naam]) =>
+      <div class="fm-extra-kop"><b>Prestaties</b><span>${behaald.filter(id => ALLE_PRESTATIES.some(p => p[0] === id)).length}/${ALLE_PRESTATIES.length}</span></div>
+      <div class="fm-badges">${ALLE_PRESTATIES.map(([id, icoon, naam]) =>
         `<span class="fm-badge${behaald.includes(id) ? ' aan' : ''}" title="${naam}${behaald.includes(id) ? '' : ' (nog niet behaald)'}" aria-label="${naam}">${icoon}</span>`).join('')}</div>`;
   }
 
@@ -541,6 +568,7 @@
       gekocht = Array.from(new Set([...(data.gekocht || []), ...gekocht]));
       keuze = gekocht.includes(data.keuze) ? data.keuze : keuze;
       gespeeld = Math.max(gespeeld, data.gespeeld || 0);
+      online.snakeBeste = data.snake_beste || 0;
       bewaar('flappyMatBest', beste); bewaar('flappyMatCredits', credits);
       bewaar('flappyMatGekocht', gekocht); bewaar('flappyMatKeuze', keuze);
     }
@@ -572,18 +600,52 @@
     } else online.plek = null;
     renderRanglijst();
   }
+  function beeldVan(id){ return (PERSONAGES.find(p => p.id === id && (p.beschikbaar || p.id === 'mat')) || PERSONAGES[0]).src; }
   function renderRanglijst(){
     const el = overlay && overlay.querySelector('.fm-ranglijst');
     if(!el) return;
-    const kop = '<div class="fm-rang-kop"><b>Ranglijst</b><span>Jouw beste: <span class="fm-credits">' + beste + '</span></span></div>';
-    if(online.fout){ el.innerHTML = kop + '<div class="leeg">Ranglijst is nog niet actief; je score wordt in deze browser bewaard.</div>'; return; }
-    if(!online.klaar){ el.innerHTML = kop + '<div class="leeg">Laden…</div>'; return; }
-    const beeld = id => (PERSONAGES.find(p => p.id === id && (p.beschikbaar || p.id === 'mat')) || PERSONAGES[0]).src;
-    const rij = (nr, r, extra) => `<li class="${r.user_id === online.id ? 'ik' : ''}${extra || ''}"><span class="nr">${nr}</span><img src="${beeld(r.keuze)}" alt=""><span class="wie">${esc(r.naam)}</span><span class="sc">${r.beste}</span></li>`;
-    let html = online.lijst.map((r, i) => rij(i + 1, r)).join('');
-    if(online.plek && online.plek > online.lijst.length)
-      html += rij(online.plek, { user_id:online.id, naam:online.naam, beste, keuze }, ' los');
+    const snake = rangTab === 'snake', mijnBeste = snake ? Math.max(lees('snakeMatBest', 0), online.snakeBeste || 0) : beste;
+    const kop = `<div class="fm-rang-kop"><span class="fm-tabs" role="tablist" aria-label="Ranglijst">`
+      + `<button data-tab="flappy" role="tab" aria-selected="${!snake}" class="${snake ? '' : 'aan'}">Flappy</button>`
+      + `<button data-tab="snake" role="tab" aria-selected="${snake}" class="${snake ? 'aan' : ''}">Snake</button></span>`
+      + `<span>Jouw beste: <span class="fm-credits">${mijnBeste}</span></span></div>`;
+    if(online.fout || (snake && snakeData && snakeData.fout)){
+      el.innerHTML = kop + '<div class="leeg">Ranglijst is nog niet actief; je score wordt in deze browser bewaard.</div>'; return;
+    }
+    if(!online.klaar || (snake && !snakeData)){ el.innerHTML = kop + '<div class="leeg">Laden…</div>'; return; }
+    const lijst = snake ? snakeData.lijst : online.lijst, plek = snake ? snakeData.plek : online.plek;
+    const rij = (nr, r, extra) => `<li class="${r.user_id === online.id ? 'ik' : ''}${extra || ''}"><span class="nr">${nr}</span><img src="${beeldVan(r.keuze)}" alt=""><span class="wie">${esc(r.naam)}</span><span class="sc">${r.beste}</span></li>`;
+    let html = lijst.map((r, i) => rij(i + 1, r)).join('');
+    if(plek && plek > lijst.length)
+      html += rij(plek, { user_id:online.id, naam:online.naam, beste:mijnBeste, keuze }, ' los');
     el.innerHTML = kop + (html ? '<ol>' + html + '</ol>' : '<div class="leeg">Nog geen scores. Zet de eerste neer!</div>');
+  }
+
+  // ---- Snake-scores: zelfde tabel, kolom snake_beste (zie supabase/flappy_scores.sql)
+  async function bewaarSnake(score){
+    try{ if(!online.klaar && !online.fout) await startOnline(); }catch(e){}
+    const sb = db();
+    if(!sb || !online.klaar || !(score > (online.snakeBeste || 0))) return;
+    const { error } = await sb.from('flappy_scores').update({ snake_beste:score, bijgewerkt_op:new Date().toISOString() }).eq('user_id', online.id);
+    if(error){ console.warn('Snake: score niet opgeslagen', error.message); return; }
+    online.snakeBeste = score;
+  }
+  async function snakeRanglijst(){
+    try{ if(!online.klaar && !online.fout) await startOnline(); }catch(e){}
+    const sb = db();
+    if(!sb || !online.klaar) return { fout:true };
+    const { data, error } = await sb.from('flappy_scores').select('user_id, naam, snake_beste, keuze')
+      .gt('snake_beste', 0).order('snake_beste', { ascending:false }).order('bijgewerkt_op', { ascending:true }).limit(10);
+    if(error) return { fout:true };
+    const lijst = (data || []).map(r => ({ user_id:r.user_id, naam:r.naam, beste:r.snake_beste, keuze:r.keuze, src:beeldVan(r.keuze) }));
+    const mijn = Math.max(lees('snakeMatBest', 0), online.snakeBeste || 0);
+    const i = lijst.findIndex(r => r.user_id === online.id);
+    let plek = i >= 0 ? i + 1 : null;
+    if(plek == null && mijn > 0){
+      const { count } = await sb.from('flappy_scores').select('user_id', { count:'exact', head:true }).gt('snake_beste', mijn);
+      plek = count == null ? null : count + 1;
+    }
+    return { lijst, plek, mijn, ik:online.id, naam:online.naam, mijnSrc:beeldVan(keuze) };
   }
 
   // 10 klikken binnen korte tijd op het logo opent het spel
@@ -610,5 +672,5 @@
     return PERSONAGES.filter(p => p.beschikbaar || p.id === 'mat').map(p => ({ id:p.id, naam:p.naam, src:p.src }));
   }
 
-  window.flappyMat = { koppel, open, geefCredits, personages, keuze:() => keuze };
+  window.flappyMat = { koppel, open, geefCredits, personages, keuze:() => keuze, bewaarSnake, snakeRanglijst, snakePrestaties };
 })();
