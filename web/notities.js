@@ -84,6 +84,12 @@ function tariefInhoud(bron, tid){
   const titel={ai:'uit de AI-verrijking van de omschrijving', bron:'zoals de bron het opgeeft'}[t.herkomst] || 'uit de omschrijving';
   return (t.tarief ? `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>` : '') + uren;
 }
+// Dezelfde opdracht bij andere bronnen (dubbels.py, via de tabel tarieven): [{bron, tender_id, url}]
+function ookOpVan(bron, tid){
+  const t=TARIEVEN.get(notitieSleutel(bron, tid));
+  if(!t || !t.ook_op) return [];
+  try{ const l=JSON.parse(t.ook_op); return Array.isArray(l) ? l : []; }catch(e){ return []; }
+}
 function tariefCel(bron, tid){
   return `<span class="tariefcel" data-sleutel="${notitieEsc(notitieSleutel(bron, tid))}">${tariefInhoud(bron, tid)}</span>`;
 }

@@ -163,6 +163,9 @@
   .filterkop .kcel > button[aria-sort]:not([aria-sort="none"]){ color:var(--tekst); }
   .aanvragen .filterkop select{ height:26px; font-size:12px; padding:0 4px; width:100%; max-width:240px; color:var(--muted); }
   .aanvragen .filterkop select.aan{ border-color:var(--primair); background:var(--actief); color:var(--actief-tekst); font-weight:500; }
+  .ookop{ display:inline-block; margin-left:6px; font-size:11px; font-weight:600; color:#6b4fa0; background:#f1ecfa; border-radius:10px; padding:1px 7px; vertical-align:1px; cursor:help; }
+  .ookop-lijst{ font-size:12.5px; color:var(--muted); margin:2px 0 8px; }
+  .ookop-lijst a{ font-weight:500; }
   .wisfilters{ font-size:12px; color:var(--primair); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; }
   .arij.data:hover{ background:var(--hover); }
   .arij.open{ background:var(--gekozen); }
@@ -572,6 +575,8 @@ function voldoet(r, f, nu){
     if(f.tarief === 'met' && !heeftTarief(r)) return false;
     if(f.tarief === 'zzp' && !(t && t.contractvorm === 'ZZP mogelijk')) return false;
     if(f.tarief === 'deta' && !(t && t.contractvorm === 'Alleen detachering')) return false;
+    if(f.tarief === 'elders' && !ookOpVan(r.bron, r.tender_id).length) return false;
+    if(f.tarief === 'uniek' && ookOpVan(r.bron, r.tender_id).length) return false;
   }
   return true;
 }
@@ -611,10 +616,25 @@ function filterKop(){
     <div class="kcel">${knop('titel', 'Aanvraag')}${opties('org', orgLijst)}</div>
     <div class="kcel">${knop('nieuw', 'Eerst gezien')}${opties('gezien', [['', 'Altijd'], ['vandaag', 'Vandaag'], ['7', 'Laatste 7 dagen'], ['30', 'Laatste 30 dagen']])}</div>
     <div class="kcel">${knop('deadline', 'Deadline')}${opties('deadline', [['', 'Alle deadlines'], ['7', 'Binnen 7 dagen'], ['21', 'Binnen 3 weken'], ['geen', 'Zonder deadline'], ['verlopen', 'Verlopen']])}</div>
-    <div class="kcel r">${knop('tarief', 'Tarief')}${opties('tarief', [['', 'Alles'], ['met', 'Met tarief'], ['zzp', 'ZZP mogelijk'], ['deta', 'Alleen detachering']])}</div>
+    <div class="kcel r">${knop('tarief', 'Tarief')}${opties('tarief', [['', 'Alles'], ['met', 'Met tarief'], ['zzp', 'ZZP mogelijk'], ['deta', 'Alleen detachering'], ['elders', 'Ook bij andere bronnen'], ['uniek', 'Alleen bij deze bron']])}</div>
     <div class="kcel"><span>Status</span>${opties('status', statusLijst)}</div>
     <span></span>
   </div>`;
+}
+
+// "ook op" bij andere bronnen: niets weggehaald, wel zichtbaar dat hij vaker voorkomt
+const bronNaam = code => (BRONNEN[code] || [code])[0];
+function ookOpBadge(r){
+  const lijst = ookOpVan(r.bron, r.tender_id);
+  if(!lijst.length) return '';
+  const namen = [...new Set(lijst.map(o => bronNaam(o.bron)))];
+  return `<span class="ookop" title="Ook op: ${esc(namen.join(', '))}">+${namen.length} ${namen.length === 1 ? 'bron' : 'bronnen'}</span>`;
+}
+function ookOpLinks(r){
+  const lijst = ookOpVan(r.bron, r.tender_id);
+  if(!lijst.length) return '';
+  return '<div class="ookop-lijst">Ook op: ' + lijst.map(o => o.url
+    ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(bronNaam(o.bron))} ↗</a>` : esc(bronNaam(o.bron))).join(' · ') + '</div>';
 }
 
 function deadlineCel(r){
@@ -638,13 +658,13 @@ function renderAanvragen(){
     const sub = [r.organisatie, r.locatie, r.nummer && r.nummer !== r.tender_id ? r.nummer : null].filter(Boolean).map(esc).join(' · ');
     const open = av.opengeklapt.has(sleutel);
     return `<div class="arij data${open ? ' open' : ''}" data-tid="${esc(r.tender_id)}" tabindex="0" role="button" aria-expanded="${open}" aria-label="${titel}: notitie">
-        <div class="atitel">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>` : `<b>${titel}</b>`}${eg != null && nu - eg < DAG ? '<span class="nieuw">nieuw</span>' : ''}${isOnline(r) ? '' : '<span class="weg">offline</span>'}${notitieIcoon(r.bron, r.tender_id)}<small>${sub || '&nbsp;'}</small></div>
+        <div class="atitel">${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${titel}</a>` : `<b>${titel}</b>`}${eg != null && nu - eg < DAG ? '<span class="nieuw">nieuw</span>' : ''}${ookOpBadge(r)}${isOnline(r) ? '' : '<span class="weg">offline</span>'}${notitieIcoon(r.bron, r.tender_id)}<small>${sub || '&nbsp;'}</small></div>
         <span class="num">${datumKort(eg)}</span>
         <span class="dl num">${deadlineCel(r)}</span>
         <span class="r">${tariefCel(r.bron, r.tender_id)}</span>
         <span>${r.status ? `<span class="wstatus" title="${esc(r.status)}">${esc(r.status)}</span>` : '<span class="grijs">—</span>'}</span>
         <span aria-hidden="true" class="grijs">${open ? '▴' : '▾'}</span>
-      </div>${open ? `<div class="adetail">${notitieHtml(r.bron, r.tender_id)}</div>` : ''}`;
+      </div>${open ? `<div class="adetail">${ookOpLinks(r)}${notitieHtml(r.bron, r.tender_id)}</div>` : ''}`;
   }).join('');
   const tabel = document.getElementById('aTabel');
   tabel.innerHTML = kop + (regels || '<div class="leeg">Geen aanvragen met deze filters.</div>');

@@ -174,6 +174,8 @@ def sync_tarieven(rijen):
             "startdatum": r.get("startdatum"),
             "duur": r.get("duur"),
             "verlenging": r.get("verlenging"),
+            "groep": r.get("groep"),
+            "ook_op": r.get("ook_op"),
             "gevonden_op": nu,
         }
         for r in rijen
@@ -193,7 +195,7 @@ def sync_tarieven(rijen):
             n += len(chunk)
         return n
 
-    kenm = ("contractvorm", "startdatum", "duur", "verlenging")
+    kenm = ("contractvorm", "startdatum", "duur", "verlenging", "groep", "ook_op")
     uren = ("uren", "uren_min", "uren_max")
     try:
         return stuur(payload)
