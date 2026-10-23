@@ -265,6 +265,7 @@
 <script src="auth.js"></script>
 <script src="notities.js"></script>
 <script src="flappy.js"></script>
+<script src="snake.js"></script>
 <script>
 // Alle bronnen die run.py scrapet (BRON in scrapers/*.py), met een leesbare naam
 // en het domein waar de scraper leest. Een nieuwe bron verschijnt vanzelf zodra
@@ -576,6 +577,7 @@ document.getElementById('aMeer').onclick = () => { av.toon += TOON_PER_KEER; ren
 koppelNotities(document.getElementById('aanvragen'), werkNotitieIcoonBij);
 document.getElementById('aSluit').onclick = () => { state.gekozen = null; renderTabel(); renderDetail(); toonAanvragen(); };
 flappyMat.koppel(document.querySelector('.shell .logo'));
+snakeMat.koppel(document.querySelector('.shell .logo'));
 
 function render(){ renderKop(); renderTabel(); renderDetail(); toonAanvragen(); }
 

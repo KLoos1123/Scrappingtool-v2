@@ -10,6 +10,7 @@
 <script src="marktlogica.js"></script>
 <script src="notities.js"></script>
 <script src="flappy.js"></script>
+<script src="snake.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -995,6 +996,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupRealtime();
   koppelNotities(document.getElementById('tableBody'), werkNotitieIcoonBij);
   flappyMat.koppel(document.querySelector('.shell .logo'));
+  snakeMat.koppel(document.querySelector('.shell .logo'));
   init(false);
 });
 </script>
