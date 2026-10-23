@@ -787,8 +787,10 @@ function renderTable(rows){
   document.getElementById('tableBody').innerHTML = pageRows.map((r,i)=>{
     const key = r.bron+'|'+r.tender_id;
     const oms = BESCHR_HEEFT.has(key) || !!BESCHR_TEKST.get(key);
-    const ook=state.samenvoegen && r.ookOp && r.ookOp.length
-      ? ' · <span class="ookop">ook op '+r.ookOp.map(o=>o.url?`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="${esc(o.organisatie||'')}">${esc(o.bron)}</a>`:esc(o.bron)).join(', ')+'</span>' : '';
+    // samengevoegd: de andere regels uit deze lijst; anders de koppeling uit de run (dubbels.py)
+    const ookLijst=state.samenvoegen ? (r.ookOp||[]) : ookOpVan(r.bron, r.tender_id);
+    const ook=ookLijst.length
+      ? ' · <span class="ookop">ook op '+ookLijst.map(o=>o.url?`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="${esc(o.organisatie||'')}">${esc(o.bron)}</a>`:esc(o.bron)).join(', ')+'</span>' : '';
     const sub=[esc(r.organisatie)+aiKlant(r), r.regio && r.regio!=='Overig / onbekend' ? esc(r.regio) : '', esc(r.bron), wanneer(r)].filter(Boolean).join(' · ')+ook;
     return `
     <tr class="rij" data-i="${i}" data-bron="${esc(r.bron)}" data-tid="${esc(r.tender_id)}">

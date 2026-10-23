@@ -23,6 +23,7 @@ import deadlines
 import verrijking
 import beschrijvingen
 import tarieven
+import dubbels
 import sheets_writer
 import supabase_sync
 from scrapers import (mercell, flextender, hero, striive, freelancenl, ns,
@@ -217,6 +218,18 @@ def main():
         print(f"  {sum(1 for r in gevonden if r['tarief'])} tarieven en "
               f"{sum(1 for r in gevonden if r['uren'])} keer uren gevonden")
         print("  kenmerken: " + ", ".join(f"{k} {sum(1 for r in gevonden if r.get(k))}" for k in tarieven.KENMERKEN))
+        # dezelfde opdracht bij meerdere bronnen: niets weghalen, wel per regel 'ook op'
+        try:
+            per_sleutel = {(r["bron"], str(r["tender_id"])): r for r in gevonden}
+            koppels = dubbels.bereken()
+            for k, v in koppels.items():
+                per_sleutel.setdefault(k, {"bron": k[0], "tender_id": k[1]}).update(v)
+            gevonden = list(per_sleutel.values())
+            dubbel = [v for v in koppels.values() if v["groep"]]
+            print(f"  {len(dubbel)} opdrachten staan ook bij een andere bron "
+                  f"({len({v['groep'] for v in dubbel})} groepen)")
+        except Exception as e:
+            print(f"  dubbels MISLUKT: {e}")
         if supabase_sync._configured():
             print(f"  {supabase_sync.sync_tarieven(gevonden)} rijen gesynct")
     except Exception as e:
