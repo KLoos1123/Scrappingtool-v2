@@ -37,6 +37,7 @@
 
   let overlay, canvas, ctx, dpr = 1, frame = null, vorige = 0, spel;
   let deeltjes = [], teksten = [];
+  let rang = null;   // ranglijst: null = laden, { fout } of { lijst, plek, mijn, ik, naam, mijnSrc }
   let beste = lees('snakeMatBest', 0);
   function lees(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }
   function bewaar(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -100,7 +101,26 @@
     stijl.textContent = `
       .sm-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(16,22,34,.78); display:flex; align-items:center; justify-content:center; overflow-y:auto; }
       .sm-overlay[hidden]{ display:none; }
-      .sm-veld{ position:relative; margin:auto; padding:10px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
+      .sm-doos{ margin:auto; padding:10px 0; display:flex; flex-direction:column; align-items:center; gap:12px; }
+      .sm-veld{ position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; }
+      .sm-zij{ width:min(420px, 94vw); }
+      @media (min-width:800px){ .sm-doos{ flex-direction:row; align-items:flex-start; } .sm-zij{ width:250px; } }
+      .sm-rang{ background:#fff; border-radius:14px; padding:12px 14px; color:#262b33; font:13px 'IBM Plex Sans',system-ui,sans-serif;
+        box-shadow:0 18px 50px rgba(0,0,0,.4); }
+      .sm-rang-kop{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+      .sm-rang-kop b{ font-size:14px; }
+      .sm-rang-kop .mijn{ font-weight:600; color:#2f5fa8; }
+      .sm-rang ol{ list-style:none; margin:0; padding:0; }
+      .sm-rang li{ display:grid; grid-template-columns:22px 22px 1fr auto; gap:8px; align-items:center; padding:4px; border-radius:6px; }
+      .sm-rang li.ik{ background:#eef2fa; font-weight:600; }
+      .sm-rang li.los{ border-top:1px dashed #d9dde3; border-radius:0; margin-top:2px; padding-top:6px; }
+      .sm-rang .nr{ color:#7a8089; text-align:right; font-variant-numeric:tabular-nums; }
+      .sm-rang li:nth-child(-n+3) .nr{ color:#b8860b; font-weight:700; }
+      .sm-rang img{ width:22px; height:22px; object-fit:cover; border-radius:50%; }
+      .sm-rang .wie{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .sm-rang .sc{ font-weight:700; font-variant-numeric:tabular-nums; }
+      .sm-rang .leeg{ color:#7a8089; font-size:12.5px; }
+      @media (max-width:799px){ .sm-rang ol{ max-height:150px; overflow:auto; } }
       .sm-veld canvas{ display:block; width:min(420px, 94vw, calc((88vh - 40px) * ${B} / ${H})); height:auto; aspect-ratio:${B}/${H}; border-radius:16px;
         box-shadow:0 24px 70px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06); touch-action:none; cursor:pointer; user-select:none; -webkit-user-select:none; outline:none; }
       .sm-sluit{ position:absolute; top:20px; right:10px; width:32px; height:32px; border:0; border-radius:50%;
@@ -117,13 +137,14 @@
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-label', 'Snake met collega\'s');
-    overlay.innerHTML = '<div class="sm-veld"><canvas tabindex="-1" aria-label="Snake speelveld"></canvas><button class="sm-sluit" aria-label="Sluiten">×</button>'
-      + '<div class="sm-onder"><button class="sm-geluid" aria-pressed="false"></button><button class="sm-pauze">Pauze</button><span>Esc sluit</span></div></div>';
+    overlay.innerHTML = '<div class="sm-doos"><div class="sm-veld"><canvas tabindex="-1" aria-label="Snake speelveld"></canvas><button class="sm-sluit" aria-label="Sluiten">×</button>'
+      + '<div class="sm-onder"><button class="sm-geluid" aria-pressed="false"></button><button class="sm-pauze">Pauze</button><span>Esc sluit</span></div></div>'
+      + '<aside class="sm-zij"><div class="sm-rang" aria-label="Ranglijst Snake"></div></aside></div>';
     document.body.appendChild(overlay);
     canvas = overlay.querySelector('canvas');
     ctx = canvas.getContext('2d');
     overlay.querySelector('.sm-sluit').addEventListener('click', sluit);
-    overlay.addEventListener('pointerdown', e => { if(e.target === overlay) sluit(); });
+    overlay.addEventListener('pointerdown', e => { if(e.target === overlay || e.target.classList.contains('sm-doos')) sluit(); });
     const knopGeluid = overlay.querySelector('.sm-geluid');
     const zetGeluid = () => { const aan = lees('flappyMatGeluid', false); knopGeluid.textContent = aan ? '♪ Geluid aan' : '♪ Geluid uit'; knopGeluid.setAttribute('aria-pressed', String(aan)); };
     zetGeluid();
@@ -154,6 +175,7 @@
     laadGezichten();
     nieuwSpel();
     overlay.hidden = false;
+    renderRang(); laadRang();
     document.addEventListener('keydown', toets, true);
     vorige = performance.now();
     frame = requestAnimationFrame(lus);
@@ -263,6 +285,35 @@
     GELUID.dood();
     if(spel.score > beste){ beste = spel.score; bewaar('snakeMatBest', beste); spel.record = true; }
     if(spel.score > 0 && window.flappyMat && flappyMat.geefCredits) flappyMat.geefCredits(spel.score);
+    // prestaties (gedeeld met Flappy Mat) en de online ranglijst
+    const gepakt = new Set(spel.ids.slice(3));
+    const anderen = gezichten.filter(p => p.id !== spel.ids[0] && BEELD[p.id] && BEELD[p.id].naturalWidth).map(p => p.id);
+    const stats = { score:spel.score, verzameld:spel.verzameld, alle:anderen.length > 0 && anderen.every(id => gepakt.has(id)) };
+    spel.prestaties = window.flappyMat && flappyMat.snakePrestaties ? flappyMat.snakePrestaties(stats) : [];
+    const ditSpel = spel;
+    if(window.flappyMat && flappyMat.bewaarSnake) flappyMat.bewaarSnake(beste).then(() => laadRang(ditSpel));
+  }
+
+  // ---- ranglijst (zelfde tabel als Flappy Mat, kolom snake_beste)
+  function esc(t){ return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function laadRang(voorSpel){
+    if(!(window.flappyMat && flappyMat.snakeRanglijst)){ rang = { fout:true }; renderRang(); return; }
+    flappyMat.snakeRanglijst().then(d => {
+      rang = d; renderRang();
+      if(voorSpel && voorSpel === spel && spel.fase === 'over' && d && !d.fout) spel.plek = d.plek;
+    }).catch(() => { rang = { fout:true }; renderRang(); });
+  }
+  function renderRang(){
+    const el = overlay && overlay.querySelector('.sm-rang');
+    if(!el) return;
+    const mijn = Math.max(beste, (rang && rang.mijn) || 0);
+    const kop = `<div class="sm-rang-kop"><b>Ranglijst Snake</b><span>Jouw beste: <span class="mijn">${mijn}</span></span></div>`;
+    if(!rang){ el.innerHTML = kop + '<div class="leeg">Laden…</div>'; return; }
+    if(rang.fout){ el.innerHTML = kop + '<div class="leeg">Ranglijst is nog niet actief; je beste score wordt in deze browser bewaard.</div>'; return; }
+    const rij = (nr, r, extra) => `<li class="${r.user_id === rang.ik ? 'ik' : ''}${extra || ''}"><span class="nr">${nr}</span><img src="${esc(r.src)}" alt=""><span class="wie">${esc(r.naam)}</span><span class="sc">${r.beste}</span></li>`;
+    let html = rang.lijst.map((r, i) => rij(i + 1, r)).join('');
+    if(rang.plek && rang.plek > rang.lijst.length) html += rij(rang.plek, { user_id:rang.ik, naam:rang.naam, beste:mijn, src:rang.mijnSrc }, ' los');
+    el.innerHTML = kop + (html ? '<ol>' + html + '</ol>' : '<div class="leeg">Nog geen scores. Zet de eerste neer!</div>');
   }
 
   function midden(x, y){ return [x * CEL + CEL / 2, KOP + y * CEL + CEL / 2]; }
@@ -437,7 +488,8 @@
     }
     if(spel.fase === 'over'){
       const verzameld = spel.ids.slice(3);
-      const hoog = verzameld.length ? 240 : 204;
+      const prest = spel.prestaties && spel.prestaties.length ? spel.prestaties : null;
+      const hoog = (verzameld.length ? 240 : 204) + (spel.plek ? 22 : 0) + (prest ? 22 : 0);
       kaart(B / 2, cy, 330, hoog);
       const top = cy - hoog / 2;
       tekst('Game over', B / 2, top + 40, 24, ROOD);
@@ -455,6 +507,8 @@
       const deel = [spel.verzameld + (spel.verzameld === 1 ? ' collega' : ' collega\'s')];
       if(spel.munten) deel.push(spel.munten + (spel.munten === 1 ? ' munt' : ' munten'));
       tekst(deel.join(' · ') + ' · +' + spel.score + ' credits', B / 2, y, 13, BLAUW);
+      if(spel.plek){ y += 22; tekst('#' + spel.plek + ' op de ranglijst', B / 2, y, 13, '#262b33'); }
+      if(prest){ y += 22; tekst('Prestatie: ' + prest[0] + (prest.length > 1 ? ' (+' + (prest.length - 1) + ')' : ''), B / 2, y, 12, '#2f8a4e'); }
       ctx.globalAlpha = 0.55 + Math.sin(nu / 300) * 0.45;
       tekst('Tik of spatie: opnieuw', B / 2, y + 28, 12, '#7a8089');
       ctx.globalAlpha = 1;
