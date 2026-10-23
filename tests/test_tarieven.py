@@ -1,6 +1,6 @@
 import unittest
 
-from tarieven import haal_tarief, haal_uren, uit_ai, uit_bron, uren_uit_bron
+from tarieven import haal_kenmerken, haal_tarief, haal_uren, uit_ai, uit_bron, uren_uit_bron
 
 
 class HaalTarief(unittest.TestCase):
@@ -72,6 +72,30 @@ class HaalUren(unittest.TestCase):
         self.assertEqual(uren_uit_bron({"uren_per_week": "32-40"})["uren"], "32–40 u/w")
         self.assertEqual(uren_uit_bron({"uren_per_week": "?-36"})["uren"], "36 u/w")
         self.assertIsNone(uren_uit_bron({"uren_per_week": "?-?"}))
+
+
+
+class TestKenmerken(unittest.TestCase):
+    def test_gelabeld(self):
+        k = haal_kenmerken("Contractvorm: Detachering ZZP Startdatum: 01-11-2026 Duur van de opdracht: 12 maand(en) "
+                           "Optie tot verlenging: Mogelijk, maar niet bekend Sluitingsdatum: 23-10-2026 00:00")
+        self.assertEqual(k, {"contractvorm": "ZZP mogelijk", "startdatum": "2026-11-01", "duur": "12 maanden",
+                             "verlenging": "Mogelijk, maar niet bekend"})
+
+    def test_zinnen(self):
+        k = haal_kenmerken("Start: z.s.m. voor een periode van 6 maanden met optie tot verlenging. "
+                           "Helaas staat deze opdracht niet open voor ZZP'ers.")
+        self.assertEqual(k, {"startdatum": "z.s.m.", "duur": "6 maanden", "verlenging": "Mogelijk",
+                             "contractvorm": "Alleen detachering"})
+        self.assertEqual(haal_kenmerken("Beoogde startdatum 1 december 2026, looptijd: 1 jaar. Verlenging: nee"),
+                         {"startdatum": "2026-12-01", "duur": "1 jaar", "verlenging": "Nee"})
+        self.assertEqual(haal_kenmerken("ZZP mogelijk: NEE, alleen detachering")["contractvorm"], "Alleen detachering")
+
+    def test_niets(self):
+        for tekst in [None, "", "na een proefperiode van 2 weken", "De opdracht start in 2027",
+                      "Optie tot verlenging: Sluitingsdatum: 02-11-2026 00:00"]:
+            with self.subTest(tekst=tekst):
+                self.assertEqual(haal_kenmerken(tekst), {})
 
 
 if __name__ == "__main__":

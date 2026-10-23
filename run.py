@@ -175,6 +175,7 @@ def main():
         gevonden = tarieven.verzamel(alles)
         print(f"  {sum(1 for r in gevonden if r['tarief'])} tarieven en "
               f"{sum(1 for r in gevonden if r['uren'])} keer uren gevonden")
+        print("  kenmerken: " + ", ".join(f"{k} {sum(1 for r in gevonden if r.get(k))}" for k in tarieven.KENMERKEN))
         if supabase_sync._configured():
             print(f"  {supabase_sync.sync_tarieven(gevonden)} rijen gesynct")
     except Exception as e:
