@@ -51,6 +51,22 @@
   button.toggle:hover{ border-color:var(--blauw); }
   .muted{ color:var(--dim); font-size:12px; }
   .loading{ padding:30px; text-align:center; color:var(--muted); }
+  /* statussen */
+  .stlijst td{ vertical-align:middle; }
+  .stlijst input[type=text]{ font:inherit; font-size:13px; width:100%; max-width:280px; padding:6px 10px; border-radius:8px;
+    border:1px solid var(--border); background:var(--bg2); color:var(--text); }
+  .stlijst input[type=text]:focus{ outline:none; border-color:var(--blauw); }
+  .stlijst input[type=color]{ width:34px; height:28px; padding:0; border:1px solid var(--border); border-radius:6px; background:none; cursor:pointer; }
+  .stlijst .hernoemd{ font-size:11px; color:var(--blauw-l); margin-left:6px; }
+  .stlijst button.mini{ font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; }
+  .stlijst button.mini:hover:not(:disabled){ border-color:var(--blauw); }
+  .stlijst button.mini:disabled{ opacity:.35; cursor:default; }
+  .stlijst button.weg:hover{ border-color:var(--magenta); color:var(--magenta); }
+  .stvoet{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+  button.tweede{ font-size:12px; font-weight:600; padding:9px 16px; border-radius:8px; border:1px solid var(--border); background:var(--bg2); color:var(--sub); cursor:pointer; }
+  .stmelding{ font-size:12.5px; }
+  .stmelding.ok{ color:#7fd3a8; } .stmelding.fout{ color:#ff8fbf; }
+  .voorbeeld{ display:inline-block; padding:2px 10px; border-radius:6px; font-size:12px; border-left:3px solid; background:var(--bg2); }
 </style>
 </head>
 <body>
@@ -82,9 +98,28 @@
       <tbody id="userRows"></tbody>
     </table>
   </div>
+
+  <div class="panel">
+    <h2>Statussen</h2>
+    <div class="muted" style="margin-bottom:12px">De statussen die iedereen per opdracht kan kiezen op het dashboard. Een andere naam
+      geven past hem ook aan bij de opdrachten die die status al hebben. Verwijderen laat bestaande opdrachten met
+      zo'n status ongemoeid; ze blijven die status gewoon tonen. Vink aan welke statussen meetellen als "in behandeling".</div>
+    <div id="stWaarschuwing" class="muted" hidden style="color:#ffcf8a;margin-bottom:10px"></div>
+    <table class="stlijst">
+      <thead><tr><th style="width:48px">Kleur</th><th>Naam</th><th>In behandeling</th><th>Voorbeeld</th><th style="width:150px"></th></tr></thead>
+      <tbody id="stRows"></tbody>
+    </table>
+    <div class="stvoet">
+      <button class="tweede" id="stNieuw">+ Status toevoegen</button>
+      <button class="action" id="stOpslaan">Opslaan</button>
+      <button class="tweede" id="stStandaard" title="Terug naar de standaardlijst (nog niet opgeslagen)">Standaardlijst</button>
+      <span class="stmelding" id="stMelding" role="status"></span>
+    </div>
+  </div>
 </div>
 
 <script src="auth.js"></script>
+<script src="marktlogica.js"></script>
 <script>
   let me = null;
 
@@ -137,12 +172,115 @@
     box.innerHTML = `<span class="newkey">${key}</span>`;
   };
 
+  /* ---------- statussen: tabel instellingen, sleutel 'statussen' (supabase/instellingen.sql) ---------- */
+  const STANDAARD = huidigeStatussen();   // zoals in marktlogica.js, vóór eventueel inladen
+  let statussen = [];                      // [{naam, kleur, behandeling, oud}]
+  let tabelOk = true;
+  const escH = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function melding(tekst, soort){ const el = document.getElementById('stMelding'); el.textContent = tekst; el.className = 'stmelding ' + (soort || ''); }
+
+  function renderStatussen(){
+    const tbody = document.getElementById('stRows');
+    tbody.innerHTML = statussen.map((s, i) => `
+      <tr data-i="${i}">
+        <td><input type="color" value="${escH(s.kleur)}" data-veld="kleur" aria-label="Kleur van ${escH(s.naam)}"></td>
+        <td><input type="text" value="${escH(s.naam)}" data-veld="naam" maxlength="40" aria-label="Naam">${s.oud && s.oud !== s.naam ? `<span class="hernoemd">was: ${escH(s.oud)}</span>` : ''}</td>
+        <td><input type="checkbox" data-veld="behandeling" ${s.behandeling ? 'checked' : ''} aria-label="Telt als in behandeling"></td>
+        <td><span class="voorbeeld" style="border-color:${escH(s.kleur)}">${escH(s.naam || '…')}</span></td>
+        <td style="white-space:nowrap">
+          <button class="mini" data-actie="op" ${i === 0 ? 'disabled' : ''} aria-label="Omhoog">↑</button>
+          <button class="mini" data-actie="neer" ${i === statussen.length - 1 ? 'disabled' : ''} aria-label="Omlaag">↓</button>
+          <button class="mini weg" data-actie="weg" aria-label="Verwijderen">Verwijderen</button>
+        </td>
+      </tr>`).join('');
+    tbody.querySelectorAll('input').forEach(inp => {
+      const i = +inp.closest('tr').dataset.i, veld = inp.dataset.veld;
+      inp.oninput = () => {
+        statussen[i][veld] = veld === 'behandeling' ? inp.checked : inp.value;
+        if(veld !== 'naam') renderStatussen();
+        else { const vb = inp.closest('tr').querySelector('.voorbeeld'); vb.textContent = inp.value || '…'; }
+        melding('Niet opgeslagen wijzigingen', '');
+      };
+      if(veld === 'naam') inp.onchange = renderStatussen;   // 'was: ...' bijwerken na het typen
+    });
+    tbody.querySelectorAll('button[data-actie]').forEach(knop => {
+      const i = +knop.closest('tr').dataset.i;
+      knop.onclick = () => {
+        const actie = knop.dataset.actie;
+        if(actie === 'weg'){
+          if(!confirm(`Status "${statussen[i].naam}" verwijderen? Opdrachten die hem al hebben houden hem.`)) return;
+          statussen.splice(i, 1);
+        } else {
+          const j = actie === 'op' ? i - 1 : i + 1;
+          [statussen[i], statussen[j]] = [statussen[j], statussen[i]];
+        }
+        renderStatussen(); melding('Niet opgeslagen wijzigingen', '');
+      };
+    });
+  }
+
+  async function laadStatussen(){
+    statussen = STANDAARD.map(s => ({ ...s, oud:s.naam }));
+    const { data, error } = await supabase.from('instellingen').select('waarde').eq('sleutel', 'statussen').maybeSingle();
+    const w = document.getElementById('stWaarschuwing');
+    if(error){
+      tabelOk = false;
+      w.hidden = false;
+      w.textContent = 'Opslaan kan nog niet: voer eenmalig supabase/instellingen.sql uit in de Supabase SQL Editor. Hieronder staat de standaardlijst.';
+      document.getElementById('stOpslaan').disabled = true;
+    } else if(data && Array.isArray(data.waarde) && data.waarde.length){
+      statussen = data.waarde.map(s => ({ naam:s.naam, kleur:s.kleur || '#5f7488', behandeling:!!s.behandeling, oud:s.naam }));
+    }
+    renderStatussen();
+  }
+
+  async function slaStatussenOp(){
+    const namen = statussen.map(s => (s.naam || '').trim());
+    if(namen.some(n => !n)) return melding('Elke status heeft een naam nodig.', 'fout');
+    if(new Set(namen.map(n => n.toLowerCase())).size !== namen.length) return melding('Twee statussen hebben dezelfde naam.', 'fout');
+    const knop = document.getElementById('stOpslaan');
+    knop.disabled = true; melding('Opslaan…', '');
+    const waarde = statussen.map(s => ({ naam:s.naam.trim(), kleur:s.kleur, behandeling:!!s.behandeling }));
+    const { error } = await supabase.from('instellingen').upsert({
+      sleutel:'statussen', waarde, gewijzigd_door:me.email, gewijzigd_op:new Date().toISOString(),
+    }, { onConflict:'sleutel' });
+    if(error){ knop.disabled = false; return melding('Opslaan mislukt: ' + error.message, 'fout'); }
+    // hernoemde statussen ook bij de opdrachten die ze al hebben
+    let opdrachten = 0, hernoemd = 0, fouten = 0;
+    for(const s of statussen){
+      if(!s.oud || s.oud === s.naam.trim()) continue;
+      const res = await supabase.from('tenders').update({
+        status:s.naam.trim(), status_gewijzigd_door:me.email, status_gewijzigd_op:new Date().toISOString(),
+      }).eq('status', s.oud).select('tender_id');
+      if(res.error) fouten++; else { hernoemd++; opdrachten += (res.data || []).length; }
+    }
+    statussen.forEach(s => { s.naam = s.naam.trim(); s.oud = s.naam; });
+    renderStatussen();
+    knop.disabled = false;
+    melding('Opgeslagen' + (hernoemd ? ` · ${hernoemd} hernoemd bij ${opdrachten} opdracht${opdrachten === 1 ? '' : 'en'}` : '')
+      + (fouten ? ` · ${fouten} hernoeming(en) mislukt` : ''), fouten ? 'fout' : 'ok');
+  }
+
+  document.getElementById('stNieuw').onclick = () => {
+    statussen.push({ naam:'', kleur:'#199DD9', behandeling:false, oud:null });
+    renderStatussen();
+    document.querySelector('#stRows tr:last-child input[type=text]').focus();
+  };
+  document.getElementById('stOpslaan').onclick = slaStatussenOp;
+  document.getElementById('stStandaard').onclick = () => {
+    const oud = new Map(statussen.filter(s => s.oud).map(s => [s.oud, s.oud]));
+    statussen = STANDAARD.map(s => ({ ...s, oud:oud.has(s.naam) ? s.naam : null }));
+    renderStatussen(); melding('Standaardlijst klaargezet; nog niet opgeslagen', '');
+  };
+
   (async () => {
     me = await requireAdmin();
     if (!me) return; // requireAdmin already redirected
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadUsers();
+    laadStatussen();
   })();
 </script>
 </body>

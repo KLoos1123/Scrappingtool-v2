@@ -682,7 +682,7 @@ function wisAlles(){
 
 /* ===================== weergaven ===================== */
 // Statussen die betekenen dat iemand met de opdracht bezig is.
-const IN_BEHANDELING = new Set(['Interessant','Contact gelegd','Aanbieding verstuurd','In onderhandeling']);
+const IN_BEHANDELING = STATUS_BEHANDELING;   // aan te passen op de Beheer-pagina (zie marktlogica.js)
 const WEERGAVEN = [
   {key:'', label:'Alles'},
   {key:'urgent', label:'Sluit < 7 dagen'},
@@ -991,6 +991,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     state.verbergBureaus = false;
     document.getElementById('verbergBureaus').checked = false;
   }
+
+  // statussen zoals ingesteld op de Beheer-pagina (zonder tabel: de standaardlijst)
+  try{
+    const { data, error } = await supabase.from('instellingen').select('waarde').eq('sleutel', 'statussen').maybeSingle();
+    if(!error && data) pasStatussenToe(data.waarde);
+  }catch(e){}
 
   bindEvents();
   setupRealtime();
