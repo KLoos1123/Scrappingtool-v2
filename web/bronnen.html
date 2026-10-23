@@ -367,9 +367,11 @@ async function laad(){
     const b = per.get(r.bron), eg = ms(r.eerst_gezien), lg = ms(r.laatst_gezien);
     b.totaal++;
     if(lg != null && (b.laatst == null || lg > b.laatst)) b.laatst = lg;
-    if(lg != null && laatsteRun != null && lg >= laatsteRun - RUN_MARGE){
+    // open = in de laatste run nog gezien én de deadline is niet voorbij (sommige
+    // portalen, zoals Mercell, laten verlopen aanvragen nog weken staan)
+    const dl = ms(r.deadline);
+    if(lg != null && laatsteRun != null && lg >= laatsteRun - RUN_MARGE && (dl == null || dl >= vandaag)){
       b.open++;
-      const dl = ms(r.deadline);
       if(dl != null && dl >= nu && dl - nu <= 7 * DAG) b.snel++;   // open en sluit binnen een week
     }
     if(eg == null) return;
@@ -512,6 +514,8 @@ function heeftTarief(r){
 }
 
 function isOnline(r){ const t = ms(r.laatst_gezien); return t != null && state.laatsteRun != null && t >= state.laatsteRun - RUN_MARGE; }
+// 'Nu open': nog op de site én deadline niet voorbij (vandaag telt nog mee)
+function isOpen(r){ const d = ms(r.deadline); return isOnline(r) && (d == null || d >= begin(Date.now())); }
 function datumKort(t){ return t == null ? '—' : new Date(t).toLocaleDateString('nl-NL', {day:'numeric', month:'short', year:'2-digit'}); }
 
 async function laadAanvragen(bron){
@@ -546,7 +550,7 @@ async function toonAanvragen(){
 // basis: open/alles en zoeken; de kolomfilters komen daarbovenop (zo blijven de keuzelijsten gevuld)
 function basisAanvragen(){
   const q = av.zoek.trim().toLowerCase();
-  return (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOnline(r))
+  return (AANVRAGEN.get(av.bron) || []).filter(r => (!av.open || isOpen(r))
     && (!q || [r.titel, r.organisatie, r.locatie, r.nummer].some(v => String(v || '').toLowerCase().includes(q))));
 }
 function voldoet(r, f, nu){
