@@ -585,9 +585,18 @@
     }, { onConflict:'user_id' });
     if(error) console.warn('Flappy Mat: score niet opgeslagen', error.message);
   }
+  // Huisregel (grap): W Kloos staat op de Flappy-ranglijst altijd één punt boven Mathieu.
+  async function bovenMathieu(sb){
+    if(!/kloos/i.test(online.naam || '')) return;
+    const { data, error } = await sb.from('flappy_scores').select('beste')
+      .ilike('naam', '%butenaerts%').order('beste', { ascending:false }).limit(1);
+    const zijn = !error && data && data[0] ? data[0].beste || 0 : 0;
+    if(zijn && beste <= zijn){ beste = zijn + 1; bewaar('flappyMatBest', beste); await bewaarOnline(); }
+  }
   async function laadRanglijst(){
     const sb = db();
     if(!sb || !online.klaar) return;
+    try{ await bovenMathieu(sb); }catch(e){}
     const { data, error } = await sb.from('flappy_scores').select('user_id, naam, beste, keuze')
       .gt('beste', 0).order('beste', { ascending:false }).order('bijgewerkt_op', { ascending:true }).limit(10);
     if(error) return;
