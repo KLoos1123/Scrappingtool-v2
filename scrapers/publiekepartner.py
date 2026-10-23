@@ -12,12 +12,19 @@ filteren. Daarom:
   2. volledige velden van die id's ophalen via ?include= (blokken van 100).
 Er komen zo'n 100 opdrachten per dag bij; actieve opdrachten ouder dan een
 paar maanden zijn zeldzaam (oudste bij het bouwen: ~3 maanden).
+
+Het kopje van post_content heeft vaste labels (Contractvorm, Duur van de
+opdracht, Startdatum, Optie tot verlenging, Sluitingsdatum); die gaan als
+kenmerken mee (zie tarieven.py) en het kopje zelf gaat uit de omschrijving.
+Een opdracht waarvan de sluitingstijd voorbij is (of die het kopje "gesloten"
+noemt) krijgt status Gesloten.
 """
 
 import html
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -37,7 +44,9 @@ PARALLEL = 4
 LICHT = "id,acf.status,acf.valid_through"
 VOLLEDIG = ("id,date,link,title,acf.status,acf.valid_through,acf.organisation,"
             "acf.hiring_organisation_name,acf.location,acf.regio,acf.salary,"
-            "acf.uren_per_week,acf.identifier_value,acf.post_content,acf.beschrijving")
+            "acf.uren_per_week,acf.identifier_value,acf.post_content,acf.beschrijving,"
+            "acf.alleen_detachering,acf.zzp_value,acf.detachering")
+NL = ZoneInfo("Europe/Amsterdam")
 
 
 def _get(sessie, params):
@@ -106,12 +115,66 @@ def _deadline(acf):
     return datum if datum and datum < "2100" else None
 
 
+def _label(acf, naam):
+    """Waarde achter '<b>Naam: </b>' in het kopje van post_content, als platte tekst."""
+    m = re.search(r"<b>\s*" + re.escape(naam) + r"\s*:\s*</b>(.*?)(?:<br\s*/?>|</p>)",
+                  acf.get("post_content") or "", re.I | re.S)
+    if not m:
+        return ""
+    return re.sub(r"\s+", " ", BeautifulSoup(m.group(1), "lxml").get_text(" ", strip=True)).strip()
+
+
 def _oms(acf):
     tekst = acf.get("post_content") or acf.get("beschrijving")
     if not tekst:
         return None
     tekst = re.sub(r"\[elementor-template[^\]]*\]", "", tekst)
+    # het kopje met labels (en "LET OP! ...") staat tussen de eerste twee <hr>'s en zit al in
+    # de velden; alleen de omschrijving erna houden
+    delen = re.split(r"<hr\s*/?>", tekst)
+    if len(delen) >= 3 and "Aanvraagnummer" in delen[1]:
+        tekst = "<hr>".join(delen[2:])
     return BeautifulSoup(tekst, "lxml").get_text(" ", strip=True) or None
+
+
+def _contractvorm(acf):
+    if (acf.get("alleen_detachering") or "").strip().upper() == "JA":
+        return "Alleen detachering"
+    kop = _label(acf, "Contractvorm").lower()
+    if acf.get("zzp_value") or "zzp" in kop:
+        return "ZZP mogelijk"
+    if acf.get("detachering") or "detachering" in kop:
+        return "Alleen detachering"
+    return None
+
+
+def _duur(tekst):
+    """'12 maand(en)' -> '12 maanden'; '2 week/weken' -> '2 weken'."""
+    m = re.search(r"(\d{1,3})\s*(maand|week|jaar)", tekst or "", re.I)
+    if not m:
+        return None
+    n, e = int(m.group(1)), m.group(2).lower()
+    if e == "jaar":
+        return f"{n} jaar"
+    if e == "week":
+        return f"{n} {'week' if n == 1 else 'weken'}"
+    return f"{n} {'maand' if n == 1 else 'maanden'}"
+
+
+def _startdatum(tekst):
+    if re.search(r"z\.?\s?s\.?\s?m|zo\s+(?:snel|spoedig)|per\s+direct|asap", tekst or "", re.I):
+        return "z.s.m."
+    datum = _iso(tekst)
+    return datum[:10] if datum else None
+
+
+def _gesloten(acf, deadline):
+    if re.search(r"deze opdracht is gesloten", acf.get("post_content") or "", re.I):
+        return True
+    if not deadline:
+        return False
+    nu = datetime.now(NL).strftime("%Y-%m-%dT%H:%M")
+    return deadline < nu[:len(deadline)] if "T" not in deadline else deadline <= nu
 
 
 def _locatie(acf):
@@ -141,13 +204,14 @@ def _tarief(tekst):
 
 def _uit_post(post):
     acf = post.get("acf") or {}
+    deadline = _deadline(acf)
     rij = {
         "tender_id": str(post["id"]),
         "nummer": str(acf["identifier_value"]) if acf.get("identifier_value") else None,
         "titel": html.unescape((post.get("title") or {}).get("rendered") or ""),
         "organisatie": acf.get("organisation") or acf.get("hiring_organisation_name"),
-        "status": "Open",
-        "deadline": _deadline(acf),
+        "status": "Gesloten" if _gesloten(acf, deadline) else "Open",
+        "deadline": deadline,
         "publicatiedatum": post.get("date"),
         "locatie": _locatie(acf),
         "omschrijving": _oms(acf),
@@ -160,6 +224,13 @@ def _uit_post(post):
         tmin, tmax = _tarief(acf.get("salary"))
         if tmin:
             rij["tarief_min"], rij["tarief_max"] = tmin, tmax
+    except Exception:
+        pass
+    try:
+        rij["contractvorm"] = _contractvorm(acf)
+        rij["duur"] = _duur(_label(acf, "Duur van de opdracht"))
+        rij["startdatum"] = _startdatum(_label(acf, "Startdatum"))
+        rij["verlenging"] = _label(acf, "Optie tot verlenging") or None
     except Exception:
         pass
     return rij

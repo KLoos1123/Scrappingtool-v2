@@ -182,6 +182,125 @@ def uren_uit_ai(data):
     return _uren_resultaat(lo if lo is not None else hi, hi if hi is not None else lo)
 
 
+# ---------------------------------------------------------------- kenmerken
+# Contractvorm (ZZP/detachering), startdatum, duur en verlenging. Uit velden die
+# de scraper meegeeft (bv. De Publieke Partner) of uit een gelabelde regel in de
+# omschrijving ("Startdatum: 01-11-2026", "Duur van de opdracht: 12 maand(en)").
+# Bewust behoudend: alleen met een duidelijk label of een vaste zinsnede.
+
+_MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli",
+            "augustus", "september", "oktober", "november", "december"]
+_DATUM = (r"(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})"
+          r"|(\d{1,2})\s+(" + "|".join(_MAANDEN) + r")\s+(\d{4})"
+          r"|(z\.?\s?s\.?\s?m\.?|zo\s+spoedig\s+mogelijk|per\s+direct|direct|asap)")
+_START = re.compile(r"(?<![\w-])(?:beoogde\s+)?(?:start(?:datum|moment)?|aanvang(?:sdatum)?|ingangsdatum|begindatum)"
+                    r"(?:\s+(?:van\s+de\s+)?opdracht)?\s*[:\-]?\s*(?:" + _DATUM + r")", re.I)
+_DUUR = re.compile(r"(?<![\w-])(?:duur(?:\s+van\s+de\s+opdracht)?|looptijd|opdrachtduur|contractduur|periode)"
+                   r"\s*(?::|-|van)?\s*(?:circa\s+|ca\.?\s+|minimaal\s+)?(\d{1,2})\s*"
+                   r"(maand(?:en|\(en\))?|mnd\.?|weken|week|jaar)\b", re.I)
+_VERLENG_LABEL = re.compile(r"(?:optie\s+tot\s+verlenging|verlengingsopties?|verlenging(?:smogelijkheden?)?)"
+                            r"\s*:\s*([^\n.;|<]{2,60})", re.I)
+_VERLENG_ZIN = re.compile(r"(?:met\s+)?(?:de\s+)?optie\s+(?:tot|op)\s+verlenging", re.I)
+_ALLEEN_DETA = re.compile(r"niet\s+open\s+voor\s+zzp|geen\s+zzp|uitsluitend\s+(?:via\s+|op\s+basis\s+van\s+)?detachering"
+                          r"|alleen\s+(?:via\s+|op\s+basis\s+van\s+)?detachering|niet\s+(?:geschikt|mogelijk)\s+voor\s+zzp", re.I)
+_ZZP_OK = re.compile(r"(?:ook\s+)?(?:open|mogelijk)\s+voor\s+zzp|zzp['’]?ers?\s+(?:zijn\s+)?(?:van\s+harte\s+)?welkom"
+                     r"|zzp\s*(?:of|/|en)\s*detachering|detachering\s*(?:of|/|en)\s*zzp", re.I)
+
+
+def _start(m):
+    if m.group(1):
+        dag, maand, jaar = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        jaar += 2000 if jaar < 100 else 0
+    elif m.group(4):
+        dag, maand, jaar = int(m.group(4)), _MAANDEN.index(m.group(5).lower()) + 1, int(m.group(6))
+    else:
+        return "z.s.m."
+    if not (1 <= dag <= 31 and 1 <= maand <= 12 and 2020 <= jaar <= 2035):
+        return None
+    return f"{jaar}-{maand:02d}-{dag:02d}"
+
+
+def _duur(n, eenheid):
+    n, e = int(n), eenheid.lower()
+    if n <= 0:
+        return None
+    if e.startswith("w"):
+        return f"{n} {'week' if n == 1 else 'weken'}"
+    if e.startswith("j"):
+        return f"{n} jaar"
+    return f"{n} {'maand' if n == 1 else 'maanden'}"
+
+
+def contractvorm(tekst):
+    """'Alleen detachering', 'ZZP mogelijk' of None, uit een veld of zin."""
+    t = _platte_tekst(tekst)
+    if not t:
+        return None
+    if _ALLEEN_DETA.search(t):
+        return "Alleen detachering"
+    m = re.search(r"zzp\s+mogelijk\s*:\s*(ja|nee)\b", t, re.I)
+    if m:
+        return "ZZP mogelijk" if m.group(1).lower() == "ja" else "Alleen detachering"
+    # "Contractvorm: Detachering ZZP" (meerdere labels achter elkaar)
+    m = re.search(r"contractvorm\s*:\s*((?:(?:zzp|detachering|loondienst|inhuur|freelance|interim)[\s,/&]*(?:of|en)?\s*)+)", t, re.I)
+    if m:
+        v = m.group(1).lower()
+        if "zzp" in v or "freelance" in v or "interim" in v:
+            return "ZZP mogelijk"
+        if "detachering" in v:
+            return "Alleen detachering"
+        if "loondienst" in v:
+            return "Loondienst"
+    if _ZZP_OK.search(t):
+        return "ZZP mogelijk"
+    return None
+
+
+def haal_kenmerken(tekst):
+    """Kenmerken uit de omschrijving: dict met contractvorm, startdatum, duur,
+    verlenging (alleen de gevonden sleutels)."""
+    t = _platte_tekst(tekst)
+    if not t:
+        return {}
+    uit = {}
+    for m in _START.finditer(t):
+        start = _start(m)
+        if start:
+            uit["startdatum"] = start
+            break
+    m = _DUUR.search(t)
+    if m:
+        duur = _duur(m.group(1), m.group(2))
+        if duur:
+            uit["duur"] = duur
+    m = _VERLENG_LABEL.search(t)
+    if m:
+        # tekst is platgeslagen: stop bij het volgende label ("Sluitingsdatum: ...")
+        waarde = re.split(r"\s+(?=[A-Z][A-Za-zé ]{2,30}\s*:)|\s+LET OP", m.group(1))[0].strip(" ,:-")
+        if re.match(r"[A-Z][A-Za-zé ]{2,30}\s*:", waarde):
+            waarde = ""   # label zonder waarde, meteen gevolgd door het volgende label
+        if re.match(r"(?:nee|geen)\b", waarde, re.I):
+            uit["verlenging"] = "Nee"
+        elif re.match(r"ja\b", waarde, re.I):
+            uit["verlenging"] = "Ja"
+        elif waarde:
+            uit["verlenging"] = waarde[0].upper() + waarde[1:]
+    elif _VERLENG_ZIN.search(t):
+        uit["verlenging"] = "Mogelijk"
+    vorm = contractvorm(t)
+    if vorm:
+        uit["contractvorm"] = vorm
+    return uit
+
+
+KENMERKEN = ("contractvorm", "startdatum", "duur", "verlenging")
+
+
+def kenmerken_uit_bron(rij):
+    """Kenmerken die de scraper als veld meegeeft (zelfde sleutels)."""
+    return {k: rij[k] for k in KENMERKEN if rij.get(k)}
+
+
 def verzamel(rijen=()):
     """Tarief en uren per week voor alle opdrachten met een omschrijving of
     AI-verrijking in tenders.db, plus de rijen van deze run die het zelf als veld
@@ -189,7 +308,7 @@ def verzamel(rijen=()):
     tarief_min, tarief_max, herkomst ('bron', 'tekst' of 'ai'; van het tarief) en
     uren, uren_min, uren_max. Tarief of uren kan ontbreken (None)."""
     conn = sqlite3.connect(DB)
-    tarief, uren = {}, {}
+    tarief, uren, kenm = {}, {}, {}
     try:
         for bron, tid, data in conn.execute("SELECT bron, tender_id, data FROM verrijkingen"):
             try:
@@ -212,6 +331,9 @@ def verzamel(rijen=()):
             u = haal_uren(oms)
             if u:
                 uren[k] = u
+            gevonden_k = haal_kenmerken(oms)
+            if gevonden_k:
+                kenm[k] = gevonden_k
     except sqlite3.OperationalError:
         pass
     conn.close()
@@ -224,14 +346,20 @@ def verzamel(rijen=()):
             tarief[k] = {**uit_bron(r), "herkomst": "bron"}
         if uren_uit_bron(r):
             uren[k] = uren_uit_bron(r)
+        if kenmerken_uit_bron(r):
+            kenm[k] = {**kenm.get(k, {}), **kenmerken_uit_bron(r)}
     leeg_t = {"tarief": None, "tarief_min": None, "tarief_max": None, "herkomst": None}
     leeg_u = {"uren": None, "uren_min": None, "uren_max": None}
-    return [{"bron": b, "tender_id": t, **tarief.get((b, t), leeg_t), **uren.get((b, t), leeg_u)}
-            for (b, t) in sorted(set(tarief) | set(uren))]
+    leeg_k = {k: None for k in KENMERKEN}
+    return [{"bron": b, "tender_id": t, **tarief.get((b, t), leeg_t), **uren.get((b, t), leeg_u),
+             **leeg_k, **kenm.get((b, t), {})}
+            for (b, t) in sorted(set(tarief) | set(uren) | set(kenm))]
 
 
 if __name__ == "__main__":
     from collections import Counter
     rijen = verzamel()
     print(f"{sum(1 for r in rijen if r['tarief'])} tarieven, {sum(1 for r in rijen if r['uren'])} met uren")
+    for k in KENMERKEN:
+        print(f"  {k}: {sum(1 for r in rijen if r[k])}")
     print(Counter(r["bron"] for r in rijen).most_common())

@@ -156,8 +156,8 @@ def sync_tarieven(rijen):
     """rijen: zoals tarieven.verzamel() ze teruggeeft (tarief en/of uren).
     Overschrijft bestaande rijen. Geeft het aantal gesyncte rijen terug.
 
-    Zonder supabase/uren.sql kent de tabel nog geen uren-kolommen en moet het
-    tarief gevuld zijn; dan sturen we alleen de tarieven, zonder uren."""
+    Zonder supabase/uren.sql kent de tabel nog geen uren- en kenmerken-kolommen
+    en moet het tarief gevuld zijn; dan sturen we alleen de tarieven."""
     nu = datetime.now(timezone.utc).isoformat(timespec="seconds")
     payload = [
         {
@@ -170,6 +170,10 @@ def sync_tarieven(rijen):
             "uren": r.get("uren"),
             "uren_min": r.get("uren_min"),
             "uren_max": r.get("uren_max"),
+            "contractvorm": r.get("contractvorm"),
+            "startdatum": r.get("startdatum"),
+            "duur": r.get("duur"),
+            "verlenging": r.get("verlenging"),
             "gevonden_op": nu,
         }
         for r in rijen
@@ -189,11 +193,20 @@ def sync_tarieven(rijen):
             n += len(chunk)
         return n
 
+    kenm = ("contractvorm", "startdatum", "duur", "verlenging")
+    uren = ("uren", "uren_min", "uren_max")
     try:
         return stuur(payload)
     except RuntimeError as e:
-        if "uren" not in str(e) and "tarief" not in str(e):
+        if not any(k in str(e) for k in kenm + uren + ("tarief",)):
             raise
-        print("  tabel tarieven kent nog geen uren (voer supabase/uren.sql uit); alleen tarieven gesynct")
-        oud = [{k: v for k, v in r.items() if not k.startswith("uren")} for r in payload if r["tarief"]]
-        return stuur(oud)
+    # oudere tabel: eerst zonder kenmerken, en zo nodig ook zonder uren
+    try:
+        n = stuur([{k: v for k, v in r.items() if k not in kenm} for r in payload if r["tarief"] or r["uren"]])
+        print("  tabel tarieven kent nog geen kenmerken (voer supabase/uren.sql uit); tarieven en uren gesynct")
+        return n
+    except RuntimeError as e:
+        if not any(k in str(e) for k in uren + ("tarief",)):
+            raise
+    print("  tabel tarieven kent nog geen uren/kenmerken (voer supabase/uren.sql uit); alleen tarieven gesynct")
+    return stuur([{k: v for k, v in r.items() if k not in kenm + uren} for r in payload if r["tarief"]])

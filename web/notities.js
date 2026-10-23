@@ -52,15 +52,35 @@ function notitieIcoon(bron, tid){
   return `<span class="notitie-icoon" title="${notitieEsc(tip)}">💬</span>`;
 }
 // Een tarief uit de notitie (zelf ingevuld) gaat voor het gescrapete tarief.
+// Contractvorm, duur en start klein onder tarief en uren; verlenging in de tooltip.
+const KENM_MAAND=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+function kenmerkenRegel(t){
+  if(!t) return '';
+  const delen=[], uitleg=[];
+  if(t.contractvorm){
+    delen.push(t.contractvorm==='Alleen detachering' ? 'Detachering' : t.contractvorm==='ZZP mogelijk' ? 'ZZP ok' : t.contractvorm);
+    uitleg.push(t.contractvorm);
+  }
+  if(t.duur){ delen.push(t.duur.replace(' maanden',' mnd').replace(' maand',' mnd')); uitleg.push('Duur: '+t.duur); }
+  if(t.startdatum){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t.startdatum);
+    const start=m ? `${+m[3]} ${KENM_MAAND[+m[2]-1]}` : t.startdatum;
+    delen.push('start '+start); uitleg.push('Start: '+(m ? `${+m[3]} ${KENM_MAAND[+m[2]-1]} ${m[1]}` : t.startdatum));
+  }
+  if(t.verlenging) uitleg.push('Verlenging: '+t.verlenging);
+  if(!delen.length) return '';   // alleen verlenging: niet de moeite van een regel
+  const klasse=t.contractvorm==='Alleen detachering' ? ' kenm-deta' : t.contractvorm==='ZZP mogelijk' ? ' kenm-zzp' : '';
+  return `<span class="kenm${klasse}" title="${notitieEsc(uitleg.join(' · '))}">${notitieEsc(delen.join(' · '))}</span>`;
+}
 function tariefInhoud(bron, tid){
   const n=NOTITIES.get(notitieSleutel(bron, tid));
   const t=TARIEVEN.get(notitieSleutel(bron, tid));
-  const uren=t && t.uren ? `<span class="uren" title="Uren per week">${notitieEsc(t.uren)}</span>` : '';
+  const uren=(t && t.uren ? `<span class="uren" title="Uren per week">${notitieEsc(t.uren)}</span>` : '')+kenmerkenRegel(t);
   if(n && n.tarief){
     const tip='Tarief uit de notitie'+(n.gewijzigd_door?` van ${n.gewijzigd_door}`:'')+(t && t.tarief?` (gescrapet: ${t.tarief})`:'');
     return `<span class="tarief tarief-notitie" title="${notitieEsc(tip)}">${notitieEsc(n.tarief)}</span>${uren}`;
   }
-  if(!t || (!t.tarief && !t.uren)) return '<span class="muted">—</span>';
+  if(!t || (!t.tarief && !uren)) return '<span class="muted">—</span>';
   const titel={ai:'uit de AI-verrijking van de omschrijving', bron:'zoals de bron het opgeeft'}[t.herkomst] || 'uit de omschrijving';
   return (t.tarief ? `<span class="tarief" title="Tarief ${titel}">${notitieEsc(t.tarief)}</span>` : '') + uren;
 }
@@ -186,6 +206,8 @@ function volgNotities(naWijziging){
   .tarief{ white-space:nowrap; color:var(--sub); font-size:12px; }
   .tarief-notitie{ color:var(--text); font-weight:600; }
   .uren{ display:block; white-space:nowrap; font-size:11px; color:var(--dim); margin-top:1px; }
+  .kenm{ display:block; white-space:nowrap; font-size:11px; color:var(--dim); margin-top:1px; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+  .kenm-zzp{ color:#2f8a4e; }
   @media (max-width:700px){ .notitie-velden{ grid-template-columns:1fr; } }`;
   const st=document.createElement('style');
   st.textContent=css;
