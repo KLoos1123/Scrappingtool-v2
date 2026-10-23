@@ -70,6 +70,25 @@ const STATUS_COLORS = {
   'Verloren':          '#8ea2b8',
   'Niet interessant':  '#5f7690',
 };
+// Statussen die als "in behandeling" tellen (KPI en weergave op het dashboard).
+const STATUS_BEHANDELING = new Set(['Interessant','Contact gelegd','Aanbieding verstuurd','In onderhandeling']);
+
+// De lijst is aan te passen op de Beheer-pagina (tabel instellingen, sleutel
+// 'statussen': [{naam, kleur, behandeling}]). Past de standaardlijst hierboven
+// ter plekke aan, zodat alle code die deze constanten gebruikt meeverandert.
+function pasStatussenToe(lijst){
+  const geldig = (lijst || []).filter(s => s && typeof s.naam === 'string' && s.naam.trim());
+  if(!geldig.length) return false;
+  STATUS_OPTIONS.splice(0, STATUS_OPTIONS.length, ...geldig.map(s => s.naam.trim()));
+  Object.keys(STATUS_COLORS).forEach(k => delete STATUS_COLORS[k]);
+  geldig.forEach(s => { STATUS_COLORS[s.naam.trim()] = /^#[0-9a-f]{6}$/i.test(s.kleur || '') ? s.kleur : '#5f7488'; });
+  STATUS_BEHANDELING.clear();
+  geldig.filter(s => s.behandeling).forEach(s => STATUS_BEHANDELING.add(s.naam.trim()));
+  return true;
+}
+function huidigeStatussen(){
+  return STATUS_OPTIONS.map(naam => ({ naam, kleur:STATUS_COLORS[naam] || '#5f7488', behandeling:STATUS_BEHANDELING.has(naam) }));
+}
 
 function wordMatch(text, kw){
   const e = kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
